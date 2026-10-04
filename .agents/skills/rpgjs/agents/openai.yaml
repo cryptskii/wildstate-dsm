@@ -1,0 +1,4 @@
+interface:
+  display_name: "RPGJS v5 Project"
+  short_description: "Internal RPGJS v5 project workflow"
+  default_prompt: "Use $rpgjs-v5-project to inspect or implement work in an RPGJS v5 project."

@@ -1,0 +1,428 @@
+import { z } from 'zod';
+
+export type Element = 'fire' | 'grass' | 'water' | 'electric' | 'none';
+export type StatusId = 'burn' | 'root' | 'stun' | 'soaked';
+/** fx is presentation metadata only; the reducer never reads it. */
+export type MoveFx = 'proj' | 'bite' | 'tongue' | 'snare' | 'bash' | 'jet' | 'tusk' | 'camo' | 'chain' | 'lure';
+export type MoveDef = { id: string; name: string; el: Element; dmg?: number; max: number; status?: StatusId; guard?: true; heal?: number; fx?: MoveFx };
+export type SpeciesDef = { name: string; el: Element; moves: MoveDef[] };
+
+/** Pinned content. Clients send move ids only; the reducer resolves every number here. */
+export const ELEMENTS: Record<Element, { beats: Element[] }> = {
+  fire: { beats: ['grass'] }, grass: { beats: ['water', 'electric'] }, water: { beats: ['fire'] }, electric: { beats: ['water'] }, none: { beats: [] },
+};
+export const STATUSES: Record<StatusId, { turns: number }> = { burn: { turns: 2 }, root: { turns: 1 }, stun: { turns: 1 }, soaked: { turns: 2 } };
+export const SPECIES: Record<string, SpeciesDef> = {
+  embercub: { name: 'Embercub', el: 'fire', moves: [
+    { id: 'strike', name: 'Strike', el: 'none', dmg: 8, max: 0 },
+    { id: 'flare', name: 'Flare', el: 'fire', dmg: 14, max: 5 },
+    { id: 'ember-bite', name: 'Ember Bite', el: 'fire', dmg: 9, max: 3, status: 'burn', fx: 'bite' },
+    { id: 'warm-coat', name: 'Warm Coat', el: 'none', guard: true, max: 2 },
+  ] },
+  mossling: { name: 'Mossling', el: 'grass', moves: [
+    { id: 'strike', name: 'Strike', el: 'none', dmg: 8, max: 0 },
+    { id: 'leaf-cut', name: 'Leaf Cut', el: 'grass', dmg: 12, max: 5 },
+    { id: 'root-bind', name: 'Root Bind', el: 'grass', dmg: 6, max: 3, status: 'root', fx: 'snare' },
+    { id: 'photosynth', name: 'Photosynth', el: 'none', heal: 12, max: 1 },
+  ] },
+  tidefin: { name: 'Tidefin', el: 'water', moves: [
+    { id: 'strike', name: 'Strike', el: 'none', dmg: 8, max: 0 },
+    { id: 'tide-lash', name: 'Tide Lash', el: 'water', dmg: 12, max: 5, fx: 'jet' },
+    { id: 'soak', name: 'Soak', el: 'water', dmg: 7, max: 3, status: 'soaked', fx: 'jet' },
+    { id: 'mist-veil', name: 'Mist Veil', el: 'none', guard: true, max: 2 },
+  ] },
+  voltusk: { name: 'Voltusk', el: 'electric', moves: [
+    { id: 'strike', name: 'Strike', el: 'none', dmg: 8, max: 0 },
+    { id: 'volt-charge', name: 'Volt Charge', el: 'electric', dmg: 12, max: 5, fx: 'tusk' },
+    { id: 'static-tusk', name: 'Static Tusk', el: 'electric', dmg: 7, max: 3, status: 'stun', fx: 'tusk' },
+    { id: 'bristle', name: 'Bristle', el: 'none', guard: true, max: 2 },
+  ] },
+  leon: { name: 'Leon', el: 'grass', moves: [
+    { id: 'strike', name: 'Strike', el: 'none', dmg: 8, max: 0 },
+    { id: 'tongue-lash', name: 'Tongue Lash', el: 'grass', dmg: 12, max: 5, fx: 'tongue' },
+    { id: 'sticky-snare', name: 'Sticky Snare', el: 'grass', dmg: 6, max: 3, status: 'root', fx: 'snare' },
+    { id: 'camouflage', name: 'Camouflage', el: 'none', guard: true, max: 2, fx: 'camo' },
+  ] },
+  rattlefin: { name: 'Rattlefin', el: 'water', moves: [
+    { id: 'strike', name: 'Strike', el: 'none', dmg: 8, max: 0 },
+    { id: 'chain-whip', name: 'Chain Whip', el: 'water', dmg: 12, max: 5, fx: 'chain' },
+    { id: 'lure-flash', name: 'Lure Flash', el: 'water', dmg: 6, max: 3, status: 'stun', fx: 'lure' },
+    { id: 'rust-hide', name: 'Rust Hide', el: 'none', guard: true, max: 2 },
+  ] },
+  brineback: { name: 'Brineback', el: 'water', moves: [
+    { id: 'strike', name: 'Strike', el: 'none', dmg: 8, max: 0 },
+    { id: 'brine-jet', name: 'Brine Jet', el: 'water', dmg: 12, max: 5, fx: 'jet' },
+    { id: 'barnacle-bash', name: 'Barnacle Bash', el: 'water', dmg: 7, max: 3, status: 'soaked', fx: 'bash' },
+    { id: 'shell-up', name: 'Shell Up', el: 'none', guard: true, max: 2 },
+  ] },
+};
+/** Growth: flat 20 XP per level, cap 10. Every number here is pinned content; clients never send stats. */
+export const XP_PER_LEVEL = 20, LEVEL_CAP = 10, BASE_HP = 40, HP_PER_LEVEL = 4;
+/** Absolute HP ceiling for schema validation (level cap). */
+export const MAX_HP = BASE_HP + HP_PER_LEVEL * (LEVEL_CAP - 1);
+export const level = (c: { xp: number }): number => Math.min(LEVEL_CAP, 1 + Math.floor(c.xp / XP_PER_LEVEL));
+export const maxHp = (c: { xp: number }): number => BASE_HP + HP_PER_LEVEL * (level(c) - 1);
+export const damageBonus = (c: { xp: number }): number => level(c) - 1;
+export const chargeBonus = (c: { xp: number }): number => (level(c) >= 4 ? 1 : 0) + (level(c) >= 7 ? 1 : 0);
+export const maxCharges = (m: MoveDef, c: { xp: number }): number => (m.max ? m.max + chargeBonus(c) : 0);
+/** Base XP × opponent-level scaling: +2 per level the opponent has over you, -2 per level under, floor 4. */
+export const xpGain = (base: number, opponentLevel: number, ownLevel: number): number => Math.max(4, base + 2 * (opponentLevel - ownLevel));
+/** Wild level rises with the holder's encounter count (cap 6) but never more than one above the lead. */
+export const wildLevel = (encounterIndex: number, leadLevel = 1): number => Math.max(1, Math.min(6, 1 + Math.floor(encounterIndex / 3), leadLevel + 1));
+export const TRAINER_LEVEL: Record<string, number> = { kade: 3, nessa: 4 };
+/** Item effects are pinned here; the client only names the item. */
+export const ITEMS = { poultice: { heal: 15 }, tonic: { charges: true } } as const;
+export type UsableItem = keyof typeof ITEMS;
+/**
+ * Trainers who wait on the map. Their creature fights at full strength (no wild handicap);
+ * beating one pays a bounty from the game account. A trainer can be challenged again after
+ * the party rests at camp.
+ */
+export type TrainerDef = { name: string; title: string; species: keyof typeof SPECIES; nick: string; greeting: string[]; win: string; lose: string; beaten: string };
+export const TRAINERS: Record<string, TrainerDef> = {
+  kade: { name: 'Kade', title: 'Meadow Drifter', species: 'mossling', nick: 'Burr', greeting: ['Hey, trainer. Burr and I take on anyone who crosses this meadow.', 'Twelve WILD says you can’t knock him down. Paid straight to your wallet if you do.'], win: 'Ha! Burr hasn’t hit the grass in weeks. The bounty’s yours, fair and square.', lose: 'That’s how it goes. Rest up with Mira and come find me again.', beaten: 'You already took my WILD today. Rest at camp and I’ll go another round.' },
+  nessa: { name: 'Nessa', title: 'Pond Keeper', species: 'tidefin', nick: 'Ripple', greeting: ['Careful by the water. Ripple doesn’t like strangers near her pond.', 'One bout. Beat her and the bounty is yours; lose and you walk back to camp.'], win: 'Ripple! …Fine. You earned that bounty. Well fought.', lose: 'The pond stays ours. Come back when your creature has rested.', beaten: 'Ripple needs to rest after your last bout. So do you, by the look of it. Come back after camp.' },
+};
+/** Meadow grass rotation; water species only come from the pond. */
+const WILD_ORDER = ['mossling', 'voltusk', 'leon', 'embercub'] as const;
+const POND_ORDER = ['tidefin', 'brineback', 'rattlefin'] as const;
+export const NICK_MAX = 12;
+
+const natural = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
+const speciesSchema = z.enum(['embercub', 'mossling', 'tidefin', 'voltusk', 'leon', 'rattlefin', 'brineback']);
+const statusSchema = z.object({ id: z.enum(['burn', 'root', 'stun', 'soaked']), turns: natural.max(5) });
+const creatureSchema = z.object({
+  id: z.string().min(1), species: speciesSchema, nick: z.string().max(NICK_MAX), hp: natural.max(MAX_HP), xp: natural,
+  charges: z.record(z.string(), natural.max(7)), guard: z.boolean(), statuses: z.array(statusSchema).max(4),
+  /** DSM ledger: the anchor (Base32) of the state object that is this creature, once the game issued it. */
+  anchor: z.string().min(1).nullable(),
+});
+const battleSchema = z.object({
+  id: z.string(), creatureId: z.string(), wild: creatureSchema, turn: natural, source: z.enum(['meadow', 'pond', 'trainer']),
+  /** For a trainer battle: who stands on the other side. */
+  trainer: z.string().optional(),
+  outcome: z.enum(['active', 'victory', 'defeat', 'captured', 'escaped']),
+  /** Projection log of the last accepted turn so the UI can animate without recomputing rules. */
+  log: z.array(z.object({ actor: z.enum(['own', 'wild']), move: z.string(), dmg: natural, mult: z.number(), status: z.string().optional(), burn: natural, skipped: z.boolean() })).max(2),
+  /** XP granted by the finishing command and the levels crossed, so the UI can show the level-up without recomputing. */
+  growth: z.object({ gain: natural, from: natural, to: natural }).optional(),
+});
+export const stateSchema = z.object({
+  scarecrowReadyAt: natural.default(0),
+  rules: z.literal('creatures-v4'), holder: z.string().min(1), revision: natural,
+  // Coins and creatures are owned in the player's DSM wallet: `coins` is the verified
+  // holdings projection, and the reducer never credits or debits it.
+  nextEncounter: natural, nextCast: natural, creatures: z.array(creatureSchema).min(1), lead: natural,
+  inventory: z.object({ capsules: natural, rod: z.boolean(), poultice: natural, tonic: natural, map: natural }), coins: natural,
+  campaign: z.object({ instance: z.string(), branch: z.enum(['unselected', 'sanctuary', 'rangers']) }),
+  battle: battleSchema.nullable(), consumed: z.array(z.string()), commandIds: z.array(z.string()),
+  victories: natural, captures: natural,
+  /** Trainers beaten since the last rest at camp; a rest reopens every challenge. */
+  trainersBeaten: z.array(z.string()).default([]),
+}).superRefine((s, ctx) => {
+  const ids = s.creatures.map(c => c.id);
+  if (new Set(ids).size !== ids.length || new Set(s.consumed).size !== s.consumed.length ||
+      new Set(s.commandIds).size !== s.commandIds.length || (s.battle && !ids.includes(s.battle.creatureId)) || s.lead >= s.creatures.length) {
+    ctx.addIssue({ code: 'custom', message: 'Invalid state references' });
+  }
+});
+export type GameState = z.infer<typeof stateSchema>;
+export type Creature = GameState['creatures'][number];
+export type Command =
+  | { type: 'encounter' } | { type: 'cast' } | { type: 'move'; move: string } | { type: 'capture'; nick?: string } | { type: 'escape' }
+  | { type: 'heal' } | { type: 'campaign'; branch: 'sanctuary' | 'rangers' }
+  | { type: 'set-lead'; creatureId: string } | { type: 'rename'; creatureId: string; nick: string }
+  /** DSM ledger: a capsule for a payment the game's account accepted (`fact` is that transfer's id). */
+  | { type: 'grant-capsule'; fact: string }
+  /** Server-timed game item gift; never a DSM coin issuance. */
+  | { type: 'scarecrow-gift'; now: number }
+  /** DSM ledger: `qty` items Bramble sold for one payment the game's account accepted. */
+  | { type: 'grant-item'; item: ShopItemId; fact: string; qty?: number }
+  /** DSM ledger: a creature Bramble bought; `fact` is the transfer of its object the game's account accepted. */
+  | { type: 'sell'; creatureId: string; fact: string }
+  /** Use a bag item on one party creature, outside battle. */
+  | { type: 'use-item'; item: UsableItem; creatureId: string }
+  /** Challenge a trainer on the map. */
+  | { type: 'challenge'; trainer: string }
+  /** DSM ledger: creature `creatureId` is the state object `anchor`. */
+  | { type: 'bind-creature'; creatureId: string; anchor: string }
+  /**
+   * DSM ledger: verified holdings. `coins` is the coin balance; `held` the creature anchors
+   * held; `inFlight` the anchors the game sent this wallet that no proof shows yet.
+   */
+  | { type: 'holdings'; coins: number; held: string[]; inFlight: string[] }
+  /** DSM ledger: a creature the wallet holds that this state does not: it joins the party. */
+  | { type: 'receive-creature'; creature: Creature };
+export type ErrorCode = 'stale' | 'battle-active' | 'no-battle' | 'fainted' | 'no-charges' |
+  'no-capsules' | 'not-weakened' | 'choice-consumed' | 'invalid-command' | 'no-rod' | 'unknown-creature' |
+  'no-item' | 'not-wild' | 'already-beaten' | 'unknown-trainer' | 'sold-out' | 'not-for-sale' | 'gift-cooldown';
+/** What Bramble's board sells. The Map is a key item: one per player. */
+export type ShopItemId = 'capsule' | 'poultice' | 'tonic' | 'map';
+export const SHOP_QTY_MAX = 9;
+export const SCARECROW_CAPSULES = 3;
+export const SCARECROW_COOLDOWN_MS = 4 * 60 * 60 * 1000;
+/** What Bramble pays for a creature, in WILD: more for a stronger one. */
+export const salePrice = (c: { xp: number }): number => 6 + 2 * level(c);
+export class GameError extends Error { constructor(public readonly code: ErrorCode) { super(code); } }
+
+export function newCreature(id: string, species: keyof typeof SPECIES, hp?: number, lvl = 1): Creature {
+  const xp = (Math.min(LEVEL_CAP, Math.max(1, lvl)) - 1) * XP_PER_LEVEL;
+  const stub = { xp };
+  return { id, species: species as Creature['species'], nick: '', hp: Math.min(maxHp(stub), hp ?? maxHp(stub)), xp, guard: false, statuses: [], anchor: null,
+    charges: Object.fromEntries(SPECIES[species].moves.filter(m => m.max).map(m => [m.id, maxCharges(m, stub)])) };
+}
+/** Adds XP and applies growth once per crossed level: +HP_PER_LEVEL current HP, +1 charge on moves that gained a slot. Returns the levels crossed. */
+export function grantXp(c: Creature, amount: number): { gain: number; from: number; to: number } {
+  const from = level(c); c.xp += amount; const to = level(c);
+  if (to > from) {
+    c.hp = Math.min(maxHp(c), c.hp + HP_PER_LEVEL * (to - from));
+    const before = { xp: (from - 1) * XP_PER_LEVEL };
+    for (const m of SPECIES[c.species].moves) if (m.max && maxCharges(m, c) > maxCharges(m, before)) c.charges[m.id] = (c.charges[m.id] ?? 0) + (maxCharges(m, c) - maxCharges(m, before));
+  }
+  return { gain: amount, from, to };
+}
+export function initialState(holder: string): GameState {
+  return stateSchema.parse({
+    rules: 'creatures-v4', holder, revision: 0, nextEncounter: 0, nextCast: 0, lead: 0,
+    creatures: [newCreature(`${holder}/starter`, 'embercub')], inventory: { capsules: 3, rod: true, poultice: 1, tonic: 0, map: 0 }, coins: 0,
+    campaign: { instance: `${holder}/campaign/1`, branch: 'unselected' },
+    battle: null, consumed: [], commandIds: [], victories: 0, captures: 0, trainersBeaten: [],
+  });
+}
+export function score(s: GameState): number { return s.victories * 10 + s.captures * 20; }
+export function displayName(c: Creature): string { return c.nick || SPECIES[c.species].name; }
+const cleanNick = (n: string | undefined) => (n ?? '').trim().slice(0, NICK_MAX);
+export function multiplier(attack: Element, defender: Element): number {
+  return ELEMENTS[attack].beats.includes(defender) ? 1.5 : ELEMENTS[defender].beats.includes(attack) ? 0.5 : 1;
+}
+function fail(code: ErrorCode): never { throw new GameError(code); }
+
+function damage(attacker: Creature, target: Creature, move: MoveDef): { dmg: number; mult: number } {
+  const mult = multiplier(move.el, SPECIES[target.species].el);
+  let d = (move.dmg! + damageBonus(attacker)) * mult;
+  if (attacker.statuses.some(x => x.id === 'soaked')) d = Math.max(1, d - 2);
+  if (target.guard) { d = d / 2; target.guard = false; }
+  return { dmg: Math.max(0, Math.round(d)), mult };
+}
+/** Ticks the holder's statuses once; returns burn damage to apply. */
+function tick(c: Creature): number {
+  let burn = 0;
+  c.statuses = c.statuses.map(x => ({ ...x, turns: x.turns - 1 })).filter(x => { if (x.id === 'burn') burn += 3; return x.turns > 0; });
+  return burn;
+}
+function applyStatus(target: Creature, id: StatusId) {
+  if (id === 'soaked') target.statuses = target.statuses.filter(x => x.id !== 'burn');
+  if (!target.statuses.some(x => x.id === id)) target.statuses.push({ id, turns: STATUSES[id].turns });
+}
+function clearBattleOnly(c: Creature) { c.guard = false; c.statuses = []; }
+/** Wild creatures spawn at a level with 70% of that level's max HP (the old 28/40). */
+function wildAt(id: string, species: keyof typeof SPECIES, lvl: number): Creature { const c = newCreature(id, species, undefined, lvl); c.hp = Math.round(maxHp(c) * 0.7); return c; }
+
+/** The game's own reduction of play (battles, captures, progress); never a DSM transition. */
+export function transition(parent: GameState, expected: number, commandId: string, command: Command): GameState {
+  if (parent.revision !== expected || parent.commandIds.includes(commandId)) fail('stale');
+  if (!commandId.trim()) fail('invalid-command');
+  const s = structuredClone(stateSchema.parse(parent));
+  const active = s.battle?.outcome === 'active';
+  if (['encounter', 'cast', 'challenge', 'heal', 'campaign', 'set-lead', 'use-item', 'scarecrow-gift'].includes(command.type) && active) fail('battle-active');
+  const lead = s.creatures[s.lead];
+  const battle = s.battle;
+  const combatant = battle ? s.creatures.find(c => c.id === battle.creatureId)! : lead;
+  const finish = (outcome: NonNullable<GameState['battle']>['outcome']) => {
+    battle!.outcome = outcome;
+    const key = `encounter/${battle!.id}`;
+    if (s.consumed.includes(key)) fail('stale');
+    s.consumed.push(key);
+    clearBattleOnly(combatant); clearBattleOnly(battle!.wild);
+  };
+  // The game's account pays the reward as a transfer to the wallet; this state never credits it.
+  const win = () => {
+    finish('victory'); s.victories += 1;
+    const base = battle!.source === 'trainer' ? 15 : 10;
+    battle!.growth = grantXp(combatant, xpGain(base, level(battle!.wild), level(combatant)));
+    if (battle!.source === 'trainer') s.trainersBeaten.push(battle!.trainer!);
+  };
+  switch (command.type) {
+    case 'encounter': {
+      if (lead.hp === 0) fail('fainted');
+      const n = s.nextEncounter++;
+      const id = `${s.holder}/wild/${n}`;
+      // A fixed rotation: the game's own design, not protocol entropy.
+      s.battle = { id, creatureId: lead.id, turn: 0, outcome: 'active', source: 'meadow', log: [], wild: wildAt(`${id}/creature`, WILD_ORDER[n % WILD_ORDER.length], wildLevel(n, level(lead))) };
+      break;
+    }
+    case 'cast': {
+      if (!s.inventory.rod) fail('no-rod');
+      if (lead.hp === 0) fail('fainted');
+      const n = s.nextCast++;
+      const id = `${s.holder}/pond/${n}`;
+      s.battle = { id, creatureId: lead.id, turn: 0, outcome: 'active', source: 'pond', log: [], wild: wildAt(`${id}/creature`, POND_ORDER[n % POND_ORDER.length], wildLevel(n, level(lead))) };
+      break;
+    }
+    case 'challenge': {
+      const t = TRAINERS[command.trainer];
+      if (!t) fail('unknown-trainer');
+      if (lead.hp === 0) fail('fainted');
+      if (s.trainersBeaten.includes(command.trainer)) fail('already-beaten');
+      const id = `${s.holder}/trainer/${command.trainer}/${s.consumed.filter(k => k.startsWith(`encounter/${s.holder}/trainer/${command.trainer}/`)).length}`;
+      const foe = newCreature(`${id}/creature`, t.species, undefined, TRAINER_LEVEL[command.trainer] ?? 3); foe.nick = t.nick;
+      s.battle = { id, creatureId: lead.id, turn: 0, outcome: 'active', source: 'trainer', trainer: command.trainer, log: [], wild: foe };
+      break;
+    }
+    case 'use-item': {
+      const c = s.creatures.find(c => c.id === command.creatureId);
+      if (!c) fail('unknown-creature');
+      if (!(command.item in ITEMS) || s.inventory[command.item] === 0) fail('no-item');
+      s.inventory[command.item] -= 1;
+      if (command.item === 'poultice') c!.hp = Math.min(maxHp(c!), c!.hp + ITEMS.poultice.heal);
+      else c!.charges = newCreature(c!.id, c!.species, undefined, level(c!)).charges;
+      break;
+    }
+    case 'set-lead': {
+      const i = s.creatures.findIndex(c => c.id === command.creatureId);
+      if (i < 0) fail('unknown-creature');
+      s.lead = i; break;
+    }
+    case 'rename': {
+      const c = s.creatures.find(c => c.id === command.creatureId);
+      if (!c) fail('unknown-creature');
+      c.nick = cleanNick(command.nick); break;
+    }
+    case 'move': {
+      if (!active) fail('no-battle');
+      if (combatant.hp === 0) fail('fainted');
+      const own = SPECIES[combatant.species].moves.find(m => m.id === command.move);
+      if (!own) fail('invalid-command');
+      if (own.max && (combatant.charges[own.id] ?? 0) === 0) fail('no-charges');
+      const wild = battle!.wild;
+      const log: NonNullable<GameState['battle']>['log'] = [];
+      // own action: a root or stun the opponent landed last turn costs this one, and no charge.
+      const skipOwn = combatant.statuses.some(x => x.id === 'root' || x.id === 'stun');
+      if (own.max && !skipOwn) combatant.charges[own.id] -= 1;
+      let entry = { actor: 'own' as const, move: own.id, dmg: 0, mult: 1, status: undefined as string | undefined, burn: 0, skipped: skipOwn };
+      if (!skipOwn) {
+        if (own.guard) combatant.guard = true;
+        else if (own.heal) combatant.hp = Math.min(maxHp(combatant), combatant.hp + own.heal);
+        else {
+          const r = damage(combatant, wild, own); entry.dmg = r.dmg; entry.mult = r.mult;
+          wild.hp = Math.max(0, wild.hp - r.dmg);
+          if (own.status && wild.hp > 0) { applyStatus(wild, own.status); entry.status = own.status; }
+        }
+      }
+      const skipWild = wild.statuses.some(x => x.id === 'root' || x.id === 'stun');
+      const wildBurn = wild.hp > 0 ? tick(wild) : 0;
+      if (wildBurn) { entry.burn = wildBurn; wild.hp = Math.max(0, wild.hp - wildBurn); }
+      log.push(entry);
+      battle!.turn += 1;
+      if (wild.hp === 0) { battle!.log = log; win(); break; }
+      // Opponent action: a wild creature always uses its signature move (index 1), weakened for
+      // balance; a trainer's creature alternates signature and status moves at full strength.
+      const trainer = battle!.source === 'trainer';
+      const wm = SPECIES[wild.species].moves[trainer && battle!.turn % 2 === 1 ? 2 : 1];
+      const w = { actor: 'wild' as const, move: wm.id, dmg: 0, mult: 1, status: undefined as string | undefined, burn: 0, skipped: skipWild };
+      let landed: StatusId | undefined;
+      if (!skipWild) {
+        const r = damage(wild, combatant, trainer ? wm : { ...wm, dmg: wm.dmg! - 4 }); w.dmg = r.dmg; w.mult = r.mult;
+        if (trainer && wm.status && combatant.hp - r.dmg > 0) { landed = wm.status; w.status = wm.status; }
+        combatant.hp = Math.max(0, combatant.hp - r.dmg);
+      }
+      // The holder's statuses tick at the end of its turn; one landed this turn holds into the next.
+      const ownBurn = combatant.hp > 0 ? tick(combatant) : 0;
+      if (ownBurn) { w.burn = ownBurn; combatant.hp = Math.max(0, combatant.hp - ownBurn); }
+      if (landed && combatant.hp > 0) applyStatus(combatant, landed);
+      log.push(w);
+      battle!.log = log;
+      if (combatant.hp === 0) finish('defeat');
+      break;
+    }
+    case 'capture': {
+      if (!active) fail('no-battle');
+      if (battle!.source === 'trainer') fail('not-wild');
+      if (s.inventory.capsules === 0) fail('no-capsules');
+      if (battle!.wild.hp > 14) fail('not-weakened');
+      s.inventory.capsules -= 1;
+      const caught = structuredClone(battle!.wild); clearBattleOnly(caught); caught.nick = cleanNick(command.nick);
+      s.creatures.push(caught);
+      finish('captured'); battle!.growth = grantXp(combatant, xpGain(5, level(battle!.wild), level(combatant))); s.captures += 1;
+      break;
+    }
+    case 'escape':
+      if (!active) fail('no-battle');
+      finish('escaped'); break;
+    case 'heal':
+      s.creatures.forEach(c => { const fresh = newCreature(c.id, c.species, undefined, level(c)); c.hp = maxHp(c); c.charges = fresh.charges; clearBattleOnly(c); });
+      s.trainersBeaten = [];
+      break;
+    case 'scarecrow-gift': {
+      if (!Number.isSafeInteger(command.now) || command.now < 0 || command.now > Number.MAX_SAFE_INTEGER - SCARECROW_COOLDOWN_MS) fail('invalid-command');
+      if (command.now < s.scarecrowReadyAt) fail('gift-cooldown');
+      s.inventory.capsules += SCARECROW_CAPSULES;
+      s.scarecrowReadyAt = command.now + SCARECROW_COOLDOWN_MS;
+      break;
+    }
+    case 'grant-capsule':
+    case 'grant-item': {
+      const item = command.type === 'grant-item' ? command.item : 'capsule';
+      const qty = command.type === 'grant-item' ? command.qty ?? 1 : 1;
+      if (!['capsule', 'poultice', 'tonic', 'map'].includes(item)) fail('invalid-command');
+      if (!Number.isInteger(qty) || qty < 1 || qty > SHOP_QTY_MAX) fail('invalid-command');
+      if (item === 'map' && (qty !== 1 || s.inventory.map > 0)) fail('sold-out');
+      const key = `payment/${command.fact}`;
+      if (!command.fact.trim() || s.consumed.includes(key)) fail('choice-consumed');
+      s.consumed.push(key);
+      if (item === 'capsule') s.inventory.capsules += qty; else s.inventory[item] += qty;
+      break;
+    }
+    case 'sell': {
+      if (active) fail('battle-active');
+      const i = s.creatures.findIndex(c => c.id === command.creatureId);
+      if (i < 0) fail('unknown-creature');
+      // The lead fights for you and the last creature is your party: Bramble buys neither.
+      if (i === s.lead || s.creatures.length <= 1) fail('not-for-sale');
+      const key = `sale/${command.fact}`;
+      if (!command.fact.trim() || s.consumed.includes(key)) fail('choice-consumed');
+      s.consumed.push(key);
+      const lead = s.creatures[s.lead];
+      s.creatures.splice(i, 1);
+      s.lead = s.creatures.indexOf(lead);
+      break;
+    }
+    case 'bind-creature': {
+      const creature = s.creatures.find(c => c.id === command.creatureId);
+      if (!creature || creature.anchor !== null || !command.anchor.trim()) fail('invalid-command');
+      if (s.creatures.some(c => c.anchor === command.anchor)) fail('invalid-command');
+      creature!.anchor = command.anchor; break;
+    }
+    case 'holdings': {
+      if (!Number.isSafeInteger(command.coins) || command.coins < 0) fail('invalid-command');
+      s.coins = command.coins;
+      // A creature whose object the wallet no longer holds has left with it. One never bound
+      // stays, and so does one on its way to the wallet that has not reached a proof yet.
+      const kept = s.creatures.filter(
+        c => c.anchor === null || command.held.includes(c.anchor) || command.inFlight.includes(c.anchor),
+      );
+      if (kept.length === 0) fail('invalid-command');
+      if (s.battle && !kept.some(c => c.id === s.battle!.creatureId)) fail('battle-active');
+      // The lead stays with its creature; one that left hands the lead to the first kept.
+      s.lead = Math.max(0, kept.findIndex(c => c.id === lead.id));
+      s.creatures = kept;
+      break;
+    }
+    case 'receive-creature': {
+      const c = creatureSchema.parse(command.creature);
+      if (c.anchor === null || s.creatures.some(x => x.anchor === c.anchor || x.id === c.id)) fail('invalid-command');
+      s.creatures.push(c); break;
+    }
+    case 'campaign': {
+      if (!['sanctuary', 'rangers'].includes(command.branch)) fail('invalid-command');
+      const opportunity = `${s.campaign.instance}/crossroads`;
+      if (s.campaign.branch !== 'unselected' || s.consumed.includes(opportunity)) fail('choice-consumed');
+      s.campaign.branch = command.branch;
+      s.consumed.push(opportunity);
+      break;
+    }
+    default: fail('invalid-command');
+  }
+  s.revision += 1; s.commandIds.push(commandId);
+  return stateSchema.parse(s);
+}

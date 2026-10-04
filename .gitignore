@@ -1,0 +1,13 @@
+node_modules/
+dist/
+lib/
+.DS_Store
+data/dsm-game.json*
+
+# Local deployment and signing secrets
+.env
+.env.*
+!.env.example
+.vercel/
+*.jks
+*.keystore

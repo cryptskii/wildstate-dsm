@@ -1,0 +1,4 @@
+interface:
+  display_name: "DSM Creature Game"
+  short_description: "DSM state and DLV integration for creature RPGs"
+  default_prompt: "Use $dsm-creature-game with the project's RPGJS skill to implement a creature RPG without simulating DSM settlement."

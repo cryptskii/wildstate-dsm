@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="icon" href="brand/icon-64.png"><title>Wildstate</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=VT323&display=swap" rel="stylesheet"><style>body{margin:0;background:#081c1a}@keyframes capThrow{0%{left:var(--x0);top:var(--y0);rotate:0deg;scale:.8}50%{top:calc((var(--y0) + var(--y1)) / 2 - 90px)}100%{left:var(--x1);top:var(--y1);rotate:720deg;scale:1}}@keyframes capWobble{0%,100%{rotate:0deg;translate:0 0}15%{rotate:-18deg;translate:-5px 0}30%{rotate:0deg}45%{rotate:18deg;translate:5px 0}60%{rotate:0deg}75%{rotate:-12deg;translate:-3px 0}}@keyframes capGlow{0%{filter:brightness(1)}50%{filter:brightness(2.2) drop-shadow(0 0 8px #fff)}100%{filter:brightness(1)}}@keyframes suckIn{0%{opacity:1;scale:1;translate:0 0;filter:none}40%{opacity:.9;filter:brightness(2.5) saturate(0)}100%{opacity:0;scale:.05;translate:var(--dx) var(--dy);filter:brightness(3) saturate(0)}}@keyframes beamSpin{to{rotate:360deg}}@keyframes smokeUp{0%{opacity:.7;scale:.6;translate:0 0}100%{opacity:0;scale:1.4;translate:0 -30px}}@keyframes slash{0%{opacity:0;scale:.4}20%{opacity:1;scale:1.3}100%{opacity:0;scale:1.5;translate:0 10px}}@keyframes emberFall{0%{opacity:1;translate:0 0}100%{opacity:0;translate:var(--dx) 40px}}@keyframes shake{0%,100%{translate:0 0}20%{translate:-6px 2px}40%{translate:6px -2px}60%{translate:-4px 1px}80%{translate:4px -1px}}@keyframes windup{0%{translate:0 0}40%{translate:-18px 4px}70%{translate:28px -10px}100%{translate:0 0}}@keyframes windupR{0%{translate:0 0}40%{translate:18px -4px}70%{translate:-28px 10px}100%{translate:0 0}}@keyframes projOwn{0%{left:var(--x0);top:var(--y0);scale:.6;opacity:0}15%{opacity:1;scale:1}100%{left:var(--x1);top:var(--y1);scale:1.15;opacity:1}}@keyframes projWild{0%{left:var(--x1);top:var(--y1);scale:.6;opacity:0}15%{opacity:1;scale:1}100%{left:var(--x0);top:var(--y0);scale:1.15;opacity:1}}@keyframes frames4{to{background-position:-128px 0}}@keyframes trail{0%{opacity:.8;scale:1}100%{opacity:0;scale:.2;translate:-30px 10px}}@keyframes burstPop{0%{opacity:1;scale:.8}100%{opacity:0;scale:1.6}}@keyframes tongueOut{0%{scale:0 .6}35%{scale:1.04 1.1}55%{scale:1 1}100%{scale:0 .6;opacity:.8}}@keyframes tongueTip{0%{left:var(--x0);top:var(--y0);scale:1.2}35%,55%{left:var(--x1);top:var(--y1)}100%{left:var(--x0);top:var(--y0);opacity:0}}@keyframes jetOut{0%{scale:0 .3;opacity:0}25%{scale:1 1.15;opacity:1}80%{scale:1 1;opacity:1}100%{scale:1 .15;opacity:0}}@keyframes lurePulse{0%{opacity:0;scale:.4}30%,60%{opacity:1;scale:1}100%{opacity:0;scale:1.6}}@keyframes jetFlow{to{background-position:22px 0}}@keyframes snareHold{0%{opacity:0;scale:1.2}20%,80%{opacity:1}100%{opacity:0}}@keyframes camoFade{0%,100%{opacity:1}50%{opacity:.15;filter:saturate(.3)}}@keyframes shieldUp{0%{opacity:0;scale:.5;translate:0 10px}30%,70%{opacity:1;scale:1;translate:0 0}100%{opacity:0;scale:1.1}}@keyframes healRise{0%{opacity:0;translate:0 16px}30%{opacity:1}100%{opacity:0;translate:0 -36px}}@keyframes dmgPop{0%{opacity:0;translate:0 10px;scale:.6}25%{opacity:1;scale:1.25}50%{scale:1}100%{opacity:0;translate:0 -40px}}@keyframes flinch{0%,100%{translate:0 0;filter:none}20%{translate:14px -4px;filter:brightness(3)}40%{translate:-8px 2px;filter:brightness(1)}60%{translate:6px 0;filter:brightness(2.5)}80%{translate:-3px 0;filter:none}}@keyframes flinchL{0%,100%{translate:0 0;filter:none}20%{translate:-14px 4px;filter:brightness(3)}40%{translate:8px -2px;filter:brightness(1)}60%{translate:-6px 0;filter:brightness(2.5)}80%{translate:3px 0;filter:none}}@keyframes capsuleArc{0%{left:var(--x0);top:var(--y0);rotate:0deg}45%{left:var(--x1);top:calc(var(--y1) - 70px);rotate:400deg}60%{left:var(--x1);top:var(--y1);rotate:420deg}70%,78%{translate:-6px 0}74%,82%{translate:6px 0}100%{left:var(--x1);top:var(--y1);rotate:420deg;translate:0 0}}@keyframes suck{0%,45%{opacity:1;scale:1}60%{opacity:0;scale:.1;translate:0 -30px}100%{opacity:0;scale:0}}@keyframes breathe{50%{translate:0 -6px}}@keyframes lunge{50%{translate:60px -16px}}@keyframes counter{50%{translate:-50px 24px}}@keyframes hit{20%,60%{opacity:.15;translate:10px 0}40%,80%{opacity:1;translate:-10px 0}}@keyframes fire{to{left:68%;bottom:60%;transform:scale(.5);opacity:0}}@keyframes guard{0%{opacity:0;scale:.6}30%,70%{opacity:1;scale:1}100%{opacity:0;scale:1.2}}@keyframes heal{0%{opacity:0;translate:0 10px}40%{opacity:1}100%{opacity:0;translate:0 -40px}}@keyframes throw{0%{left:20%;bottom:30%;transform:rotate(0)}45%{left:70%;bottom:60%;transform:rotate(400deg)}65%,85%{left:70%;bottom:45%;transform:rotate(380deg)}75%,100%{left:70%;bottom:45%;transform:rotate(420deg)}}@keyframes catch{0%,40%{opacity:1;scale:1}60%,100%{opacity:0;scale:0}}@keyframes run{to{translate:-240px 0;opacity:0}}@keyframes flash{0%,100%{opacity:0}30%{opacity:.9}}@keyframes arrive{from{translate:0 12px;opacity:0}}@keyframes blink{50%{opacity:0}}</style></helmet>
+<div data-screen-label="Battle mobile" style="min-height:100vh;display:grid;place-items:center;background:#0e2620;background-image:radial-gradient(#153429 1px,transparent 1px);background-size:8px 8px;padding:32px 16px;color:#f3f3df;font-family:'VT323',ui-monospace,monospace;font-size:18px">
+<x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+  <div style="height:100%;display:flex;flex-direction:column;background:#142f26;color:#f3f3df;font-family:'VT323',ui-monospace,monospace;font-size:18px">
+    <div style="font-family:'Silkscreen',monospace;padding:56px 16px 10px;background:#1b3a2e;display:flex;justify-content:space-between;align-items:center;letter-spacing:0;font-size:11px;white-space:nowrap;border-bottom:4px solid #0b1a15"><span style="font-family:'Silkscreen',monospace;font-weight:700">{{ headTitle }}</span><span style="font-family:'Silkscreen',monospace;display:flex;gap:10px;align-items:center;letter-spacing:0;color:#b9cdb6;font-size:10px"><span>Turn {{ turnLabel }}</span><span style="font-family:'Silkscreen',monospace;padding:1px 6px;border:2px solid #6f9a5a;font-size:9px;letter-spacing:0;color:#d7e6cf">LOCAL</span></span></div>
+
+    <div style="height:380px;flex:none;position:relative;overflow:hidden;background:url(tiles/arena-mobile.png) 0 0/100% 100% no-repeat;image-rendering:pixelated;border-bottom:4px solid #0b1a15;animation:{{ arenaAnim }}">
+      <div style="position:absolute;inset:0;background:#fff;pointer-events:none;opacity:0;display:{{ fxFlash }};animation:flash .45s"></div>
+      {{ wildSprite }}{{ ownSprite }}{{ fxLayer }}
+      <div style="position:absolute;z-index:2;left:14px;top:14px;padding:7px 10px 8px;width:176px;background:#f6efd2;color:#26443a;box-shadow:0 0 0 2px #26443a,0 0 0 4px #e9e0b8,0 0 0 6px #26443a">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><b style="font-family:'VT323',monospace;font-size:26px;font-weight:400;line-height:1">{{ wildName }}</b><span style="font-size:16px;white-space:nowrap;color:#4c6a5c">{{ wildTag }}</span></div>
+        <div style="display:flex;gap:6px;margin-top:5px;flex-wrap:wrap;min-height:16px"><span style="font-family:'Silkscreen',monospace;font-size:9px;letter-spacing:0;padding:2px 6px;color:#f6efd2;background:{{ wildElColor }};border:2px solid #26443a;line-height:1">{{ wildElLabel }}</span><sc-for list="{{ wildStatuses }}" as="st" hint-placeholder-count="0"><span style="font-family:'Silkscreen',monospace;font-size:9px;letter-spacing:0;padding:2px 6px;color:#f6efd2;background:#26443a;border:2px solid #26443a;line-height:1">{{ st.label }} {{ st.turns }}</span></sc-for></div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:6px"><span style="font-family:'Silkscreen',monospace;font-size:9px;letter-spacing:0;color:#4c6a5c">HP</span><div style="flex:1;height:10px;background:#3b3f2e;border:2px solid #26443a;box-sizing:border-box"><i style="display:block;height:100%;transition:width .45s;background:{{ wildHpColor }};width:{{ wildHpPct }};box-shadow:inset 0 2px 0 #ffffff55"></i></div><small style="font-size:18px;font-variant-numeric:tabular-nums;white-space:nowrap"><b>{{ wildHp }}</b><span style="color:#4c6a5c">/{{ wildMax }}</span></small></div>
+      </div>
+      <div style="position:absolute;z-index:2;right:14px;bottom:14px;padding:7px 10px 8px;width:176px;background:#f6efd2;color:#26443a;box-shadow:0 0 0 2px #26443a,0 0 0 4px #e9e0b8,0 0 0 6px #26443a">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px"><b style="font-family:'VT323',monospace;font-size:26px;font-weight:400;line-height:1">{{ ownName }}</b><span style="font-size:16px;white-space:nowrap;color:#4c6a5c">Lv {{ ownLevel }} · {{ ownXpLabel }} XP</span></div>
+        <div style="display:flex;gap:6px;margin-top:5px;flex-wrap:wrap;min-height:16px"><span style="font-family:'Silkscreen',monospace;font-size:9px;letter-spacing:0;padding:2px 6px;color:#f6efd2;background:{{ ownElColor }};border:2px solid #26443a;line-height:1">{{ ownElLabel }}</span><sc-for list="{{ ownStatuses }}" as="st" hint-placeholder-count="0"><span style="font-family:'Silkscreen',monospace;font-size:9px;letter-spacing:0;padding:2px 6px;color:#f6efd2;background:#26443a;border:2px solid #26443a;line-height:1">{{ st.label }} {{ st.turns }}</span></sc-for></div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:6px"><span style="font-family:'Silkscreen',monospace;font-size:9px;letter-spacing:0;color:#4c6a5c">HP</span><div style="flex:1;height:10px;background:#3b3f2e;border:2px solid #26443a;box-sizing:border-box"><i style="display:block;height:100%;transition:width .45s;background:{{ ownHpColor }};width:{{ ownHpPct }};box-shadow:inset 0 2px 0 #ffffff55"></i></div><small style="font-size:18px;font-variant-numeric:tabular-nums;white-space:nowrap"><b>{{ ownHp }}</b><span style="color:#4c6a5c">/{{ ownMax }}</span></small></div>
+      </div>
+    </div>
+
+    <div style="background:#142f26;padding:10px 14px 40px;display:grid;gap:10px;flex:1;align-content:start">
+      <div style="display:flex;align-items:center;gap:12px;background:#10261f;box-shadow:0 0 0 2px #0b1a15,0 0 0 4px #9ccf6e,0 0 0 6px #0b1a15;padding:6px 12px;min-height:44px;margin:4px 6px 2px">{{ portrait }}<p role="status" style="font-size:18px;margin:0;flex:1;line-height:1.3">{{ message }}</p><sc-if value="{{ active }}" hint-placeholder-val="{{ true }}"><small style="font-family:'Silkscreen',monospace;font-size:9px;letter-spacing:0;color:#c4ec79;white-space:nowrap">{{ matchupHint }}</small></sc-if><span style="color:#c4ec79;font-size:16px;animation:blink 1s steps(1) infinite">▼</span></div>
+      <sc-if value="{{ active }}" hint-placeholder-val="{{ true }}">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:6px">
+          <sc-for list="{{ moves }}" as="m" hint-placeholder-count="4">
+            <button disabled="{{ m.disabled }}" onClick="{{ m.use }}" style="font:inherit;font-family:'VT323',ui-monospace,monospace;cursor:pointer;border:0;color:#f3f3df;text-align:left;box-shadow:0 0 0 2px #0b1a15,inset 2px 2px 0 #ffffff22,inset -2px -3px 0 #00000055;border-left:5px solid {{ m.elColor }};border-radius:0;background:{{ m.bg }};padding:10px 12px;display:grid;grid-template-rows:auto 1fr auto;gap:4px;min-height:58px;opacity:{{ m.opacity }}" style-hover="filter:brightness(1.15)" style-active="translate:0 2px;box-shadow:0 0 0 2px #0b1a15,inset 2px 2px 0 #00000055">
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><b style="font-family:'VT323',monospace;font-size:22px;font-weight:400;white-space:nowrap;letter-spacing:.5px">{{ m.name }}</b><span style="font-family:'Silkscreen',monospace;font-size:8px;letter-spacing:0;padding:3px 5px;color:#f6efd2;background:#0b1a15;line-height:1;opacity:.85">{{ m.elLabel }}</span></div>
+              <div style="display:flex;flex-direction:column;gap:2px"><small style="font-size:15px;line-height:1.25">{{ m.line1 }}</small></div>
+              <div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="display:flex;gap:3px;min-height:8px"><sc-for list="{{ m.pips }}" as="p" hint-placeholder-count="0"><i style="width:8px;height:8px;border:2px solid #0b1a15;background:{{ p.fill }};display:block;box-shadow:inset 1px 1px 0 #ffffff55"></i></sc-for></div><small style="font-family:'Silkscreen',monospace;font-size:8px;color:#c7d8c2;white-space:nowrap">{{ m.chargeLabel }}</small></div>
+            </button>
+          </sc-for>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:6px">
+          <button disabled="{{ captureDisabled }}" onClick="{{ capture }}" style="font:inherit;font-family:'VT323',ui-monospace,monospace;cursor:pointer;border:0;color:#f3f3df;text-align:left;box-shadow:0 0 0 2px #0b1a15,inset 2px 2px 0 #ffffff22,inset -2px -3px 0 #00000055;border-radius:0;background:#1f4434;padding:0 10px;min-height:44px;display:flex;justify-content:space-between;align-items:center;gap:8px;opacity:{{ captureOpacity }}" style-active="translate:0 2px"><b style="font-size:18px;white-space:nowrap">◉ Capsule</b><small style="font-size:16px;color:#c7d8c2;white-space:nowrap">{{ captureHint }}</small></button>
+          <button disabled="{{ busy }}" onClick="{{ escape }}" style="font:inherit;font-family:'VT323',ui-monospace,monospace;cursor:pointer;border:0;color:#f3f3df;text-align:left;box-shadow:0 0 0 2px #0b1a15,inset 2px 2px 0 #ffffff22,inset -2px -3px 0 #00000055;border-radius:0;background:#1f4434;padding:0 10px;min-height:44px;display:flex;justify-content:space-between;align-items:center;gap:8px" style-active="translate:0 2px"><b style="font-size:18px">{{ runLabel }}</b><small style="font-size:16px;color:#c7d8c2;white-space:nowrap">{{ runHint }}</small></button>
+        </div>
+      </sc-if>
+      <sc-if value="{{ naming }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid;gap:10px;padding:10px 12px;margin:0 6px;background:#f6efd2;color:#26443a;box-shadow:0 0 0 2px #26443a,0 0 0 4px #f6efd2,0 0 0 6px #26443a">
+          <div style="font-family:'Silkscreen',monospace;font-size:9px;color:#4c6a5c">NAME YOUR {{ caughtName }}</div>
+          <input value="{{ nick }}" onChange="{{ setNick }}" onKeyDown="{{ nickKey }}" maxLength="12" placeholder="{{ caughtName }}" autoFocus="{{ true }}" style="font:inherit;font-family:'VT323',monospace;font-size:24px;color:#26443a;background:#ece4c3;border:0;box-shadow:0 0 0 2px #26443a;padding:6px 10px;outline:none;width:100%;box-sizing:border-box">
+          <button onClick="{{ finishNaming }}" style="font:inherit;font-family:'VT323',monospace;cursor:pointer;border:0;color:#f3f3df;box-shadow:0 0 0 2px #0b1a15,inset 2px 2px 0 #ffffff22,inset -2px -3px 0 #00000055;background:#3f6e2a;min-height:44px;font-size:20px" style-active="translate:0 2px">Keep ▶</button>
+        </div>
+      </sc-if>
+      <sc-if value="{{ levelUp }}" hint-placeholder-val="{{ false }}">
+        <div onClick="{{ dismissLevelUp }}" style="display:grid;gap:8px;padding:10px 12px;margin:0 6px;background:#f6efd2;color:#26443a;box-shadow:0 0 0 2px #26443a,0 0 0 4px #e9d86b,0 0 0 6px #26443a;cursor:pointer;animation:arrive .25s ease-out">
+          <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-family:'Silkscreen',monospace;font-size:10px;font-weight:700;color:#8a6d1f">✦ LEVEL UP</span><span style="font-family:'VT323',monospace;font-size:28px;line-height:1">Lv {{ luFrom }} <span style="color:#8a6d1f">▶</span> Lv {{ luTo }}</span></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:17px">
+            <div style="display:flex;justify-content:space-between;background:#ece4c3;padding:4px 8px;box-shadow:inset 0 0 0 2px #26443a"><span style="color:#4c6a5c">MAX HP</span><b>{{ luHp }}</b></div>
+            <div style="display:flex;justify-content:space-between;background:#ece4c3;padding:4px 8px;box-shadow:inset 0 0 0 2px #26443a"><span style="color:#4c6a5c">DAMAGE</span><b>{{ luDmg }}</b></div>
+          </div>
+          <sc-if value="{{ luCharges }}" hint-placeholder-val="{{ false }}"><div style="font-size:16px;color:#3f6e2a">+1 charge on every special move</div></sc-if>
+          <small style="font-family:'Silkscreen',monospace;font-size:7px;color:#6c8a7c">XP IS CARRIED ON THE CREATURE'S DSM STATE · TAP TO CONTINUE</small>
+        </div>
+      </sc-if>
+      <sc-if value="{{ endedNotNaming }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid;gap:10px;padding:6px">
+          <a href="Field mobile.dc.html" style="font:inherit;font-family:'VT323',ui-monospace,monospace;cursor:pointer;border:0;color:#f3f3df;text-align:left;box-shadow:0 0 0 2px #0b1a15,inset 2px 2px 0 #ffffff22,inset -2px -3px 0 #00000055;border-radius:0;background:#3f6e2a;min-height:50px;font-size:21px;text-align:center;display:grid;place-items:center;text-decoration:none" style-active="translate:0 2px">Return to exploring ▶</a>
+          <button onClick="{{ rest }}" style="font:inherit;font-family:'VT323',ui-monospace,monospace;cursor:pointer;border:0;color:#f3f3df;text-align:left;box-shadow:0 0 0 2px #0b1a15,inset 2px 2px 0 #ffffff22,inset -2px -3px 0 #00000055;border-radius:0;background:#1f4434;min-height:44px;font-size:20px;text-align:center" style-active="translate:0 2px">✚ Rest with Mira</button>
+        </div>
+      </sc-if>
+      <sc-if value="{{ showLedger }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;border-top:2px dashed #26443a;padding:8px 6px 0;font-family:'Silkscreen',monospace;font-size:7px;color:#8fb09a;white-space:nowrap"><span style="display:flex;gap:6px"><span style="padding:3px 6px;background:#0b1a15;color:#c4ec79">REV {{ revision }}</span><span style="padding:3px 6px;background:#0b1a15">{{ lastCmd }}</span><span style="padding:3px 6px;background:#0b1a15">{{ consumedLabel }}</span></span><span style="font-family:'VT323',monospace;font-size:16px;color:#d7e6cf">◉ {{ capsules }} <span style="color:#e9d86b">✦ {{ coins }}</span></span></div>
+      </sc-if>
+    </div>
+  </div>
+</x-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;ownSpecies&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;embercub&quot;,&quot;options&quot;:[&quot;embercub&quot;,&quot;mossling&quot;,&quot;tidefin&quot;,&quot;voltusk&quot;,&quot;leon&quot;,&quot;brineback&quot;,&quot;rattlefin&quot;],&quot;tsType&quot;:&quot;'embercub'|'mossling'|'tidefin'|'voltusk'&quot;,&quot;section&quot;:&quot;Battle&quot;},&quot;wildSpecies&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;mossling&quot;,&quot;options&quot;:[&quot;embercub&quot;,&quot;mossling&quot;,&quot;tidefin&quot;,&quot;voltusk&quot;,&quot;leon&quot;,&quot;brineback&quot;,&quot;rattlefin&quot;],&quot;tsType&quot;:&quot;'embercub'|'mossling'|'tidefin'|'voltusk'&quot;,&quot;section&quot;:&quot;Battle&quot;},&quot;showLedger&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Battle&quot;}}">
+const EL = {
+  fire:  { label: 'FIRE',  color: '#b5522a', beats: 'grass' },
+  grass: { label: 'GRASS', color: '#3f8a4f', beats: ['water', 'electric'] },
+  water: { label: 'WATER', color: '#2f6f9e', beats: 'fire' },
+  electric: { label: 'VOLT', color: '#8a6d1f', beats: 'water' },
+  none:  { label: 'BASIC', color: '#5b6b60', beats: null },
+};
+const SPECIES = {
+  embercub: { name: 'Embercub', el: 'fire', moves: [
+    { id: 'strike', name: 'Strike', el: 'none', dmg: 8, max: 0, line1: '8 damage' },
+    { id: 'flare', name: 'Flare', el: 'fire', dmg: 14, max: 5, line1: '14 fire damage' },
+    { id: 'ember-bite', name: 'Ember Bite', el: 'fire', dmg: 9, max: 3, status: 'burn', fx: 'bite', line1: '9 fire · Burn 3×2' },
+    { id: 'warm-coat', name: 'Warm Coat', el: 'none', guard: true, max: 2, line1: 'Guard · halve next hit' },
+  ]},
+  mossling: { name: 'Mossling', el: 'grass', moves: [
+    { id: 'strike', name: 'Strike', el: 'none', dmg: 8, max: 0, line1: '8 damage' },
+    { id: 'leaf-cut', name: 'Leaf Cut', el: 'grass', dmg: 12, max: 5, fx: 'proj', line1: '12 grass damage' },
+    { id: 'root-bind', name: 'Root Bind', el: 'grass', dmg: 6, max: 3, status: 'root', fx: 'snare', line1: '6 grass · Root 1 turn' },
+    { id: 'photosynth', name: 'Photosynth', el: 'none', heal: 12, max: 1, line1: 'Heal 12 HP' },
+  ]},
+  tidefin: { name: 'Tidefin', el: 'water', moves: [
+    { id: 'strike', name: 'Strike', el: 'none', dmg: 8, max: 0, line1: '8 damage' },
+    { id: 'tide-lash', name: 'Tide Lash', el: 'water', dmg: 12, max: 5, fx: 'jet', line1: '12 water damage' },
+    { id: 'soak', name: 'Soak', el: 'water', dmg: 7, max: 3, status: 'soaked', fx: 'jet', line1: '7 water · Soak, clears Burn' },
+    { id: 'mist-veil', name: 'Mist Veil', el: 'none', guard: true, max: 2, line1: 'Guard · halve next hit' },
+  ]},
+  voltusk: { name: 'Voltusk', el: 'electric', moves: [
+    { id: 'strike', name: 'Strike', el: 'none', dmg: 8, max: 0, line1: '8 damage' },
+    { id: 'volt-charge', name: 'Volt Charge', el: 'electric', dmg: 12, max: 5, fx: 'tusk', line1: '12 volt damage' },
+    { id: 'static-tusk', name: 'Static Tusk', el: 'electric', dmg: 7, max: 3, status: 'stun', fx: 'tusk', line1: '7 volt · Stun 1 turn' },
+    { id: 'bristle', name: 'Bristle', el: 'none', guard: true, max: 2, line1: 'Guard · halve next hit' },
+  ]},
+  rattlefin: { name: 'Rattlefin', el: 'water', moves: [
+    { id: 'strike', name: 'Strike', el: 'none', dmg: 8, max: 0, line1: '8 damage' },
+    { id: 'chain-whip', name: 'Chain Whip', el: 'water', dmg: 12, max: 5, fx: 'chain', line1: '12 water damage' },
+    { id: 'lure-flash', name: 'Lure Flash', el: 'water', dmg: 6, max: 3, status: 'stun', fx: 'lure', line1: '6 water · Stun 1 turn' },
+    { id: 'rust-hide', name: 'Rust Hide', el: 'none', guard: true, max: 2, line1: 'Guard · halve next hit' },
+  ]},
+  brineback: { name: 'Brineback', el: 'water', moves: [
+    { id: 'strike', name: 'Strike', el: 'none', dmg: 8, max: 0, line1: '8 damage' },
+    { id: 'brine-jet', name: 'Brine Jet', el: 'water', dmg: 12, max: 5, fx: 'jet', line1: '12 water damage' },
+    { id: 'barnacle-bash', name: 'Barnacle Bash', el: 'water', dmg: 7, max: 3, status: 'soaked', fx: 'bash', line1: '7 water · Soaked 2 turns' },
+    { id: 'shell-up', name: 'Shell Up', el: 'none', guard: true, max: 2, line1: 'Guard · halve next hit' },
+  ]},
+  leon: { name: 'Leon', el: 'grass', moves: [
+    { id: 'strike', name: 'Strike', el: 'none', dmg: 8, max: 0, line1: '8 damage' },
+    { id: 'tongue-lash', name: 'Tongue Lash', el: 'grass', dmg: 12, max: 5, fx: 'tongue', line1: '12 grass damage' },
+    { id: 'sticky-snare', name: 'Sticky Snare', el: 'grass', dmg: 6, max: 3, status: 'root', fx: 'snare', line1: '6 grass · Root 1 turn' },
+    { id: 'camouflage', name: 'Camouflage', el: 'none', guard: true, max: 2, fx: 'camo', line1: 'Guard · halve next hit' },
+  ]},
+};
+const STATUS = { burn: { label: 'BURN', turns: 2, verb: 'is burning' }, root: { label: 'ROOT', turns: 1, verb: 'is rooted' }, stun: { label: 'STUN', turns: 1, verb: 'is stunned' }, soaked: { label: 'SOAKED', turns: 2, verb: 'is soaked' } };
+const TRAINERS = {
+  kade: { name: 'Kade', species: 'mossling', nick: 'Burr', win: 'Ha! Burr hasn’t hit the grass in weeks. The bounty’s yours, fair and square.', lose: 'That’s how it goes. Rest up with Mira and come find me again.' },
+  nessa: { name: 'Nessa', species: 'tidefin', nick: 'Ripple', win: 'Ripple! …Fine. You earned that bounty. Well fought.', lose: 'The pond stays ours. Come back when your creature has rested.' },
+};
+const WILD_ORDER = ['mossling', 'tidefin', 'voltusk', 'leon', 'embercub'];
+// Pixel-art species ship as PNG facing right; vector placeholders face front.
+const ART = { rattlefin: { src: 'creatures/rattlefin.png', faces: 'left', scale: 1.3, lift: 20 }, brineback: { src: 'creatures/brineback.png', faces: 'left', scale: 1.25, lift: 24 }, leon: { src: 'creatures/leon.png', faces: 'right', scale: 1.25, lift: 36 }, embercub: { src: 'creatures/embercub.png', faces: 'right', scale: 1.25 }, mossling: { src: 'creatures/mossling.png', faces: 'left', scale: 1.3 }, tidefin: { src: 'creatures/tidefin.png', faces: 'left', scale: 1.15 }, voltusk: { src: 'creatures/voltusk.png', faces: 'left', scale: 1.2 } };
+const art = sp => ART[sp] || { src: `creatures/${sp}.svg`, faces: 'front', scale: 1 };
+// own stands left and must face right; wild stands right and must face left.
+const flip = (sp, side) => { const a = art(sp); const want = side === 'own' ? 'right' : 'left'; return (a.faces === 'front' ? side === 'own' : a.faces !== want) ? 'scaleX(-1)' : 'none'; };
+const SPARKLES = Array.from({ length: 10 }, (_, n) => ({ left: ((n * 37) % 92) + '%', top: ((n * 23) % 85) + '%', delay: n * 0.2 + 's', size: (9 + (n % 3) * 4) + 'px' }));
+const wait = ms => new Promise(r => setTimeout(r, ms));
+const beats = (a, d) => [].concat(EL[a].beats || []).includes(d);
+const mult = (a, d) => beats(a, d) ? 1.5 : beats(d, a) ? 0.5 : 1;
+const LV_CAP = 10, XP_PER = 20;
+const lvOf = xp => Math.min(LV_CAP, 1 + Math.floor((xp || 0) / XP_PER));
+const maxHpAt = lv => 40 + 4 * (lv - 1);
+const dmgBonus = lv => lv - 1;
+const chargeBonus = lv => (lv >= 4 ? 1 : 0) + (lv >= 7 ? 1 : 0);
+const maxCharges = (m, lv) => m.max ? m.max + chargeBonus(lv) : 0;
+const xpGain = (base, oppLv, myLv) => Math.max(4, base + 2 * (oppLv - myLv));
+const fresh = (sp, lv = 1) => { const xp = (lv - 1) * XP_PER; return { species: sp, hp: maxHpAt(lv), xp, guard: false, statuses: [],
+  charges: Object.fromEntries(SPECIES[sp].moves.filter(m => m.max).map(m => [m.id, maxCharges(m, lv)])) }; };
+const SAVE = 'wildstate.save';
+const loadSave = () => { try { const v = JSON.parse(localStorage.getItem(SAVE)); if (v && v.party && v.party.length) return v; } catch (e) {} return { party: [{ id: 'c-1', nick: '', ...fresh('embercub') }], lead: 0, capsules: 3, coins: 10, nextId: 2 }; };
+const writeSave = v => { let prev = {}; try { prev = JSON.parse(localStorage.getItem(SAVE)) || {}; } catch (e) {} localStorage.setItem(SAVE, JSON.stringify({ ...prev, ...v })); };
+
+
+const FXC = {"ownX":70,"ownY":215,"wildX":292,"wildY":135,"ownFlinch":"flinchL","dmgOwnX":120,"dmgOwnY":150,"dmgWildX":300,"dmgWildY":70};
+const PROJ = { fire: 'fire', grass: 'leaf', water: 'water', electric: 'bolt' };
+const BURST_TINT = { fire: 'sepia(1) saturate(3) hue-rotate(-20deg)', grass: 'sepia(1) saturate(2) hue-rotate(60deg)', water: 'sepia(1) saturate(2) hue-rotate(170deg)', electric: 'none', none: 'grayscale(.3)' };
+function fxSprite(name, style, key) { return React.createElement('div', { key, style: { position: 'absolute', width: 32, height: 32, zIndex: 6, backgroundImage: 'url(fx/' + name + '.png)', backgroundSize: '128px 32px', imageRendering: 'pixelated', pointerEvents: 'none', ...style } }); }
+function fxLayer(s) {
+  const fx = s.effect, el = s.fxEl || 'none', dir = s.fxDir || 'own', out = [];
+  const px = v => v + 'px';
+  const from = dir === 'own' ? { '--x0': px(FXC.ownX), '--y0': px(FXC.ownY), '--x1': px(FXC.wildX), '--y1': px(FXC.wildY) } : { '--x0': px(FXC.ownX), '--y0': px(FXC.ownY), '--x1': px(FXC.wildX), '--y1': px(FXC.wildY) };
+  const travel = dir === 'own' ? 'projOwn' : 'projWild';
+  const sc = 2;
+  if (fx === 'proj' && el === 'fire') {
+    out.push(fxSprite('fire', { ...from, animation: travel + ' .42s cubic-bezier(.3,0,.8,1) forwards, frames4 .2s steps(4) infinite', scale: sc * 1.3, rotate: dir === 'own' ? '-22deg' : '158deg', filter: 'drop-shadow(0 0 6px #ff7a2b)' }, 'p'));
+    for (let i = 0; i < 5; i++) out.push(fxSprite('fire', { ...from, animation: travel + ' .42s cubic-bezier(.3,0,.8,1) forwards, frames4 .2s steps(4) infinite', animationDelay: (i * .045) + 's, 0s', scale: sc * (0.8 - i * 0.12), opacity: .55 - i * .1, rotate: dir === 'own' ? '-22deg' : '158deg', filter: 'brightness(1.3) saturate(1.4)' }, 't' + i));
+    for (let i = 0; i < 4; i++) out.push(React.createElement('div', { key: 'sp' + i, style: { position: 'absolute', zIndex: 6, width: 4, height: 4, background: '#ffe66b', boxShadow: '0 0 4px #ff9a2b', ...from, animation: travel + ' .42s cubic-bezier(.3,0,.8,1) forwards, trail .35s ease-out forwards', animationDelay: (.08 + i * .07) + 's', pointerEvents: 'none' } }));
+  } else if (fx === 'proj' && PROJ[el]) {
+    out.push(fxSprite(PROJ[el], { ...from, animation: travel + ' .42s cubic-bezier(.3,0,.8,1) forwards, frames4 .24s steps(4) infinite', scale: sc, transformOrigin: 'center', rotate: dir === 'own' ? '-20deg' : '160deg' }, 'p'));
+    for (let i = 0; i < 4; i++) out.push(fxSprite(PROJ[el], { ...from, animation: travel + ' .42s cubic-bezier(.3,0,.8,1) forwards, frames4 .24s steps(4) infinite', animationDelay: (i * .05) + 's, 0s', scale: sc * (0.6 - i * 0.1), opacity: .5 - i * .1, filter: 'brightness(1.4)' }, 't' + i));
+  }
+  if (fx === 'impact' && el === 'fire') {
+    const tx = dir === 'own' ? FXC.wildX : FXC.ownX, ty = dir === 'own' ? FXC.wildY : FXC.ownY;
+    if (s.fxKind === 'bite') { out.push(fxSprite('bite', { left: tx - 6, top: ty - 10, scale: sc * 1.8, animation: 'frames4 .45s steps(4) forwards, slash .5s ease-out forwards', rotate: dir === 'own' ? '0deg' : '180deg' }, 'bt')); }
+    out.push(fxSprite('fireburst', { left: tx, top: ty, scale: sc * (s.fxKind === 'bite' ? 1.1 : 1.8), animation: 'frames4 .5s steps(4) forwards, burstPop .55s ease-out forwards' }, 'fb'));
+    [[-30, -14], [26, -22], [12, 26], [-18, 20]].forEach(([dx, dy], i) => out.push(fxSprite('fireburst', { left: tx + dx, top: ty + dy, scale: sc * .7, animation: 'frames4 .4s steps(4) forwards, burstPop .45s ease-out forwards', animationDelay: (.06 + i * .05) + 's' }, 'fb' + i)));
+    for (let i = 0; i < 6; i++) out.push(React.createElement('div', { key: 'em' + i, style: { position: 'absolute', zIndex: 6, left: tx + 8 + (i % 3) * 10, top: ty + 6 + (i % 2) * 8, width: 4, height: 4, background: i % 2 ? '#ffe66b' : '#ff7a2b', boxShadow: '0 0 4px #ff7a2b', '--dx': ((i - 2.5) * 14) + 'px', animation: 'emberFall .6s ease-in forwards', animationDelay: (.15 + i * .04) + 's', pointerEvents: 'none' } }));
+    out.push(fxSprite('fireburst', { left: tx - 4, top: ty - 20, scale: sc * 1.4, backgroundPosition: '-96px 0', animation: 'smokeUp .7s ease-out forwards', animationDelay: '.3s', opacity: 0 }, 'sm'));
+    if (s.fxDmg != null) out.push(React.createElement('div', { key: 'd', style: { position: 'absolute', zIndex: 7, left: dir === 'own' ? FXC.dmgWildX : FXC.dmgOwnX, top: dir === 'own' ? FXC.dmgWildY : FXC.dmgOwnY, fontFamily: "'Silkscreen',monospace", fontSize: 20, color: s.fxCrit ? '#ffe66b' : '#fff8d6', textShadow: '2px 2px 0 #0b1a15, -2px 2px 0 #0b1a15, 2px -2px 0 #0b1a15, -2px -2px 0 #0b1a15', animation: 'dmgPop .9s ease-out forwards', pointerEvents: 'none' } }, (s.fxCrit ? '!' : '') + '-' + s.fxDmg));
+  } else if (fx === 'impact') {
+    const tx = dir === 'own' ? FXC.wildX : FXC.ownX, ty = dir === 'own' ? FXC.wildY : FXC.ownY;
+    out.push(fxSprite('burst', { left: tx, top: ty, scale: sc * 1.4, animation: 'frames4 .4s steps(4) forwards, burstPop .45s ease-out forwards', filter: BURST_TINT[el] || 'none' }, 'b'));
+    [[-26, -10], [22, -18], [8, 24]].forEach(([dx, dy], i) => out.push(fxSprite('burst', { left: tx + dx, top: ty + dy, scale: sc * .6, animation: 'frames4 .35s steps(4) forwards, burstPop .4s ease-out forwards', animationDelay: (i * .06) + 's', filter: BURST_TINT[el] || 'none' }, 'b' + i)));
+    if (s.fxDmg != null) out.push(React.createElement('div', { key: 'd', style: { position: 'absolute', zIndex: 7, left: dir === 'own' ? FXC.dmgWildX : FXC.dmgOwnX, top: dir === 'own' ? FXC.dmgWildY : FXC.dmgOwnY, fontFamily: "'Silkscreen',monospace", fontSize: 20, color: s.fxCrit ? '#ffe66b' : '#fff8d6', textShadow: '2px 2px 0 #0b1a15, -2px 2px 0 #0b1a15, 2px -2px 0 #0b1a15, -2px -2px 0 #0b1a15', animation: 'dmgPop .9s ease-out forwards', pointerEvents: 'none' } }, (s.fxCrit ? '!' : '') + '-' + s.fxDmg));
+  }
+  const beam = (key, x0, y0, x1, y1, h, bg, outline, anim, extra) => {
+    const len = Math.hypot(x1 - x0, y1 - y0), ang = Math.atan2(y1 - y0, x1 - x0) * 180 / Math.PI;
+    out.push(React.createElement('div', { key, style: { position: 'absolute', zIndex: 5, left: x0, top: y0 - h / 2, height: h, width: len, background: bg, boxShadow: '0 0 0 3px ' + outline + ', inset 0 3px 0 #ffffff55, inset 0 -3px 0 #00000033', borderRadius: h / 2, transformOrigin: '0 50%', rotate: ang + 'deg', animation: anim, pointerEvents: 'none', ...extra } }));
+    return { len, ang };
+  };
+  const ends = (ox, oy, wx, wy) => dir === 'own' ? { x0: FXC.ownX + ox, y0: FXC.ownY + oy, x1: FXC.wildX + wx, y1: FXC.wildY + wy } : { x0: FXC.wildX + wx, y0: FXC.wildY + wy, x1: FXC.ownX + ox, y1: FXC.ownY + oy };
+  if (fx === 'tongue') {
+    const e = ends(70, -22, 10, 26);
+    beam('tg', e.x0, e.y0, e.x1, e.y1, 12, 'linear-gradient(#f3a6bd,#d9557a 55%,#8a2a48)', '#3a0f1e', 'tongueOut .55s cubic-bezier(.2,.9,.3,1) forwards');
+    out.push(fxSprite('tongue', { '--x0': px(e.x0 - 16), '--y0': px(e.y0 - 16), '--x1': px(e.x1 - 16), '--y1': px(e.y1 - 16), scale: sc * 1.5, animation: 'tongueTip .55s cubic-bezier(.2,.9,.3,1) forwards, frames4 .25s steps(4) infinite' }, 'tt'));
+    out.push(React.createElement('div', { key: 'tsq', style: { position: 'absolute', zIndex: 7, left: e.x1 - 10, top: e.y1 - 30, fontFamily: "'Silkscreen',monospace", fontSize: 11, color: '#fff', textShadow: '2px 2px 0 #3a0f1e,-2px 2px 0 #3a0f1e,2px -2px 0 #3a0f1e,-2px -2px 0 #3a0f1e', animation: 'dmgPop .5s ease-out .22s forwards', opacity: 0, pointerEvents: 'none' } }, 'SLAP!'));
+  }
+  if (fx === 'jet') {
+    const e = ends(60, -8, 6, 30);
+    beam('jt', e.x0, e.y0, e.x1, e.y1, 20, 'repeating-linear-gradient(90deg,#e9f7ff 0 8px,#5aa9d6 8px 20px,#2f6f9e 20px 24px)', '#163a5a', 'jetOut .55s ease-out forwards, jetFlow .18s linear infinite');
+    beam('jt2', e.x0, e.y0, e.x1, e.y1, 8, 'linear-gradient(90deg,#ffffffcc,#ffffff44)', 'transparent', 'jetOut .55s ease-out forwards', { boxShadow: 'none', top: e.y0 - 7 });
+    for (let i = 0; i < 8; i++) { const k = 0.25 + i * 0.1, a = Math.atan2(e.y1 - e.y0, e.x1 - e.x0); out.push(fxSprite('splash', { left: e.x0 + (e.x1 - e.x0) * k - 16, top: e.y0 + (e.y1 - e.y0) * k - 16, scale: sc * .5, animation: 'frames4 .4s steps(4) forwards, burstPop .45s ease-out forwards', animationDelay: (.1 + i * .04) + 's', rotate: (a * 180 / Math.PI - 90) + 'deg' }, 'jd' + i)); }
+  }
+  if (fx === 'chain') {
+    const e = ends(60, -16, 8, 26);
+    const { len } = beam('ch', e.x0, e.y0, e.x1, e.y1, 10, 'url(fx/chain.png) 0 0/96px 24px repeat-x', '#2a1a0a', 'tongueOut .55s cubic-bezier(.2,.9,.3,1) forwards, jetFlow .12s linear infinite', { imageRendering: 'pixelated', backgroundSize: '96px 10px' });
+    out.push(fxSprite('chain', { '--x0': px(e.x0 - 16), '--y0': px(e.y0 - 16), '--x1': px(e.x1 - 16), '--y1': px(e.y1 - 16), scale: sc * 1.3, animation: 'tongueTip .55s cubic-bezier(.2,.9,.3,1) forwards', filter: 'drop-shadow(0 2px 0 #0b1a15)' }, 'chT'));
+  }
+  if (fx === 'lure') {
+    const cx = dir === 'own' ? FXC.ownX + 50 : FXC.wildX + 20, cy = dir === 'own' ? FXC.ownY - 60 : FXC.wildY - 20;
+    out.push(fxSprite('lure', { left: cx - 16, top: cy - 16, scale: sc * 2.4, animation: 'frames4 .3s steps(4) infinite, lurePulse .9s ease-out forwards', filter: 'drop-shadow(0 0 10px #2fb5c7)' }, 'lu'));
+    out.push(React.createElement('div', { key: 'lflash', style: { position: 'absolute', inset: 0, zIndex: 4, background: 'radial-gradient(circle at ' + cx + 'px ' + cy + 'px, #bfffff 0, #2fb5c799 18%, transparent 55%)', animation: 'flash .9s ease-out forwards', pointerEvents: 'none' } }));
+  }
+  if (fx === 'impact' && el !== 'fire' && s.fxKind === 'snare') { const tx = dir === 'own' ? FXC.wildX : FXC.ownX, ty = dir === 'own' ? FXC.wildY : FXC.ownY; out.push(fxSprite('vine', { left: tx - 4, top: ty - 6, scale: sc * 3.2, animation: 'frames4 .4s steps(4) infinite, snareHold 1s ease-out forwards' }, 'vn')); out.push(fxSprite('vine', { left: tx - 4, top: ty - 6, scale: sc * 2.2, animation: 'frames4 .4s steps(4) infinite reverse, snareHold 1s ease-out .08s forwards', opacity: 0 }, 'vn2')); }
+  if (fx === 'impact' && (s.fxKind === 'bash' || s.fxKind === 'jet')) { const tx = dir === 'own' ? FXC.wildX : FXC.ownX, ty = dir === 'own' ? FXC.wildY : FXC.ownY; out.push(fxSprite(s.fxKind === 'bash' ? 'shell' : 'splash', { left: tx - 6, top: ty, scale: sc * 2.6, animation: 'frames4 .45s steps(4) forwards, burstPop .55s ease-out forwards' }, 'sh')); [[-24, -12], [22, -16], [6, 22]].forEach(([dx, dy], i) => out.push(fxSprite('splash', { left: tx + dx, top: ty + dy, scale: sc * 1.1, animation: 'frames4 .4s steps(4) forwards, burstPop .45s ease-out forwards', animationDelay: (.05 + i * .06) + 's' }, 'sh' + i))); }
+  if (fx === 'impact' && s.fxKind === 'tusk') { const tx = dir === 'own' ? FXC.wildX : FXC.ownX, ty = dir === 'own' ? FXC.wildY : FXC.ownY; out.push(fxSprite('spark', { left: tx - 4, top: ty - 4, scale: sc * 2.8, animation: 'frames4 .3s steps(4) forwards, burstPop .45s ease-out forwards' }, 'sk')); for (let i = 0; i < 4; i++) out.push(fxSprite('spark', { left: tx - 28 + i * 20, top: ty - 20 + (i % 2) * 30, scale: sc * 1.3, animation: 'frames4 .25s steps(4) forwards, burstPop .4s ease-out forwards', animationDelay: (.05 + i * .05) + 's' }, 'sk' + i)); out.push(React.createElement('div', { key: 'zf', style: { position: 'absolute', inset: 0, zIndex: 4, background: '#fff6a8', animation: 'flash .35s ease-out forwards', pointerEvents: 'none', mixBlendMode: 'screen' } })); }
+  if (fx === 'camo') { for (let i = 0; i < 5; i++) out.push(fxSprite('leaf', { left: FXC.ownX - 20 + i * 18, top: FXC.ownY - 30 + (i % 2) * 26, scale: sc * .9, animation: 'frames4 .4s steps(4) infinite, healRise 1s ease-out forwards', animationDelay: '0s, ' + (i * .07) + 's', filter: 'hue-rotate(10deg)' }, 'cm' + i)); }
+  if (fx === 'guard') out.push(fxSprite('shield', { left: FXC.ownX - 10, top: FXC.ownY - 30, scale: sc * 2.2, animation: 'frames4 .5s steps(4) forwards, shieldUp .9s ease-out forwards' }, 'g'));
+  if (fx === 'heal') for (let i = 0; i < 5; i++) out.push(fxSprite('heal', { left: FXC.ownX - 30 + i * 22, top: FXC.ownY - 10 + (i % 2) * 20, scale: sc * .9, animation: 'frames4 .5s steps(4) infinite, healRise 1s ease-out forwards', animationDelay: '0s, ' + (i * .08) + 's' }, 'h' + i));
+  if (fx && fx.startsWith('cap-')) {
+    const stage = fx.slice(4); const at = { left: FXC.wildX, top: FXC.wildY + 58 };
+    const capStyle = { zIndex: 8, scale: sc * 1.5, filter: "drop-shadow(0 3px 0 #0b1a1566)" };
+    if (stage === 'throw') out.push(fxSprite('capsule', { ...from, ...capStyle, animation: 'capThrow .6s cubic-bezier(.4,0,.6,1) forwards', '--y1': (FXC.wildY + 58) + 'px' }, 'cap'));
+    if (stage === 'open') { out.push(fxSprite('capsule', { ...at, ...capStyle, backgroundPosition: '-64px 0' }, 'cap')); out.push(fxSprite('beam', { left: FXC.wildX, top: FXC.wildY, scale: sc * 2.4, animation: 'frames4 .5s steps(4) infinite, beamSpin 1.2s linear infinite', filter: 'drop-shadow(0 0 6px #fff)' }, 'bm')); }
+    if (stage === 'shake') { out.push(fxSprite('capsule', { ...at, ...capStyle, animation: 'capWobble .45s ease-in-out 3' }, 'cap')); [0, .45, .9].forEach((d, i) => out.push(fxSprite('beam', { left: FXC.wildX - 6, top: FXC.wildY + 52, scale: sc * .9, animation: 'frames4 .35s steps(4) forwards', animationDelay: d + 's', opacity: .9 }, 'sk' + i))); }
+    if (stage === 'catch') { out.push(fxSprite('capsule', { ...at, ...capStyle, backgroundPosition: '-96px 0', animation: 'capGlow .5s ease-out' }, 'cap')); out.push(fxSprite('burst', { left: FXC.wildX, top: FXC.wildY + 58, scale: sc * 1.6, animation: 'frames4 .4s steps(4) forwards, burstPop .5s ease-out forwards' }, 'cb')); }
+  }
+  return React.createElement(React.Fragment, null, out);
+}
+class Component extends DCLogic {
+  state = this.boot();
+  boot() {
+    const q = new URLSearchParams(location.search).get('wild') || '';
+    const trainer = q.startsWith('trainer:') ? TRAINERS[q.slice(8)] ? q.slice(8) : null : null;
+    const save = loadSave(), leadC = save.party[save.lead] || save.party[0];
+    const wsp = trainer ? TRAINERS[trainer].species : SPECIES[q] ? q : (this.props.wildSpecies ?? 'mossling');
+    const own = { ...structuredClone(leadC), guard: false, statuses: [] };
+    const encN = Number(localStorage.getItem('wildstate.encounter') || 3);
+    const wildLv = trainer ? (trainer === 'nessa' ? 4 : 3) : Math.max(1, Math.min(6, 1 + Math.floor(encN / 3), lvOf(own.xp) + 1));
+    const wild = fresh(wsp, wildLv); wild.lv = wildLv;
+    return { own, wild, wildHp: trainer ? maxHpAt(wildLv) : Math.round(maxHpAt(wildLv) * 0.7), turn: 0, outcome: 'active', save, naming: false, nick: '', trainer, levelUp: null,
+      message: trainer ? `${TRAINERS[trainer].name} sent out ${TRAINERS[trainer].nick}!` : `A wild ${SPECIES[wsp].name} appeared!`, effect: '', busy: false, revision: 12, lastCmd: 'c-0012', consumed: 'encounter/3',
+      capsules: save.capsules, coins: save.coins, encounter: encN, speaker: trainer || 'player' };
+  }
+  persist(extra) {
+    const s = this.state, save = structuredClone(s.save);
+    const i = save.party.findIndex(c => c.id === s.own.id);
+    if (i >= 0) save.party[i] = { ...save.party[i], hp: s.own.hp, xp: s.own.xp, charges: s.own.charges };
+    save.capsules = s.capsules; save.coins = s.coins; Object.assign(save, extra || {});
+    writeSave(save); this.setState({ save });
+    return save;
+  }
+  componentDidUpdate(prev, prevState) {
+    if (prev.ownSpecies !== this.props.ownSpecies && this.props.ownSpecies) { const own = fresh(this.props.ownSpecies); own.id = this.state.own.id; this.setState({ own }); }
+    if (prev.wildSpecies !== this.props.wildSpecies) this.setState(this.boot());
+    if (prevState && prevState.outcome === 'active' && this.state.outcome !== 'active' && this.state.outcome !== 'captured') this.persist();
+  }
+  set(p) { return new Promise(r => this.setState(p, () => { if (p && p.__persist) this.persist(); r(); })); }
+  commit(extra) { const rev = this.state.revision + 1; return { revision: rev, lastCmd: 'c-' + String(rev).padStart(4, '0'), ...extra }; }
+  dealDamage(attacker, target, base, el) {
+    let d = Math.round((base + dmgBonus(lvOf(attacker.xp))) * mult(el, SPECIES[target.species].el));
+    if (attacker.statuses.some(x => x.id === 'soaked')) d = Math.max(1, d - 2);
+    if (target.guard) { d = Math.ceil(d / 2); target.guard = false; }
+    return d;
+  }
+  tickStatuses(c) {
+    let burn = 0;
+    c.statuses = c.statuses.map(x => ({ ...x, turns: x.turns - 1 })).filter(x => { if (x.id === 'burn') burn += 3; return x.turns > 0; });
+    return burn;
+  }
+  grant(own, base, oppLv) {
+    const before = lvOf(own.xp), gain = xpGain(base, oppLv, before); own.xp += gain; const after = lvOf(own.xp);
+    if (after > before) { own.hp = Math.min(maxHpAt(after), own.hp + 4 * (after - before)); // level-up heals the new HP
+      SPECIES[own.species].moves.forEach(m => { if (m.max && maxCharges(m, after) > maxCharges(m, before)) own.charges[m.id] = (own.charges[m.id] || 0) + 1; });
+      return { gain, levelUp: { from: before, to: after, hp: [maxHpAt(before), maxHpAt(after)], dmg: [dmgBonus(before), dmgBonus(after)], charges: chargeBonus(after) > chargeBonus(before) } }; }
+    return { gain, levelUp: null };
+  }
+  async victory(own, wild, s) { await this.victoryInner(own, wild, s); this.persist(); }
+  victoryInner(own, wild, s) {
+    if (s.trainer) {
+      const t = TRAINERS[s.trainer]; const g = this.grant(own, 15, wild.lv || 3);
+      try { const b = JSON.parse(localStorage.getItem('wildstate.beaten') || '[]'); if (!b.includes(s.trainer)) b.push(s.trainer); localStorage.setItem('wildstate.beaten', JSON.stringify(b)); } catch (e) {}
+      return this.set({ own, wild, wildHp: 0, outcome: 'victory', turn: s.turn + 1, busy: false, effect: '', coins: s.coins + 12, speaker: s.trainer, levelUp: g.levelUp,
+        message: `${t.nick} is down! +${g.gain} XP · 12 WILD bounty from ${t.name}. "${t.win}"`, ...this.commit({ consumed: `trainer/${s.trainer}` }) });
+    }
+    const g = this.grant(own, 10, wild.lv || 1);
+    return this.set({ own, wild, wildHp: 0, outcome: 'victory', turn: s.turn + 1, busy: false, effect: '', coins: s.coins + 5, levelUp: g.levelUp,
+      message: `${SPECIES[wild.species].name} fainted. Victory! +${g.gain} XP · +5 WILD`, ...this.commit({ consumed: `encounter/${s.encounter}` }) });
+  }
+  async useMove(m) {
+    const s = this.state; if (s.busy || s.outcome !== 'active') return;
+    const own = structuredClone(s.own), wild = structuredClone(s.wild); wild.hp = s.wildHp;
+    if (m.max) own.charges[m.id] -= 1;
+    const ownName = SPECIES[own.species].name, wildName = SPECIES[wild.species].name;
+    const isAtk = !m.guard && !m.heal;
+    await this.set({ busy: true, own, message: `${ownName} used ${m.name}!`, effect: isAtk ? 'windup' : m.guard ? (m.fx === 'camo' ? 'camo' : 'guard') : 'heal', fxEl: m.el, fxDir: 'own', fxDmg: null, fxKind: m.fx || '' });
+    await wait(isAtk ? 380 : 700);
+    if (isAtk && m.fx === 'bite') { await this.set({ effect: 'lunge', fxKind: 'bite' }); await wait(300); }
+    else if (isAtk && m.fx === 'tongue') { await this.set({ effect: 'tongue', fxKind: 'tongue' }); await wait(520); }
+    else if (isAtk && m.fx === 'snare') { await this.set({ effect: 'proj', fxKind: 'snare' }); await wait(420); }
+    else if (isAtk && (m.fx === 'bash' || m.fx === 'tusk')) { await this.set({ effect: 'lunge', fxKind: m.fx }); await wait(300); }
+    else if (isAtk && m.fx === 'jet') { await this.set({ effect: 'jet', fxKind: 'jet' }); await wait(520); }
+    else if (isAtk && m.fx === 'chain') { await this.set({ effect: 'chain', fxKind: 'bash' }); await wait(520); }
+    else if (isAtk && m.fx === 'lure') { await this.set({ effect: 'lure', fxKind: 'tusk' }); await wait(800); }
+    else if (isAtk && PROJ[m.el]) { await this.set({ effect: 'proj', fxKind: 'proj' }); await wait(420); }
+    else if (isAtk) { await this.set({ effect: 'lunge', fxKind: 'melee' }); await wait(300); }
+    let msg = '';
+    if (m.guard) { own.guard = true; msg = `${ownName} braces for the next hit.`; await this.set({ own, message: msg, effect: '' }); await wait(400); }
+    else if (m.heal) { own.hp = Math.min(maxHpAt(lvOf(own.xp)), own.hp + m.heal); msg = `${ownName} recovered ${m.heal} HP.`; await this.set({ own, message: msg, effect: '' }); await wait(400); }
+    else {
+      const k = mult(m.el, SPECIES[wild.species].el);
+      const d = this.dealDamage(own, wild, m.dmg, m.el);
+      wild.hp = Math.max(0, wild.hp - d);
+      msg = k > 1 ? `Super effective! ${d} damage.` : k < 1 ? `Not very effective… ${d} damage.` : `${wildName} took ${d} damage.`;
+      if (m.status && wild.hp > 0) {
+        if (m.status === 'soaked') wild.statuses = wild.statuses.filter(x => x.id !== 'burn');
+        if (!wild.statuses.some(x => x.id === m.status)) wild.statuses.push({ id: m.status, ...STATUS[m.status] });
+        msg += ` ${wildName} ${STATUS[m.status].verb}.`;
+      }
+      await this.set({ own, wild, wildHp: wild.hp, message: msg, effect: 'impact', fxDmg: d, fxCrit: k > 1, flash: k > 1 }); await wait(k > 1 ? 650 : 550);
+      await this.set({ flash: false });
+    }
+    if (wild.hp === 0) return this.victory(own, wild, s);
+    await this.set({ own, wild, message: msg, effect: '' });
+    const rooted = wild.statuses.some(x => x.id === 'root' || x.id === 'stun');
+    const burn = this.tickStatuses(wild);
+    if (burn) { wild.hp = Math.max(0, wild.hp - burn); await wait(400); await this.set({ wild, wildHp: wild.hp, message: `${wildName} takes ${burn} burn damage.`, effect: 'impact', fxEl: 'fire', fxDir: 'own', fxDmg: burn, fxCrit: false }); await wait(550); }
+    if (wild.hp === 0) return this.victory(own, wild, s);
+    if (rooted) { await wait(400); await this.set({ wild, message: `${wildName} ${wild.statuses.some(x => x.id === 'stun') || s.wild.statuses.some(x => x.id === 'stun') ? 'is stunned' : 'is rooted'} and cannot move.`, effect: '' }); await wait(600); }
+    else {
+      const wm = SPECIES[wild.species].moves[1];
+      await wait(400); await this.set({ message: `${s.trainer ? TRAINERS[s.trainer].nick : 'Wild ' + wildName} used ${wm.name}!`, speaker: s.trainer || s.speaker, effect: 'windup', fxEl: wm.el, fxDir: 'wild', fxDmg: null }); await wait(380);
+      if (wm.fx === 'tongue') { await this.set({ effect: 'tongue', fxKind: 'tongue' }); await wait(520); }
+      else if (wm.fx === 'jet') { await this.set({ effect: 'jet', fxKind: 'jet' }); await wait(520); }
+      else if (wm.fx === 'chain') { await this.set({ effect: 'chain', fxKind: 'bash' }); await wait(520); }
+      else if (wm.fx === 'lure') { await this.set({ effect: 'lure', fxKind: 'tusk' }); await wait(800); }
+      else if (wm.fx === 'bash' || wm.fx === 'tusk' || wm.fx === 'bite') { await this.set({ effect: 'counter', fxKind: wm.fx }); await wait(300); }
+      else { await this.set({ effect: 'proj', fxKind: wm.fx === 'snare' ? 'snare' : 'proj' }); await wait(420); }
+      const d = this.dealDamage(wild, own, wm.dmg - 4, wm.el);
+      own.hp = Math.max(0, own.hp - d);
+      await this.set({ own, message: `${ownName} took ${d} damage.`, effect: 'impact', fxDmg: d, fxCrit: false }); await wait(550);
+    }
+    const ownBurn = this.tickStatuses(own);
+    if (ownBurn && own.hp > 0) { own.hp = Math.max(0, own.hp - ownBurn); await this.set({ own, message: `${ownName} takes ${ownBurn} burn damage.`, effect: 'impact', fxEl: 'fire', fxDir: 'wild', fxDmg: ownBurn, fxCrit: false }); await wait(550); }
+    if (own.hp === 0) return this.set({ own, wild, outcome: 'defeat', __persist: true, turn: s.turn + 1, busy: false, effect: '', speaker: s.trainer || 'player', message: s.trainer ? `${ownName} fainted. ${TRAINERS[s.trainer].name}: "${TRAINERS[s.trainer].lose}"` : `${ownName} fainted. Mira can help at camp.`, ...this.commit({ consumed: `encounter/${s.encounter}` }) });
+    this.setState({ own, wild, turn: s.turn + 1, busy: false, effect: '', message: 'Choose your next move.', ...this.commit({}) });
+  }
+  async capture() {
+    const s = this.state; if (s.busy || s.wildHp > 14 || !s.capsules) return;
+    await this.set({ busy: true, message: 'Capsule away!', effect: 'cap-throw', fxDir: 'own' }); await wait(600);
+    await this.set({ effect: 'cap-open' }); await wait(650);
+    await this.set({ message: '…', effect: 'cap-shake' }); await wait(1400);
+    await this.set({ message: 'Gotcha!', effect: 'cap-catch' }); await wait(500);
+    const own = structuredClone(s.own); const g = this.grant(own, 5, s.wild.lv || 1);
+    this.setState({ own, busy: false, effect: '', outcome: 'captured', capsules: s.capsules - 1, naming: true, nick: '', levelUp: g.levelUp,
+      message: `${SPECIES[s.wild.species].name} joined your collection! +${g.gain} XP`, ...this.commit({ consumed: `encounter/${s.encounter}` }) }, () => this.persist());
+  }
+  finishNaming() {
+    const s = this.state, save = structuredClone(s.save), sp = s.wild.species;
+    const nick = (s.nick || '').trim().slice(0, 12);
+    const caught = { id: 'c-' + save.nextId, nick, species: sp, hp: Math.max(1, s.wildHp), xp: ((s.wild.lv || 1) - 1) * XP_PER, guard: false, statuses: [], charges: structuredClone(fresh(sp, s.wild.lv || 1).charges) };
+    save.party.push(caught); save.nextId += 1; writeSave(save);
+    this.setState({ save, naming: false, message: `${nick || SPECIES[sp].name} is in your bag. Swap leads from the BAG.` });
+  }
+  async escape() {
+    const s = this.state; if (s.busy) return;
+    await this.set({ busy: true, message: 'You slipped away safely.', effect: 'escape' }); await wait(650);
+    this.set({ busy: false, effect: '', outcome: 'escaped', __persist: true, message: 'Back to the meadow.', ...this.commit({ consumed: `encounter/${s.encounter}` }) });
+  }
+  next() {
+    const s = this.state; const n = s.encounter + 1;
+    const own = structuredClone(s.own); own.guard = false; own.statuses = [];
+    if (own.hp === 0) return this.setState({ message: `${SPECIES[own.species].name} has fainted. Rest with Mira first.` });
+    const wsp = WILD_ORDER[n % WILD_ORDER.length];
+    this.setState({ own, wild: fresh(wsp), wildHp: 28, turn: 0, outcome: 'active', encounter: n, message: `A wild ${SPECIES[wsp].name} appeared!`, speaker: 'player', ...this.commit({ consumed: '—' }) });
+  }
+  rest() {
+    const s = this.state; const own = fresh(s.own.species, lvOf(s.own.xp)); own.xp = s.own.xp;
+    own.id = s.own.id; own.nick = s.own.nick;
+    this.setState({ own, speaker: 'mira', message: 'Mira restored HP and every charge.', ...this.commit({ consumed: '—' }) }, () => this.persist());
+  }
+  renderVals() {
+    const s = this.state, own = s.own, wild = s.wild, osp = SPECIES[own.species], wsp = SPECIES[wild.species];
+    const fx = s.effect, show = k => fx === k ? 'block' : 'none';
+    const hpColor = hp => hp > 20 ? 'linear-gradient(#6cc784,#4da96c)' : hp > 10 ? 'linear-gradient(#e8bd4e,#d9a93a)' : 'linear-gradient(#dc6a4e,#c9553a)';
+    const anim = (base, hitKey, extra) => fx === hitKey ? 'hit .45s' : extra[fx] || base;
+    const moves = osp.moves.map(m => {
+      const mMax = maxCharges(m, lvOf(own.xp)); const left = m.max ? own.charges[m.id] : null;
+      const disabled = s.busy || (m.max && left === 0);
+      const k = m.dmg ? mult(m.el, wsp.el) : 1;
+      return { name: m.name, elLabel: EL[m.el].label, elColor: EL[m.el].color,
+        line1: m.line1 + (k > 1 ? ' · ×1.5' : k < 1 ? ' · ×0.5' : ''),
+        bg: m.el === 'fire' ? '#7a3b1e' : m.el === 'grass' ? '#2f5a2e' : m.el === 'water' ? '#244b63' : m.el === 'electric' ? '#5a4a14' : '#26503c',
+        opacity: disabled ? 0.4 : 1, disabled,
+        pips: m.max ? Array.from({ length: mMax }, (_, i) => ({ fill: i < left ? '#edf5e8' : 'transparent' })) : [],
+        chargeLabel: m.max ? `${left}/${mMax}` : '∞', use: () => this.useMove(m) };
+    });
+    const dir = s.fxDir || 'own';
+    const wildAnim = fx === 'impact' && dir === 'own' ? 'flinch .5s' : fx === 'windup' && dir === 'wild' ? 'windupR .38s ease-in-out' : fx === 'cap-open' ? 'suckIn .6s ease-in forwards' : (fx === 'cap-shake' || fx === 'cap-catch') ? 'none' : 'breathe 2s ease-in-out infinite';
+    const ownAnim = fx === 'impact' && dir === 'wild' ? 'flinchL .5s' : fx === 'windup' && dir === 'own' ? 'windup .38s ease-in-out' : fx === 'lunge' ? 'lunge .3s' : fx === 'camo' ? 'camoFade 1s ease-in-out' : fx === 'escape' ? 'run .65s forwards' : 'breathe 2s ease-in-out infinite';
+    const wildOpacity = s.outcome === 'victory' || s.outcome === 'captured' || fx === 'cap-shake' || fx === 'cap-catch' ? 0 : 1;
+    const ownLv = lvOf(own.xp), wildLv = wild.lv || 1, ownMax = maxHpAt(ownLv), wildMax = maxHpAt(wildLv);
+    const k = mult(osp.el, wsp.el), xp = ownLv >= LV_CAP ? XP_PER : own.xp % XP_PER;
+    return {
+      ready: true, fxLayer: fxLayer(s), arenaAnim: fx === 'impact' ? 'shake .4s' : 'none', portrait: React.createElement('img', { key: 'p', src: 'portraits/' + s.speaker + '.png', alt: s.speaker, style: { width: 40, height: 40, flex: 'none', objectFit: 'cover', objectPosition: '50% 8%', imageRendering: 'pixelated', background: '#f6efd2', boxShadow: '0 0 0 2px #26443a, 0 0 0 4px #9ccf6e' } }), sparkles: SPARKLES,
+      turnLabel: s.turn + 1, ownName: own.nick || osp.name, wildName: s.trainer ? TRAINERS[s.trainer].nick : wsp.name,
+      headTitle: s.trainer ? 'TRAINER BATTLE' : 'WILD ENCOUNTER', wildTag: s.trainer ? `${TRAINERS[s.trainer].name}’s · Lv ${wildLv}` : `Wild · Lv ${wildLv}`, runLabel: s.trainer ? 'Forfeit' : 'Run', runHint: s.trainer ? 'No bounty' : 'To the meadow', naming: s.naming, endedNotNaming: s.outcome !== 'active' && !s.naming,
+      nick: s.nick, caughtName: wsp.name, setNick: e => this.setState({ nick: e.target.value }), finishNaming: () => this.finishNaming(), nickKey: e => { if (e.key === 'Enter') this.finishNaming(); }, ownLevel: 1 + Math.floor(own.xp / 20),
+      ownXpPct: xp / XP_PER * 100 + '%', ownXpLabel: ownLv >= LV_CAP ? 'MAX' : `${xp}/${XP_PER}`, ownMax, wildMax, ownLevel: ownLv,
+      levelUp: !!s.levelUp, luFrom: s.levelUp?.from, luTo: s.levelUp?.to, luHp: s.levelUp ? `${s.levelUp.hp[0]} → ${s.levelUp.hp[1]}` : '', luDmg: s.levelUp ? `+${s.levelUp.dmg[0]} → +${s.levelUp.dmg[1]}` : '', luCharges: !!(s.levelUp && s.levelUp.charges), dismissLevelUp: () => this.setState({ levelUp: null }),
+      wildSprite: React.createElement('img', { key: 'w', src: art(wild.species).src, alt: wsp.name, style: { '--dx': '-20px', '--dy': '40px', ...{"position":"absolute","width":"140px","transformOrigin":"bottom center","imageRendering":"pixelated","right":"24px","top":"80px","filter":"drop-shadow(0 8px 7px #28482c55)","transition":"opacity .3s"}, transform: flip(wild.species, 'wild'), scale: String(art(wild.species).scale), animation: wildAnim, opacity: wildOpacity, marginTop: (art(wild.species).lift || 0) + 'px' } }),
+      ownSprite: React.createElement('img', { key: 'o', src: art(own.species).src, alt: osp.name, style: { ...{"position":"absolute","width":"160px","left":"6px","bottom":"44px","transformOrigin":"bottom center","imageRendering":"pixelated","filter":"drop-shadow(0 8px 7px #28482c55)"}, transform: flip(own.species, 'own'), scale: String(art(own.species).scale), animation: ownAnim } }),
+      ownElLabel: EL[osp.el].label, ownElColor: EL[osp.el].color, wildElLabel: EL[wsp.el].label, wildElColor: EL[wsp.el].color,
+      ownStatuses: own.guard ? [{ label: 'GUARD', turns: '' }, ...own.statuses] : own.statuses, wildStatuses: wild.statuses,
+      ownHp: own.hp, wildHp: s.wildHp, ownHpPct: own.hp / 40 * 100 + '%', wildHpPct: s.wildHp / 40 * 100 + '%',
+      ownHpColor: hpColor(own.hp), wildHpColor: hpColor(s.wildHp),
+      wildAnim: anim('breathe 2s ease-in-out infinite', 'wild-hit', { counter: 'counter .5s', capture: 'catch 1.7s forwards' }),
+      ownAnim: anim('breathe 2s ease-in-out infinite', 'own-hit', { strike: 'lunge .65s', escape: 'run .65s forwards' }),
+      wildOpacity: s.outcome === 'victory' || s.outcome === 'captured' ? 0 : 1,
+      fxFlash: s.flash ? 'block' : 'none',
+      message: s.message, active: s.outcome === 'active', ended: s.outcome !== 'active', busy: s.busy, moves,
+      matchupHint: k > 1 ? 'ADVANTAGE' : k < 1 ? 'DISADVANTAGE' : `${EL[osp.el].label} vs ${EL[wsp.el].label}`,
+      captureDisabled: s.busy || !!s.trainer || !s.capsules || s.wildHp > 14, captureOpacity: (s.busy || s.trainer || !s.capsules || s.wildHp > 14) ? 0.4 : 1,
+      captureHint: s.trainer ? 'Not a wild creature' : s.wildHp > 14 ? 'Weaken to 14 HP' : `${s.capsules} left`,
+      capture: () => this.capture(), escape: () => this.escape(), next: () => this.next(), rest: () => this.rest(),
+      showLedger: this.props.showLedger ?? true, revision: s.revision, lastCmd: s.lastCmd, consumedLabel: s.consumed, capsules: s.capsules, coins: s.coins,
+    };
+  }
+}
+</script>
+</body>
+</html>

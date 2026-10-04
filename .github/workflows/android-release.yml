@@ -1,0 +1,78 @@
+name: Android APK
+on:
+  workflow_dispatch:
+    inputs:
+      game_url:
+        description: Public Vercel HTTPS game URL
+        required: true
+        type: string
+      version_name:
+        description: APK version name
+        required: true
+        default: '0.1.0'
+        type: string
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      WILDSTATE_GAME_URL: ${{ inputs.game_url || vars.WILDSTATE_GAME_URL }}
+      WILDSTATE_VERSION_NAME: ${{ inputs.version_name || github.ref_name }}
+      WILDSTATE_VERSION_CODE: ${{ github.run_number }}
+      WILDSTATE_KEYSTORE_PATH: ${{ runner.temp }}/wildstate-release.jks
+      WILDSTATE_KEYSTORE_PASSWORD: ${{ secrets.WILDSTATE_KEYSTORE_PASSWORD }}
+      WILDSTATE_KEY_ALIAS: ${{ secrets.WILDSTATE_KEY_ALIAS }}
+      WILDSTATE_KEY_PASSWORD: ${{ secrets.WILDSTATE_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm test && npm run typecheck && npm run build
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Restore release signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.WILDSTATE_KEYSTORE_BASE64 }}
+        run: |
+          python3 - <<'PY'
+          import os, base64
+          from pathlib import Path
+          if not os.environ.get('WILDSTATE_GAME_URL') or not os.environ.get('KEYSTORE_BASE64'):
+              raise SystemExit('Configure the public game URL and signing secrets first; see docs/android-app.md.')
+          p = Path(os.environ['WILDSTATE_KEYSTORE_PATH'])
+          p.write_bytes(base64.b64decode(os.environ['KEYSTORE_BASE64'], validate=True))
+          p.chmod(0o600)
+          PY
+      - run: ./gradlew assembleRelease lintRelease
+        working-directory: android
+      - name: Prepare downloads
+        run: |
+          mkdir -p release
+          cp android/app/build/outputs/apk/release/app-release.apk release/wildstate.apk
+          cd release
+          sha256sum wildstate.apk > SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wildstate-android
+          path: release/
+      - name: Prepare a GitHub draft release
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release/wildstate.apk release/SHA256SUMS --draft --title "Wildstate $GITHUB_REF_NAME" --notes 'Install wildstate.apk on Android 8 or newer. This online game requires an internet connection and the DSM wallet. Verify SHA256SUMS before installing. Publish this draft only after testing the hosted game and wallet connection.'
+      - name: Remove temporary signing key
+        if: always()
+        run: rm -f "$WILDSTATE_KEYSTORE_PATH"
