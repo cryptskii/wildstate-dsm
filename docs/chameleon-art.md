@@ -1,0 +1,5 @@
+# Leon — the wallet chameleon
+
+Built-in image generation. User selected the detailed speckled yellow-green design. The selected PNG currently has an opaque background; transparent extraction remains unresolved. Original wallet GIF is unchanged.
+
+A single isolated cute lime and moss-green CHAMELEON monster battle sprite, facing RIGHT, full body on four gripping split-toe feet, HUGE round golden-green swiveling eye, smiling angular head with small casque ridge, slender body, curled spiral tail rising on LEFT behind body. Faithful chameleon anatomy, no horns wings or accessories, no branch. Crisp polished 16-bit RPG pixel art, visible pixel clusters and dark silhouette contour, warm forest palette, collectible creature personality. Genuine transparent alpha PNG CUTOUT. Entire creature with small margin. ALL pixels outside creature fully transparent. Absolutely NO glow, NO halo, NO vignette, NO painted background of any color, NO shadow, NO ground, NO environment, NO checkerboard, NO text. Standalone isolated game sprite with tight clear edges.

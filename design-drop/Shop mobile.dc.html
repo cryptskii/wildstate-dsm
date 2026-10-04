@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><link rel="icon" href="brand/icon-64.png"><title>Wildstate</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=VT323&display=swap" rel="stylesheet"><style>body{margin:0;background:#081c1a}@keyframes blink{50%{opacity:0}}@keyframes reveal{from{opacity:0;transform:scale(1.04)}to{opacity:1;transform:scale(1)}}@keyframes coinPop{0%{opacity:0;translate:0 8px}30%{opacity:1}100%{opacity:0;translate:0 -30px}}@keyframes lantern{50%{opacity:.75}}@keyframes chalk{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}</style></helmet>
+<div data-screen-label="Shop mobile" style="min-height:100vh;display:grid;place-items:center;background:#0e2620;background-image:radial-gradient(#153429 1px,transparent 1px);background-size:8px 8px;padding:32px 16px;color:#f3f3df;font-family:'VT323',ui-monospace,monospace;font-size:18px">
+<x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+  <div style="height:100%;position:relative;overflow:hidden;background:#2a1a10;color:#f3f3df;font-family:'VT323',ui-monospace,monospace;font-size:18px">
+    <img src="shop/interior.png" alt="" style="position:absolute;left:0;top:200px;width:402px;height:714px;image-rendering:pixelated;image-rendering:crisp-edges">
+    <div style="position:absolute;left:30px;top:240px;width:50px;height:50px;border-radius:50%;background:radial-gradient(#ffcf6a66,transparent 70%);animation:lantern 1.6s infinite;pointer-events:none"></div>
+
+    <!-- header -->
+    <div style="position:absolute;left:0;right:0;top:0;height:200px;background:#1b3a2e;padding:56px 14px 0">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;background:#1b3a2ef2;box-shadow:0 0 0 2px #0b1a15,0 0 0 4px #9ccf6e,0 0 0 6px #0b1a15">
+        <div><div style="font-family:'Silkscreen',monospace;font-size:11px;font-weight:700">TRADING POST</div><div style="font-size:14px;color:#b9cdb6;line-height:1">Bramble · Local playtest</div></div>
+        <div style="position:relative;display:flex;align-items:center;gap:10px;font-size:20px;white-space:nowrap"><span>◉ {{ capsules }}</span><span style="color:#e9d86b;font-family:'Silkscreen',monospace;font-size:13px;padding:4px 8px;background:#0b1a15">✦ {{ coins }} WILD</span><span style="position:absolute;right:0;top:-14px;color:{{ deltaColor }};font-family:'Silkscreen',monospace;font-size:10px;display:{{ deltaShow }};animation:coinPop .9s ease-out forwards">{{ delta }}</span></div>
+      </div>
+    </div>
+
+    <!-- speech -->
+    <div onClick="{{ nextLine }}" style="position:absolute;left:14px;right:14px;top:166px;display:flex;gap:10px;padding:6px 10px;background:#10261fef;box-shadow:0 0 0 2px #0b1a15,0 0 0 4px #9ccf6e,0 0 0 6px #0b1a15;min-height:44px;cursor:pointer;animation:reveal .2s">
+      <div style="flex:1;min-width:0"><div style="font-family:'Silkscreen',monospace;font-size:8px;color:#c4ec79;margin-bottom:3px">BRAMBLE · TRADER</div><p style="margin:0;font-size:17px;line-height:1.2">{{ speech }}</p></div><span style="align-self:flex-end;color:#c4ec79;font-size:13px;animation:blink 1s steps(1) infinite">▼</span>
+    </div>
+
+    <!-- tabs on the board frame -->
+    <div style="position:absolute;left:30px;right:26px;top:452px;display:flex;gap:6px">
+      <button onClick="{{ tabBuy }}" style="font:inherit;font-family:'Silkscreen',monospace;font-size:9px;cursor:pointer;border:0;color:{{ buyColor }};background:{{ buyBg }};padding:6px 12px;box-shadow:0 0 0 2px #2b1a10;" style-active="translate:0 1px">BUY</button>
+      <button onClick="{{ tabSell }}" style="font:inherit;font-family:'Silkscreen',monospace;font-size:9px;cursor:pointer;border:0;color:{{ sellColor }};background:{{ sellBg }};padding:6px 12px;box-shadow:0 0 0 2px #2b1a10;" style-active="translate:0 1px">SELL</button>
+      <span style="margin-left:auto;font-family:'Silkscreen',monospace;font-size:7px;color:#e9dcb4;padding:8px 0;opacity:.9;white-space:nowrap">{{ tabHint }}</span>
+    </div>
+
+    <!-- chalkboard -->
+    <div style="position:absolute;left:34px;right:30px;top:486px;height:272px;display:grid;grid-template-rows:repeat(4,1fr);gap:4px;padding:6px 4px;color:#e8e2c8">
+      <sc-for list="{{ items }}" as="it" hint-placeholder-count="4">
+        <button onClick="{{ it.pick }}" disabled="{{ it.soldOut }}" style="font:inherit;font-family:'VT323',ui-monospace,monospace;cursor:pointer;border:0;text-align:left;color:#e8e2c8;background:{{ it.bg }};box-shadow:{{ it.ring }};padding:4px 8px;display:grid;grid-template-columns:44px 1fr auto;align-items:center;gap:10px;opacity:{{ it.opacity }}" style-active="translate:0 1px">
+          <div style="width:44px;height:44px;background-image:{{ it.icon }};background-size:contain;background-repeat:no-repeat;background-position:center;image-rendering:pixelated;filter:drop-shadow(0 0 2px #0008)"></div>
+          <div style="min-width:0"><div style="display:flex;align-items:baseline;gap:8px"><b style="font-size:21px;font-weight:400;line-height:1;white-space:nowrap">{{ it.name }}</b><span style="font-family:'Silkscreen',monospace;font-size:7px;color:#bcc9a8;white-space:nowrap">{{ it.tag }}</span></div><small style="display:block;font-size:14px;line-height:1.15;color:#c9d4b8;margin-top:3px">{{ it.desc }}</small></div>
+          <div style="text-align:right;white-space:nowrap"><div style="font-family:'Silkscreen',monospace;font-size:12px;color:#ffe08a;text-shadow:1px 1px 0 #0008">✦ {{ it.price }}</div><small style="font-size:13px;color:#bcc9a8">{{ it.stock }}</small></div>
+        </button>
+      </sc-for>
+    </div>
+
+    <!-- action bar on the floor -->
+    <div style="position:absolute;left:14px;right:14px;bottom:34px;display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:stretch">
+      <a href="Field mobile.dc.html" style="font-family:'Silkscreen',monospace;font-size:9px;color:#f3f3df;text-decoration:none;background:#1f4434;display:grid;place-items:center;padding:0 12px;box-shadow:0 0 0 2px #0b1a15,inset 2px 2px 0 #ffffff22,inset -2px -3px 0 #00000055">◀ LEAVE</a>
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;background:#10261fef;box-shadow:0 0 0 2px #0b1a15;min-height:44px"><span style="font-size:17px;line-height:1.1">{{ selName }}</span><div style="display:flex;align-items:center;gap:6px"><button onClick="{{ dec }}" style="font:inherit;font-family:'Silkscreen',monospace;font-size:10px;cursor:pointer;border:0;color:#f3f3df;background:#1f4434;width:28px;height:28px;box-shadow:0 0 0 2px #0b1a15">−</button><span style="font-family:'Silkscreen',monospace;font-size:11px;min-width:16px;text-align:center">{{ qty }}</span><button onClick="{{ inc }}" style="font:inherit;font-family:'Silkscreen',monospace;font-size:10px;cursor:pointer;border:0;color:#f3f3df;background:#1f4434;width:28px;height:28px;box-shadow:0 0 0 2px #0b1a15">+</button></div></div>
+      <button onClick="{{ confirm }}" disabled="{{ confirmDisabled }}" style="font:inherit;font-family:'Silkscreen',monospace;font-size:9px;cursor:pointer;border:0;color:#f3f3df;background:{{ confirmBg }};padding:0 12px;min-width:92px;box-shadow:0 0 0 2px #0b1a15,inset 2px 2px 0 #ffffff22,inset -2px -3px 0 #00000055;opacity:{{ confirmOpacity }};display:grid;gap:3px;place-items:center;line-height:1" style-active="translate:0 2px"><span>{{ confirmLabel }}</span><span style="color:#ffe08a;font-size:11px">{{ total }}</span></button>
+    </div>
+    <sc-if value="{{ showLedger }}" hint-placeholder-val="{{ true }}">
+      <div style="position:absolute;left:14px;right:14px;bottom:10px;display:flex;justify-content:space-between;font-family:'Silkscreen',monospace;font-size:7px;color:#8fb09a;white-space:nowrap"><span>REV {{ revision }} · {{ lastCmd }}</span><span>{{ ledgerNote }}</span></div>
+    </sc-if>
+  </div>
+</x-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;showLedger&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Shop&quot;}}">
+// Catalogue is pinned content. Only `capsule` maps to today's `buy-capsule` command; the rest are proposed commands (see handoff notes).
+const CATALOGUE = [
+  { id: 'capsule', name: 'Capture Capsule', tag: 'ITEM', desc: 'Catch a weakened creature.', price: 3, icon: 'shop/icon-capsule.png', cmd: 'buy-capsule' },
+  { id: 'poultice', name: 'Herb Poultice', tag: 'HEAL · 1 USE', desc: 'Restore 20 HP to one creature mid-fight.', price: 4, icon: 'shop/icon-poultice.png', cmd: 'buy-item (proposed)' },
+  { id: 'tonic', name: 'Charge Tonic', tag: 'RESTORE', desc: 'Refill one move’s charges.', price: 5, icon: 'shop/icon-tonic.png', cmd: 'buy-item (proposed)' },
+  { id: 'map', name: 'Ranger’s Map', tag: 'KEY ITEM · 1', desc: 'Opens the path east of the meadow.', price: 12, icon: 'shop/icon-map.png', stock: 1, cmd: 'buy-item (proposed)' },
+];
+const SPECIES = { embercub: ['Embercub', 'fire'], mossling: ['Mossling', 'grass'], tidefin: ['Tidefin', 'water'], voltusk: ['Voltusk', 'electric'], leon: ['Leon', 'grass'], brineback: ['Brineback', 'water'], rattlefin: ['Rattlefin', 'water'] };
+const SAVE = 'wildstate.save', lvOf = xp => Math.min(10, 1 + Math.floor((xp || 0) / 20)), maxHpAt = lv => 40 + 4 * (lv - 1);
+const loadSave = () => { try { const v = JSON.parse(localStorage.getItem(SAVE)); if (v && v.party && v.party.length) return v; } catch (e) {} return { party: [{ id: 'c-1', nick: '', species: 'embercub', hp: 40, xp: 0 }], lead: 0, capsules: 3, coins: 10, poultice: 1, tonic: 0, map: 0 }; };
+const LINES = ['Welcome in, traveller. Everything on the board is for sale — Wild Coin only, no promises.', 'Capsules go fast after a meadow rush. Stock up.', 'Selling a creature transfers it for good. Think it over.'];
+
+class Component extends DCLogic {
+  save = loadSave();
+  state = { tab: 'buy', sel: 'capsule', qty: 1, coins: this.save.coins, capsules: this.save.capsules, owned: { map: this.save.map ?? 0, poultice: this.save.poultice ?? 1, tonic: this.save.tonic ?? 0 }, lead: this.save.lead || 0, creatures: this.save.party.map(c => ({ ...c, lvl: lvOf(c.xp) })), line: 0, revision: this.save.revision || 14, lastCmd: 'c-' + String(this.save.revision || 14).padStart(4, '0'), ledgerNote: 'coins are a conserved local balance', delta: '', deltaShow: 'none', deltaColor: '#ffe08a' };
+  pick(id) { this.setState({ sel: id, qty: 1 }); }
+  persist() { const s = this.state; const prev = loadSave(); localStorage.setItem(SAVE, JSON.stringify({ ...prev, party: s.creatures.map(({ lvl, ...c }) => c), lead: s.lead, capsules: s.capsules, coins: s.coins, map: s.owned.map, poultice: s.owned.poultice, tonic: s.owned.tonic, revision: s.revision })); }
+  bump(n) { this.setState(s => ({ qty: Math.max(1, Math.min(9, s.qty + n)) })); }
+  flash(delta, color) { clearTimeout(this.t); this.setState({ delta, deltaColor: color, deltaShow: 'block' }); this.t = setTimeout(() => this.setState({ deltaShow: 'none' }), 900); }
+  confirm() {
+    const s = this.state, rev = s.revision + 1, commit = { revision: rev, lastCmd: 'c-' + String(rev).padStart(4, '0') };
+    if (s.tab === 'buy') {
+      const it = CATALOGUE.find(i => i.id === s.sel); const cost = it.price * s.qty;
+      if (cost > s.coins) return this.setState({ line: -1, ledgerNote: 'rejected: no-coins · state unchanged' });
+      const next = { coins: s.coins - cost, ...commit, ledgerNote: `${it.cmd} ×${s.qty} · debit ${cost}` };
+      if (it.id === 'capsule') next.capsules = s.capsules + s.qty;
+      if (it.id === 'map') next.owned = { ...s.owned, map: 1 };
+      if (it.id === 'poultice' || it.id === 'tonic') next.owned = { ...s.owned, [it.id]: (s.owned[it.id] || 0) + s.qty };
+      this.setState({ ...next, qty: 1, line: 1 }, () => this.persist()); this.flash('-' + cost, '#dc6a4e');
+    } else {
+      const idx = s.creatures.findIndex(c => c.id === s.sel); const c = s.creatures[idx]; if (!c || s.creatures.length <= 1 || idx === s.lead) return;
+      const gain = 6 + c.lvl * 2; const lead = idx < s.lead ? s.lead - 1 : s.lead;
+      this.setState({ coins: s.coins + gain, creatures: s.creatures.filter(x => x.id !== c.id), lead, sel: null, ...commit, ledgerNote: `transfer ${c.id} → bramble · credit ${gain}` }, () => this.persist()); this.flash('+' + gain, '#c4ec79');
+    }
+  }
+  renderVals() {
+    const s = this.state, buy = s.tab === 'buy';
+    const items = buy
+      ? CATALOGUE.map(it => { const soldOut = it.stock != null && s.owned[it.id] >= it.stock; const on = s.sel === it.id; return { name: it.name, tag: it.tag, desc: it.desc, price: it.price, stock: soldOut ? 'sold' : it.stock != null ? `${it.stock} left` : '∞', icon: `url(${it.icon})`, pick: () => this.pick(it.id), soldOut, opacity: soldOut ? .45 : 1, bg: on ? '#2f4a3e' : 'transparent', ring: on ? '0 0 0 2px #e8e2c8' : 'none' }; })
+      : s.creatures.map(c => { const on = s.sel === c.id; const lead = s.creatures.indexOf(c) === s.lead; return { name: c.nick || SPECIES[c.species][0], tag: lead ? 'LEAD · KEEP' : SPECIES[c.species][1].toUpperCase(), desc: `Lv ${c.lvl} · ${c.hp}/${maxHpAt(c.lvl)} HP · transfers ownership`, price: 6 + c.lvl * 2, stock: lead ? 'not for sale' : 'offer', icon: `url(creatures/${c.species}.png)`, pick: () => !lead && this.pick(c.id), soldOut: lead, opacity: lead ? .5 : 1, bg: on ? '#2f4a3e' : 'transparent', ring: on ? '0 0 0 2px #e8e2c8' : 'none' }; });
+    const selItem = buy ? CATALOGUE.find(i => i.id === s.sel) : s.creatures.find(c => c.id === s.sel);
+    const total = buy && selItem ? selItem.price * s.qty : !buy && selItem ? 6 + selItem.lvl * 2 : 0;
+    const cant = buy ? (!selItem || total > s.coins || (selItem.stock != null && s.owned[selItem.id] >= selItem.stock)) : !selItem;
+    return {
+      coins: s.coins, capsules: s.capsules, delta: s.delta, deltaShow: s.deltaShow, deltaColor: s.deltaColor,
+      speech: s.line === -1 ? 'Not enough WILD for that, friend. Win a few bouts first.' : LINES[s.line] || LINES[0], nextLine: () => this.setState({ line: (Math.max(0, s.line) + 1) % LINES.length }),
+      tabBuy: () => this.setState({ tab: 'buy', sel: 'capsule', qty: 1 }), tabSell: () => this.setState({ tab: 'sell', sel: null, qty: 1 }),
+      buyColor: buy ? '#2b1a10' : '#e9dcb4', buyBg: buy ? '#e9dcb4' : '#5a3a1a', sellColor: !buy ? '#2b1a10' : '#e9dcb4', sellBg: !buy ? '#e9dcb4' : '#5a3a1a',
+      tabHint: buy ? 'TAP AN ITEM' : 'TRADE A CREATURE FOR WILD',
+      items, selName: selItem ? (buy ? selItem.name : (selItem.nick || SPECIES[selItem.species][0])) : (buy ? 'Pick an item' : 'Pick a creature'), qty: buy ? s.qty : 1,
+      inc: () => buy && this.bump(1), dec: () => buy && this.bump(-1),
+      confirm: () => this.confirm(), confirmDisabled: cant, confirmOpacity: cant ? .45 : 1, confirmBg: buy ? '#3f6e2a' : '#7a3b1e', confirmLabel: buy ? 'BUY' : 'SELL', total: (buy ? '−' : '+') + ' ✦ ' + total,
+      showLedger: this.props.showLedger ?? true, revision: s.revision, lastCmd: s.lastCmd, ledgerNote: s.ledgerNote,
+    };
+  }
+}
+</script>
+</body>
+</html>

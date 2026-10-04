@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet><style>@keyframes pondflow{to{background-position:-672px 0}}</style><link rel="icon" href="brand/icon-64.png"><title>Wildstate</title><link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=VT323&display=swap" rel="stylesheet"><style>body{margin:0;background:#081c1a}@keyframes blink{50%{opacity:0}}@keyframes bob{50%{translate:0 -4px}}@keyframes burn{to{background-position:-96px 0}}@keyframes flicker{0%,100%{opacity:.55;scale:1}50%{opacity:.85;scale:1.15}}@keyframes twinkle{50%{opacity:.2;translate:0 -6px}}@keyframes reveal{from{opacity:0;transform:scale(1.06)}to{opacity:1;transform:scale(1)}}</style></helmet>
+<div data-screen-label="Field mobile" style="min-height:100vh;display:grid;place-items:center;background:#0e2620;background-image:radial-gradient(#153429 1px,transparent 1px);background-size:8px 8px;padding:32px 16px;color:#f3f3df;font-family:'VT323',ui-monospace,monospace;font-size:18px">
+<x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+  <div style="height:100%;position:relative;overflow:hidden;background:#3b7a2a;color:#f3f3df;font-family:'VT323',ui-monospace,monospace;font-size:18px">
+    <!-- world -->
+    <div ref="{{ viewport }}" onClick="{{ tapMove }}" style="position:absolute;inset:0;overflow:hidden;cursor:pointer">
+      <div style="position:absolute;left:0;top:0;width:800px;height:640px;transform-origin:0 0;transform:{{ camera }};transition:transform .18s linear;image-rendering:pixelated">
+        <img src="tiles/fieldmap-v10.png?g4" alt="" style="position:absolute;left:0;top:0;width:800px;height:640px;image-rendering:pixelated">
+        <div style="position:absolute;left:512px;top:384px;width:224px;height:224px;background:url(tiles/pond-anim.png?g1) 0 0/672px 224px no-repeat;image-rendering:pixelated;animation:pondflow 1.2s steps(3) infinite;pointer-events:none"></div>
+        <!-- meadow glow -->
+        <div style="position:absolute;left:448px;top:192px;width:192px;height:160px;box-shadow:inset 0 0 0 2px #f6ffc866,0 0 24px #d9ff8a55;pointer-events:none"></div>
+        <sc-for list="{{ sparkles }}" as="sp" hint-placeholder-count="0"><i style="position:absolute;color:#fbffd6;font-style:normal;font-size:12px;left:{{ sp.left }};top:{{ sp.top }};animation:twinkle 2.2s infinite;animation-delay:{{ sp.delay }};pointer-events:none">✧</i></sc-for>
+        <div style="position:absolute;left:243px;top:410px;width:56px;height:44px;border-radius:50%;background:radial-gradient(#ffcf6a66,transparent 68%);animation:flicker 1.1s infinite;pointer-events:none"></div>
+        <div style="position:absolute;left:256px;top:416px;width:32px;height:32px;background:url(fx/campfire.png) 0 0/96px 32px;image-rendering:pixelated;animation:burn .36s steps(3) infinite;pointer-events:none"></div>
+        <!-- labels -->
+        <!-- NPCs -->
+        {{ miraSprite }}{{ rowanSprite }}{{ kadeSprite }}{{ nessaSprite }}{{ heroSprite }}
+        <div style="position:absolute;left:{{ bubbleX }};top:{{ bubbleY }};display:{{ bubbleShow }};font-family:'Silkscreen',monospace;font-size:9px;padding:3px 6px;background:#f6efd2;color:#26443a;box-shadow:0 0 0 2px #26443a;animation:bob 1s infinite;pointer-events:none">{{ bubbleText }}</div>
+      </div>
+    </div>
+
+    <!-- HUD header -->
+    <div style="position:absolute;left:12px;right:12px;top:56px;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;background:#1b3a2ef2;box-shadow:0 0 0 2px #0b1a15,0 0 0 4px #9ccf6e,0 0 0 6px #0b1a15">
+      <div><div style="display:flex;align-items:center;gap:6px;font-family:'Silkscreen',monospace;font-size:11px;font-weight:700;letter-spacing:0;color:#f8c926"><img src="brand/star-64.png" alt="" style="width:14px;height:14px;image-rendering:pixelated;display:block">WILDSTATE</div><div style="font-size:14px;color:#b9cdb6;line-height:1">Meadow camp · Local playtest</div></div>
+      <div style="display:flex;align-items:center;gap:10px;font-size:17px;white-space:nowrap"><span>◉ {{ capsules }}</span><span style="color:#e9d86b">✦ {{ coins }} <small style="font-family:'Silkscreen',monospace;font-size:8px;vertical-align:middle">WILD</small></span><button onClick="{{ toggleParty }}" style="font:inherit;font-family:'Silkscreen',monospace;font-size:9px;cursor:pointer;border:0;color:#f3f3df;background:#26503c;padding:6px 8px;box-shadow:0 0 0 2px #0b1a15,0 0 0 3px #6f9a5a" style-active="translate:0 1px">BAG</button></div>
+    </div>
+
+    <!-- collection panel -->
+    <sc-if value="{{ party }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute;left:12px;right:12px;top:130px;padding:12px;background:#f6efd2;color:#26443a;box-shadow:0 0 0 2px #26443a,0 0 0 4px #e9e0b8,0 0 0 6px #26443a;display:grid;gap:10px;animation:reveal .2s">
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:22px;white-space:nowrap">{{ bagTitle }}</span><button onClick="{{ toggleParty }}" style="font:inherit;font-family:'Silkscreen',monospace;font-size:9px;cursor:pointer;border:0;color:#f6efd2;background:#26443a;padding:5px 8px">CLOSE</button></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+          <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="3"><button onClick="{{ t.pick }}" style="font:inherit;font-family:'Silkscreen',monospace;font-size:9px;cursor:pointer;border:0;padding:7px 4px;color:{{ t.fg }};background:{{ t.bg }};box-shadow:0 0 0 2px #26443a">{{ t.label }}</button></sc-for>
+        </div>
+        <sc-if value="{{ tabCreatures }}" hint-placeholder-val="{{ true }}">
+        <sc-for list="{{ creatures }}" as="c" hint-placeholder-count="0">
+          <div style="display:flex;align-items:center;gap:10px;padding:8px;background:{{ c.bgCard }};box-shadow:0 0 0 2px #26443a">
+            <div style="width:52px;height:52px;flex:none;background-image:{{ c.bg }};background-size:contain;background-repeat:no-repeat;background-position:center;image-rendering:pixelated"></div>
+            <div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><span style="display:flex;align-items:baseline;gap:6px;min-width:0"><b style="font-size:20px;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ c.name }}</b><span style="font-size:13px;color:#6c8a7c;white-space:nowrap">{{ c.species }}</span></span><span style="display:flex;gap:4px;flex:none"><span style="font-family:'Silkscreen',monospace;font-size:8px;padding:2px 5px;color:#f6efd2;background:{{ c.elColor }}">{{ c.elLabel }}</span><sc-if value="{{ c.isLead }}" hint-placeholder-val="{{ false }}"><span style="font-family:'Silkscreen',monospace;font-size:8px;padding:2px 5px;color:#26443a;background:#e9d86b">LEAD</span></sc-if><sc-if value="{{ c.notLead }}" hint-placeholder-val="{{ false }}"><button onClick="{{ c.setLead }}" style="font:inherit;font-family:'Silkscreen',monospace;font-size:8px;cursor:pointer;border:0;padding:2px 6px;color:#f6efd2;background:#26503c" style-active="translate:0 1px">SWAP IN</button></sc-if></span></div>
+              <div style="display:flex;align-items:center;gap:6px;margin-top:4px"><span style="font-family:'Silkscreen',monospace;font-size:8px;color:#4c6a5c">HP</span><div style="flex:1;height:9px;background:#3b3f2e;border:2px solid #26443a;box-sizing:border-box"><i style="display:block;height:100%;background:{{ c.hpColor }};width:{{ c.hpPct }}"></i></div><small style="font-size:14px">{{ c.hp }}/{{ c.hpMax }}</small></div>
+              <div style="display:flex;align-items:center;gap:6px;margin-top:3px"><span style="font-family:'Silkscreen',monospace;font-size:8px;color:#8a6d1f">LV {{ c.level }}</span><div style="flex:1;height:6px;background:#3b3f2e;border:2px solid #26443a;box-sizing:border-box"><i style="display:block;height:100%;background:#e9d86b;width:{{ c.xpPct }}"></i></div><small style="font-size:13px;color:#4c6a5c;white-space:nowrap">{{ c.xpLabel }}</small></div>
+              <div style="font-size:14px;color:#4c6a5c;margin-top:2px">DMG +{{ c.dmg }} · {{ c.charges }}</div>
+              <div style="font-family:'Silkscreen',monospace;font-size:7px;color:#6c8a7c;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">OWNER {{ c.owner }}</div></div>
+          </div>
+        </sc-for>
+        </sc-if>
+        <sc-if value="{{ tabItems }}" hint-placeholder-val="{{ false }}">
+        <sc-for list="{{ items }}" as="it" hint-placeholder-count="0">
+          <div style="display:flex;align-items:center;gap:10px;padding:8px;background:#ece4c3;box-shadow:0 0 0 2px #26443a;opacity:{{ it.opacity }}">
+            <div style="width:40px;height:40px;flex:none;background-image:{{ it.bg }};background-size:contain;background-repeat:no-repeat;background-position:center;image-rendering:pixelated"></div>
+            <div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;align-items:baseline"><b style="font-size:20px;font-weight:400">{{ it.name }}</b><span style="font-family:'Silkscreen',monospace;font-size:10px">×{{ it.qty }}</span></div><div style="font-size:14px;color:#4c6a5c;line-height:1.2">{{ it.desc }}</div></div>
+          </div>
+        </sc-for>
+        <div style="display:flex;justify-content:space-between;padding:6px 8px;font-size:16px;white-space:nowrap"><span>Wild Coin</span><span style="color:#8a6d1f">✦ {{ coins }} WILD</span></div>
+        </sc-if>
+        <sc-if value="{{ tabWallet }}" hint-placeholder-val="{{ false }}">
+          <sc-if value="{{ walletOff }}" hint-placeholder-val="{{ true }}">
+            <div style="display:grid;gap:10px;padding:12px 8px;text-align:center">
+              <div style="font-size:18px;line-height:1.25">Connect a DSM wallet to hold your creatures and capsules as your own.</div>
+              <div style="font-size:14px;color:#4c6a5c;line-height:1.2">Until then this is a local playtest. Nothing here is DSM evidence.</div>
+              <button onClick="{{ connect }}" style="font:inherit;font-family:'Silkscreen',monospace;font-size:10px;cursor:pointer;border:0;color:#f3f3df;background:#26503c;padding:12px;box-shadow:0 0 0 2px #0b1a15,0 0 0 3px #6f9a5a" style-active="translate:0 1px">{{ connectLabel }}</button>
+            </div>
+          </sc-if>
+          <sc-if value="{{ walletOn }}" hint-placeholder-val="{{ false }}">
+            <div style="display:grid;gap:8px">
+              <div style="display:flex;align-items:center;gap:10px;padding:8px;background:#ece4c3;box-shadow:0 0 0 2px #26443a"><span style="width:10px;height:10px;background:#4da96c;box-shadow:0 0 0 2px #26443a;flex:none"></span><div style="flex:1;min-width:0"><div style="font-family:'Silkscreen',monospace;font-size:9px">CONNECTED · DSM</div><div style="font-size:15px;color:#4c6a5c;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ holder }}</div></div><button onClick="{{ disconnect }}" style="font:inherit;font-family:'Silkscreen',monospace;font-size:8px;cursor:pointer;border:0;color:#f6efd2;background:#26443a;padding:5px 7px">DISCONNECT</button></div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <div style="padding:8px;background:#ece4c3;box-shadow:0 0 0 2px #26443a"><div style="font-family:'Silkscreen',monospace;font-size:8px;color:#4c6a5c">REVISION</div><div style="font-size:22px">{{ revision }}</div></div>
+                <div style="padding:8px;background:#ece4c3;box-shadow:0 0 0 2px #26443a"><div style="font-family:'Silkscreen',monospace;font-size:8px;color:#4c6a5c">LAST COMMAND</div><div style="font-size:22px">{{ lastCmd }}</div></div>
+              </div>
+              <div style="padding:8px;background:#ece4c3;box-shadow:0 0 0 2px #26443a"><div style="font-family:'Silkscreen',monospace;font-size:8px;color:#4c6a5c;margin-bottom:4px">CONSUMED OPPORTUNITIES</div>
+                <sc-for list="{{ consumed }}" as="k" hint-placeholder-count="0"><div style="font-size:15px;line-height:1.3;color:#26443a">· {{ k }}</div></sc-for></div>
+              <div style="font-family:'Silkscreen',monospace;font-size:7px;color:#8a5a2a;text-align:center;line-height:1.6">LOCAL PLAYTEST · ADAPTER NOT LIVE · NOT DSM EVIDENCE</div>
+            </div>
+          </sc-if>
+        </sc-if>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button onClick="{{ saveGame }}" style="font:inherit;font-family:'Silkscreen',monospace;font-size:9px;cursor:pointer;border:0;color:#f3f3df;background:#26503c;padding:9px;box-shadow:0 0 0 2px #0b1a15,0 0 0 3px #6f9a5a" style-active="translate:0 1px">SAVE GAME</button><button onClick="{{ loadGame }}" style="font:inherit;font-family:'Silkscreen',monospace;font-size:9px;cursor:pointer;border:0;color:#f3f3df;background:#26503c;padding:9px;box-shadow:0 0 0 2px #0b1a15,0 0 0 3px #6f9a5a" style-active="translate:0 1px">LOAD GAME</button></div>
+        <sc-if value="{{ saveMsg }}" hint-placeholder-val="{{ false }}"><div style="font-family:'Silkscreen',monospace;font-size:8px;color:#4c6a5c;text-align:center">{{ saveMsg }}</div></sc-if>
+      </div>
+    </sc-if>
+
+    <!-- dialogue -->
+    <sc-if value="{{ talking }}" hint-placeholder-val="{{ false }}">
+      <div onClick="{{ nextLine }}" style="position:absolute;left:12px;right:12px;bottom:196px;display:flex;gap:12px;padding:10px 12px;background:#10261fef;box-shadow:0 0 0 2px #0b1a15,0 0 0 4px #9ccf6e,0 0 0 6px #0b1a15;cursor:pointer;animation:reveal .2s">
+        {{ portrait }}
+        <div style="flex:1;min-width:0"><div style="font-family:'Silkscreen',monospace;font-size:9px;color:#c4ec79;margin-bottom:4px">{{ speaker }}</div><p style="margin:0;font-size:18px;line-height:1.25">{{ line }}</p><div style="text-align:right;color:#c4ec79;font-size:13px;animation:blink 1s steps(1) infinite">▼</div></div>
+      </div>
+    </sc-if>
+
+    <!-- notice -->
+    <sc-if value="{{ noticeShow }}" hint-placeholder-val="{{ false }}">
+      <div style="position:absolute;left:12px;right:12px;bottom:196px;padding:10px 12px;background:#10261fef;box-shadow:0 0 0 2px #0b1a15,0 0 0 4px #9ccf6e,0 0 0 6px #0b1a15;font-size:18px;line-height:1.25;animation:reveal .2s">{{ notice }}</div>
+    </sc-if>
+
+    <!-- encounter flash -->
+    <sc-if value="{{ encounter }}" hint-placeholder-val="{{ false }}">
+      <a href="{{ battleHref }}" style="position:absolute;inset:0;display:grid;place-items:center;background:#081c1ad9;color:#f3f3df;text-decoration:none;animation:reveal .35s">
+        <div style="text-align:center;display:grid;gap:14px;padding:22px 28px;background:#1b3a2e;box-shadow:0 0 0 2px #0b1a15,0 0 0 4px #9ccf6e,0 0 0 6px #0b1a15">
+          <div style="font-family:'Silkscreen',monospace;font-size:12px;color:#c4ec79">{{ encTitle }}</div>
+          <div style="font-size:26px;line-height:1.1">{{ encLine }}</div>
+          <div style="font-family:'Silkscreen',monospace;font-size:9px;color:#d7e6cf;animation:blink 1s steps(1) infinite">TAP TO FIGHT ▶</div>
+        </div>
+      </a>
+    </sc-if>
+
+    <sc-if value="{{ shop }}" hint-placeholder-val="{{ false }}">
+      <a href="Shop mobile.dc.html" style="position:absolute;inset:0;display:grid;place-items:center;background:#081c1ad9;color:#f3f3df;text-decoration:none;animation:reveal .35s">
+        <div style="text-align:center;display:grid;gap:14px;padding:22px 28px;background:#1b3a2e;box-shadow:0 0 0 2px #0b1a15,0 0 0 4px #9ccf6e,0 0 0 6px #0b1a15">
+          <div style="font-family:'Silkscreen',monospace;font-size:12px;color:#c4ec79">TRADING POST</div>
+          <div style="font-size:26px;line-height:1.1">Bramble’s door creaks open.</div>
+          <div style="font-family:'Silkscreen',monospace;font-size:9px;color:#d7e6cf;animation:blink 1s steps(1) infinite">TAP TO ENTER ▶</div>
+        </div>
+      </a>
+    </sc-if>
+    <!-- controls -->
+    <div style="position:absolute;left:12px;right:12px;bottom:40px;display:flex;justify-content:space-between;align-items:flex-end;gap:12px;pointer-events:none;padding:0 2px">
+      <div style="position:relative;width:120px;height:120px;pointer-events:auto;filter:drop-shadow(0 3px 0 #0b1a15)">
+        <div style="position:absolute;inset:-4px;clip-path:polygon(36px 0,84px 0,84px 36px,120px 36px,120px 84px,84px 84px,84px 120px,36px 120px,36px 84px,0 84px,0 36px,36px 36px);background:#2b1a10;left:-4px;top:-4px;width:128px;height:128px;clip-path:polygon(40px 0,88px 0,88px 40px,128px 40px,128px 88px,88px 88px,88px 128px,40px 128px,40px 88px,0 88px,0 40px,40px 40px)"></div>
+        <div style="position:absolute;left:-2px;top:-2px;width:124px;height:124px;background:linear-gradient(#c9c9c0,#8f8f85);clip-path:polygon(40px 0,84px 0,84px 40px,124px 40px,124px 84px,84px 84px,84px 124px,40px 124px,40px 84px,0 84px,0 40px,40px 40px)"></div>
+        <div style="position:absolute;inset:0;background:#3e3e3a;clip-path:polygon(40px 0,80px 0,80px 40px,120px 40px,120px 80px,80px 80px,80px 120px,40px 120px,40px 80px,0 80px,0 40px,40px 40px)"></div>
+        <button onClick="{{ up }}" style="font:inherit;font-family:'Silkscreen',monospace;font-size:11px;cursor:pointer;border:0;color:#f6efd2;background:linear-gradient(#a8743c,#8a5a2a);box-shadow:inset 0 2px 0 #d9a86a,inset 0 -3px 0 #5a3a1a;position:absolute;left:42px;top:2px;width:36px;height:38px;border-radius:4px 4px 0 0;display:grid;place-items:center;text-shadow:0 1px 0 #2b1a10" style-active="background:#7a4e22;box-shadow:inset 0 3px 0 #5a3a1a">▲</button>
+        <button onClick="{{ left }}" style="font:inherit;font-family:'Silkscreen',monospace;font-size:11px;cursor:pointer;border:0;color:#f6efd2;background:linear-gradient(#a8743c,#8a5a2a);box-shadow:inset 0 2px 0 #d9a86a,inset 0 -3px 0 #5a3a1a;position:absolute;left:2px;top:42px;width:38px;height:36px;border-radius:4px 0 0 4px;display:grid;place-items:center;text-shadow:0 1px 0 #2b1a10" style-active="background:#7a4e22;box-shadow:inset 0 3px 0 #5a3a1a">◀</button>
+        <button onClick="{{ right }}" style="font:inherit;font-family:'Silkscreen',monospace;font-size:11px;cursor:pointer;border:0;color:#f6efd2;background:linear-gradient(#a8743c,#8a5a2a);box-shadow:inset 0 2px 0 #d9a86a,inset 0 -3px 0 #5a3a1a;position:absolute;left:80px;top:42px;width:38px;height:36px;border-radius:0 4px 4px 0;display:grid;place-items:center;text-shadow:0 1px 0 #2b1a10" style-active="background:#7a4e22;box-shadow:inset 0 3px 0 #5a3a1a">▶</button>
+        <button onClick="{{ down }}" style="font:inherit;font-family:'Silkscreen',monospace;font-size:11px;cursor:pointer;border:0;color:#f6efd2;background:linear-gradient(#a8743c,#8a5a2a);box-shadow:inset 0 2px 0 #d9a86a,inset 0 -3px 0 #5a3a1a;position:absolute;left:42px;top:80px;width:36px;height:38px;border-radius:0 0 4px 4px;display:grid;place-items:center;text-shadow:0 1px 0 #2b1a10" style-active="background:#7a4e22;box-shadow:inset 0 3px 0 #5a3a1a">▼</button>
+        <div style="position:absolute;left:44px;top:44px;width:32px;height:32px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#6a6a64,#3e3e3a);box-shadow:inset 0 2px 0 #2a2a27"></div>
+      </div>
+      <div style="display:grid;gap:8px;justify-items:end;pointer-events:auto">
+        <div style="font-size:15px;color:#2b1a10;background:#e9dcb4;padding:5px 9px;box-shadow:0 0 0 2px #2b1a10,inset 0 -2px 0 #c9b98a;max-width:200px;text-align:right;line-height:1.15">{{ hint }}</div>
+        <button onClick="{{ talk }}" style="font:inherit;font-family:'Silkscreen',monospace;font-size:11px;cursor:pointer;border:0;color:#f6efd2;text-shadow:0 1px 0 #2b1a10;background-color:{{ talkBg }};background-image:radial-gradient(circle at 40% 30%,#ffffff40,transparent 60%);width:78px;height:78px;border-radius:50%;box-shadow:0 0 0 3px #2b1a10,0 0 0 6px #c9892a,0 0 0 8px #2b1a10,inset 0 4px 0 #ffffff33,inset 0 -5px 0 #00000044,0 3px 0 #0b1a15" style-active="translate:0 3px;box-shadow:0 0 0 3px #2b1a10,0 0 0 6px #c9892a,0 0 0 8px #2b1a10,inset 0 4px 0 #00000055">{{ talkLabel }}</button>
+      </div>
+    </div>
+  </div>
+</x-import>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const T = 32, VW = 402, VH = 874, ZOOM = 1.75;
+const EL = { fire: ['FIRE', '#b5522a'], grass: ['GRASS', '#3f8a4f'], water: ['WATER', '#2f6f9e'], electric: ['VOLT', '#8a6d1f'] };
+const SPECIES = { embercub: ['Embercub', 'fire'], mossling: ['Mossling', 'grass'], tidefin: ['Tidefin', 'water'], voltusk: ['Voltusk', 'electric'], leon: ['Leon', 'grass'], brineback: ['Brineback', 'water'], rattlefin: ['Rattlefin', 'water'] };
+const MIRA = { x: 304, y: 432 }, ROWAN = { x: 304, y: 368 };
+const KADE = { x: 400, y: 272 }, NESSA = { x: 624, y: 336 };
+const TRAINERS = {
+  kade: { name: 'Kade', title: 'Meadow Drifter', pos: KADE, species: 'mossling', nick: 'Burr', greeting: ['Hey, trainer. Burr and I take on anyone who crosses this meadow.', 'Twelve WILD says you can’t knock him down. Paid straight to your wallet if you do.'], beaten: 'You already took my WILD today. Rest at camp and I’ll go another round.' },
+  nessa: { name: 'Nessa', title: 'Pond Keeper', pos: NESSA, species: 'tidefin', nick: 'Ripple', greeting: ['Careful by the water. Ripple doesn’t like strangers near her pond.', 'One bout. Beat her and the bounty is yours; lose and you walk back to camp.'], beaten: 'Ripple needs to rest after your last bout. So do you, by the look of it. Come back after camp.' },
+};
+const beatenSet = () => { try { return new Set(JSON.parse(localStorage.getItem('wildstate.beaten') || '[]')); } catch (e) { return new Set(); } };
+const MEADOW = { x0: 448, x1: 640, y0: 192, y1: 352 };
+const SHOP_DOOR = { tx: 18, ty: 4 };
+// Collision generated alongside tiles/fieldmap-v10.png?g4 (trees, fences, camp props, pond)
+const blocked = new Set(["-1,-1","-1,0","0,-1","0,0","-1,18","-1,19","0,18","0,19","1,-1","1,0","2,-1","2,0","1,18","1,19","2,18","2,19","3,-1","3,0","4,-1","4,0","3,18","3,19","4,18","4,19","5,-1","5,0","6,-1","6,0","5,18","5,19","6,18","6,19","7,-1","8,-1","7,18","7,19","8,18","8,19","9,-1","10,-1","9,18","9,19","10,18","10,19","11,-1","12,-1","13,-1","14,-1","23,-1","24,-1","-1,1","-1,2","0,1","0,2","-1,3","-1,4","0,3","0,4","-1,5","-1,6","0,5","0,6","-1,7","-1,8","0,7","0,8","-1,9","-1,10","0,9","0,10","23,9","23,10","24,9","-1,11","-1,12","0,11","0,12","23,11","23,12","-1,13","-1,14","0,13","0,14","23,13","-1,15","-1,16","0,15","0,16","-1,17","0,17","1,1","4,1","5,1","2,4","2,5","3,4","3,5","12,9","13,9","14,9","15,9","15,10","15,11","2,14","2,15","2,16","2,17","3,17","4,17","5,17","6,17","7,17","8,17","9,17","10,17","12,17","13,17","5,14","5,15","6,14","6,15","7,14","7,15","13,10","13,11","14,11","4,5","1,4","4,6","5,6","9,15","10,15","21,9","22,9","23,14","23,15","23,16","23,17","23,7","24,7","23,8","24,8","14,17","2,1","3,1","6,1","23,6","24,6","12,13","13,13","12,14","13,14","12,15","13,15","7,0","7,1","8,0","8,1","9,0","9,1","10,0","10,1","13,0","13,1","14,0","14,1","23,0","23,1","24,0","24,1","11,1","12,1","15,1","15,2","15,3","15,4","16,1","16,2","16,3","16,4","17,1","17,2","17,3","17,4","18,1","18,2","18,3","19,1","19,2","19,3","19,4","20,1","20,2","20,3","20,4","21,1","21,2","21,3","21,4","23,2","24,2","23,3","24,3","23,4","24,4","23,5","24,5","7,4","8,4","7,5","8,5","15,12","15,13","15,14","15,15","15,16","15,17","2,9","3,9","4,9","5,9","6,9","7,9","8,9","9,9","10,9","2,10","2,11","2,12","2,13","3,10","4,10","3,11","4,11","4,12","7,10","8,10","7,11","8,11","3,13","17,12","18,12","19,12","20,12","21,12","17,13","18,13","19,13","20,13","21,13","22,13","16,14","17,14","18,14","19,14","20,14","21,14","22,14","16,15","17,15","18,15","19,15","20,15","21,15","22,15","16,16","17,16","18,16","19,16","20,16","21,16","22,16","17,17","18,17","19,17","20,17","21,17","23,18","23,19","17,18","18,18","19,18","20,18","21,18","24,10","24,11","24,12","24,13","24,14","24,15","24,16","24,17","24,18","24,19","12,18","13,18","12,19","13,19"]);
+const SPARKLES = Array.from({ length: 10 }, (_, n) => ({ left: 452 + ((n * 37) % 180) + 'px', top: 196 + ((n * 23) % 140) + 'px', delay: n * .2 + 's' }));
+const MIRA_LINES = [
+  { speaker: 'Mira · Camp Healer', portrait: 'mira', message: 'There you are! Your creatures have rested by the campfire. Their HP and special moves are full again.' },
+  { speaker: 'You', portrait: 'player', message: 'Thanks, Mira. We’re ready to explore the meadow again.' },
+  { speaker: 'Mira · Camp Healer', portrait: 'mira', message: 'Take care out there. A new companion keeps the HP it had when you caught it, so bring it to me for a rest too.' },
+];
+const ROWAN_LINES = [
+  { speaker: 'Rowan · Expedition Ranger', portrait: 'rowan', message: 'Keep an eye out for Voltusk and a chameleon called Leon. Tidefin and Brineback only bite at the pond, so bring your rod. The meadow has more surprises than it first lets on. Weaken a creature before throwing a capsule.' },
+  { speaker: 'You', portrait: 'player', message: 'I’ll build my collection one encounter at a time—and bring everyone back to camp when they need rest.' },
+  { speaker: 'Rowan · Expedition Ranger', portrait: 'rowan', message: 'That’s the spirit. Leave the meadow and walk back in for a new encounter. Mira will restore your creatures’ HP and special moves.' },
+];
+const DIR_ROW = { down: 0, left: 1, right: 2, up: 3 };
+const WILD_ORDER = ['mossling', 'voltusk', 'leon', 'embercub'];
+const POND = new Set(["17,12","18,12","19,12","20,12","21,12","17,13","18,13","19,13","20,13","21,13","22,13","16,14","17,14","18,14","19,14","20,14","21,14","22,14","16,15","17,15","18,15","19,15","20,15","21,15","22,15","16,16","17,16","18,16","19,16","20,16","21,16","22,16","17,17","18,17","19,17","20,17","21,17","17,18","18,18","19,18","20,18"]);
+const SAVE_SLOT = 'wildstate.slot1';
+const POND_ORDER = ['tidefin', 'brineback', 'rattlefin'];
+
+const SAVE = 'wildstate.save';
+const MOVE_CH = { embercub: [['flare', 'Flare', 5], ['ember-bite', 'Ember Bite', 3], ['warm-coat', 'Warm Coat', 2]], mossling: [['leaf-cut', 'Leaf Cut', 5], ['root-bind', 'Root Bind', 3], ['photosynth', 'Photosynth', 1]], tidefin: [['tide-lash', 'Tide Lash', 5], ['soak', 'Soak', 3], ['mist-veil', 'Mist Veil', 2]], voltusk: [['volt-charge', 'Volt Charge', 5], ['static-tusk', 'Static Tusk', 3], ['bristle', 'Bristle', 2]], leon: [['tongue-lash', 'Tongue Lash', 5], ['sticky-snare', 'Sticky Snare', 3], ['camouflage', 'Camouflage', 2]], brineback: [['brine-jet', 'Brine Jet', 5], ['barnacle-bash', 'Barnacle Bash', 3], ['shell-up', 'Shell Up', 2]], rattlefin: [['chain-whip', 'Chain Whip', 5], ['lure-flash', 'Lure Flash', 3], ['rust-hide', 'Rust Hide', 2]] };
+const LV_CAP = 10, XP_PER = 20, lvOf = xp => Math.min(LV_CAP, 1 + Math.floor((xp || 0) / XP_PER)), maxHpAt = lv => 40 + 4 * (lv - 1), chargeBonus = lv => (lv >= 4 ? 1 : 0) + (lv >= 7 ? 1 : 0);
+const freshCharges = sp => Object.fromEntries((MOVE_CH[sp] || []).map(m => [m[0], m[2]]));
+const loadSave = () => { try { const v = JSON.parse(localStorage.getItem(SAVE)); if (v && v.party && v.party.length) return v; } catch (e) {} return { party: [{ id: 'c-1', nick: '', species: 'embercub', hp: 40, xp: 0, charges: freshCharges('embercub') }], lead: 0, capsules: 3, coins: 10, nextId: 2 }; };
+const writeSave = v => { let prev = {}; try { prev = JSON.parse(localStorage.getItem(SAVE)) || {}; } catch (e) {} localStorage.setItem(SAVE, JSON.stringify({ ...prev, ...v })); };
+const chargeLabel = c => { const b = chargeBonus(lvOf(c.xp)); return (MOVE_CH[c.species] || []).map(m => `${m[1]} ${c.charges && c.charges[m[0]] != null ? c.charges[m[0]] : m[2] + b}/${m[2] + b}`).join(' · '); };
+
+const loadPos = () => { try { const p = JSON.parse(localStorage.getItem('wildstate.pos')); if (p && Number.isInteger(p.hx) && Number.isInteger(p.hy)) return p; } catch (e) {} return { hx: 11, hy: 5, dir: 'down' }; };
+class Component extends DCLogic {
+  save = loadSave();
+  pos = loadPos();
+  state = { hx: this.pos.hx, hy: this.pos.hy, dir: 'down', step: 1, party: false, talking: null, page: 0, notice: '', encounter: false, inside: false, vw: VW, vh: VH,
+    creatures: this.save.party, lead: this.save.lead, capsules: this.save.capsules, coins: this.save.coins,
+    tab: 'creatures', wallet: localStorage.getItem('wildstate.wallet') === '1', connecting: false, poultice: this.save.poultice ?? 1, tonic: this.save.tonic ?? 0, map: this.save.map ?? 0, rod: true, fishing: false, saveMsg: '' };
+  viewport = React.createRef();
+  componentDidMount() {
+    { const px = this.state.hx * T + 16, py = this.state.hy * T + 16; if (px >= MEADOW.x0 && px <= MEADOW.x1 && py >= MEADOW.y0 && py <= MEADOW.y1) this.setState({ inside: true }); }
+    this.onKey = e => { const m = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', w: 'up', s: 'down', a: 'left', d: 'right' }[e.key]; if (m) { e.preventDefault(); this.move(m); } if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); this.state.talking ? this.nextLine() : this.talk(); } };
+    window.addEventListener('keydown', this.onKey);
+    const v = this.viewport.current; if (v) this.setState({ vw: v.clientWidth, vh: v.clientHeight });
+  }
+  componentWillUnmount() { window.removeEventListener('keydown', this.onKey); clearTimeout(this.noticeT); }
+  move(dir) {
+    if (this.state.talking || this.state.encounter || this.state.party) return;
+    const d = { up: [0, -1], down: [0, 1], left: [-1, 0], right: [1, 0] }[dir];
+    this.setState(s => {
+      const nx = s.hx + d[0], ny = s.hy + d[1];
+      const npc = [MIRA, ROWAN, KADE, NESSA].some(p => nx === p.x >> 5 && ny === p.y >> 5);
+      const ok = nx >= 0 && nx < 25 && ny >= 0 && ny < 20 && !blocked.has(nx + ',' + ny) && !npc;
+      return ok ? { dir, step: (s.step + 1) % 3, hx: nx, hy: ny } : { dir, step: (s.step + 1) % 3 };
+    }, () => { localStorage.setItem('wildstate.pos', JSON.stringify({ hx: this.state.hx, hy: this.state.hy, dir: this.state.dir })); this.checkEncounter(); });
+  }
+  checkEncounter() {
+    const s = this.state, px = s.hx * T + 16, py = s.hy * T + 16;
+    if (s.hx === SHOP_DOOR.tx && s.hy === SHOP_DOOR.ty) { this.setState({ shop: true }); return; }
+    const inWild = px >= MEADOW.x0 && px <= MEADOW.x1 && py >= MEADOW.y0 && py <= MEADOW.y1;
+    if (!inWild) { if (s.inside) this.setState({ inside: false }); return; }
+    if (s.inside) return;
+    if (!s.creatures[s.lead].hp) { this.setState({ inside: true }); return this.flash(`${s.creatures[s.lead].nick || SPECIES[s.creatures[s.lead].species][0]} needs rest. Swap leads in the BAG or talk to Mira.`); }
+    const n = Number(localStorage.getItem('wildstate.encounter') || 0); localStorage.setItem('wildstate.encounter', String(n + 1));
+    this.setState({ inside: true, wild: WILD_ORDER[n % WILD_ORDER.length] }); setTimeout(() => this.setState({ encounter: true }), 250);
+  }
+  flash(msg) { clearTimeout(this.noticeT); this.setState({ notice: msg }); this.noticeT = setTimeout(() => this.setState({ notice: '' }), 2600); }
+  near() { const px = this.state.hx * T + 16, py = this.state.hy * T + 16; const all = { mira: MIRA, rowan: ROWAN, kade: KADE, nessa: NESSA }; let best = null, bd = 72; for (const k in all) { const d = Math.hypot(px - all[k].x, py - all[k].y); if (d <= bd) { bd = d; best = k; } } return best; }
+  nearPond() { const s = this.state; return [[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy]) => POND.has((s.hx+dx)+','+(s.hy+dy))); }
+  cast() {
+    const s = this.state; if (s.talking || s.encounter || s.fishing || !this.nearPond()) return;
+    if (!s.creatures[s.lead].hp) return this.flash('Your lead needs rest before fishing.');
+    this.setState({ fishing: true, notice: 'Cast… waiting for a bite.' });
+    const n = Number(localStorage.getItem('wildstate.fish') || 0); localStorage.setItem('wildstate.fish', String(n + 1));
+    setTimeout(() => { this.setState({ fishing: false, notice: '', inside: true, wild: POND_ORDER[n % POND_ORDER.length] }); setTimeout(() => this.setState({ encounter: true }), 250); }, 1600);
+  }
+  saveGame() { const sv = loadSave(); const slot = { ...sv, hx: this.state.hx, hy: this.state.hy, poultice: this.state.poultice, tonic: this.state.tonic, map: this.state.map, at: Date.now() }; localStorage.setItem(SAVE_SLOT, JSON.stringify(slot)); this.setState({ saveMsg: 'Saved ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }); }
+  loadGame() { try { const slot = JSON.parse(localStorage.getItem(SAVE_SLOT)); if (!slot) return this.setState({ saveMsg: 'No save yet.' }); writeSave({ poultice: slot.poultice, tonic: slot.tonic, map: slot.map, party: slot.party, lead: slot.lead, capsules: slot.capsules, coins: slot.coins, nextId: slot.nextId }); this.setState({ creatures: slot.party, lead: slot.lead, capsules: slot.capsules, coins: slot.coins, hx: slot.hx, hy: slot.hy, inside: true, poultice: slot.poultice ?? 1, tonic: slot.tonic ?? 0, map: slot.map ?? 0, party: false, saveMsg: '' }); this.flash('Game loaded.'); } catch (e) { this.setState({ saveMsg: 'Save is corrupt.' }); } }
+  talk() {
+    const s = this.state; if (s.talking || s.encounter) return;
+    if (this.nearPond() && !this.near()) return this.cast();
+    const who = this.near();
+    if (who === 'rowan') return this.setState({ talking: ROWAN_LINES, page: 0 });
+    if (TRAINERS[who]) {
+      const t = TRAINERS[who], sp = `${t.name} · ${t.title}`;
+      if (beatenSet().has(who)) return this.setState({ talking: [{ speaker: sp, portrait: who, message: t.beaten }], page: 0 });
+      if (!s.creatures[s.lead].hp) return this.setState({ talking: [{ speaker: sp, portrait: who, message: 'Your lead can barely stand. See Mira first, then we’ll talk.' }], page: 0 });
+      return this.setState({ talking: t.greeting.map(message => ({ speaker: sp, portrait: who, message })), page: 0, thenFight: who });
+    }
+    if (who === 'mira') { localStorage.setItem('wildstate.beaten', '[]'); const creatures = s.creatures.map(c => ({ ...c, hp: maxHpAt(lvOf(c.xp)), charges: Object.fromEntries(Object.entries(freshCharges(c.species)).map(([k, v]) => [k, v + chargeBonus(lvOf(c.xp))])) })); writeSave({ ...loadSave(), party: creatures }); return this.setState({ talking: MIRA_LINES, page: 0, creatures }); }
+    this.flash('Walk to Mira at the rest camp to talk.');
+  }
+  nextLine() { const s = this.state; if (!s.talking) return; if (s.page >= s.talking.length - 1) { if (s.thenFight) { this.setState({ talking: null, page: 0, thenFight: null, wild: 'trainer:' + s.thenFight, inside: true }); setTimeout(() => this.setState({ encounter: true }), 250); } else this.setState({ talking: null, page: 0 }); } else this.setState({ page: s.page + 1 }); }
+  tapMove(e) {
+    const s = this.state; if (s.talking || s.encounter || s.party) return;
+    const r = this.viewport.current.getBoundingClientRect(); const cx = e.clientX - r.left - r.width / 2, cy = e.clientY - r.top - r.height / 2;
+    if (Math.abs(cx) < 20 && Math.abs(cy) < 20) return;
+    this.move(Math.abs(cx) > Math.abs(cy) ? (cx > 0 ? 'right' : 'left') : (cy > 0 ? 'down' : 'up'));
+  }
+  sprite(sheet, col, row, x, y, key, extra) {
+    return React.createElement('div', { key, style: { position: 'absolute', left: x, top: y, width: 32, height: 32, backgroundImage: `url(${sheet})`, backgroundPosition: `${-col * 32}px ${-row * 32}px`, backgroundSize: '96px 128px', imageRendering: 'pixelated', filter: 'drop-shadow(0 2px 0 #1e3a1c66)', ...extra } });
+  }
+  renderVals() {
+    const s = this.state;
+    const hx = s.hx * T, hy = s.hy * T;
+    const scale = ZOOM, cw = s.vw / scale, ch = s.vh / scale;
+    const camX = Math.max(0, Math.min(800 - cw, hx + 16 - cw / 2)), camY = Math.max(0, Math.min(640 - ch, hy + 16 - ch / 2 - 10));
+    const who = this.near();
+    const lineObj = s.talking ? s.talking[s.page] : null;
+    const hpColor = hp => hp > 20 ? '#4da96c' : hp > 10 ? '#d9a93a' : '#c9553a';
+    return {
+      viewport: this.viewport, camera: `scale(${scale}) translate(${-Math.round(camX)}px, ${-Math.round(camY)}px)`, sparkles: SPARKLES,
+      heroSprite: this.sprite('sprites/hero.png', s.step, DIR_ROW[s.dir], hx, hy - 8, 'hero', { zIndex: 3, transition: 'left .18s linear, top .18s linear' }),
+      miraSprite: this.sprite('sprites/female.png', 1, 0, MIRA.x - 16, MIRA.y - 24, 'mira', { zIndex: 2 }),
+      kadeSprite: React.createElement('img', { key: 'kade', src: 'sprites/kade32.png', alt: 'Kade', style: { position: 'absolute', left: KADE.x - 16, top: KADE.y - 26, width: 32, height: 40, imageRendering: 'pixelated', zIndex: 2, filter: 'drop-shadow(0 2px 0 #1e3a1c66)' } }),
+      nessaSprite: React.createElement('img', { key: 'nessa', src: 'sprites/nessa32.png', alt: 'Nessa', style: { position: 'absolute', left: NESSA.x - 16, top: NESSA.y - 26, width: 32, height: 40, imageRendering: 'pixelated', zIndex: 2, filter: 'drop-shadow(0 2px 0 #1e3a1c66)' } }),
+      rowanSprite: this.sprite('sprites/hero.png', 1, 2, ROWAN.x - 16, ROWAN.y - 24, 'rowan', { zIndex: 2, filter: 'sepia(1) saturate(1.4) hue-rotate(-12deg) brightness(.82) drop-shadow(0 2px 0 #1e3a1c66)' }),
+      bubbleShow: (who || (this.nearPond() && !s.fishing)) && !s.talking ? 'block' : 'none', bubbleText: who ? 'TALK' : 'CAST', bubbleX: (who === 'rowan' ? ROWAN.x : who === 'mira' ? MIRA.x : who === 'kade' ? KADE.x : who === 'nessa' ? NESSA.x : hx) - 16 + 'px', bubbleY: (who === 'rowan' ? ROWAN.y : who === 'mira' ? MIRA.y : hy) - 48 + 'px',
+      capsules: s.capsules, coins: s.coins, partyCount: s.creatures.length, party: s.party, toggleParty: () => this.setState({ party: !s.party }),
+      nearPond: this.nearPond() && !who, fishing: s.fishing, cast: () => this.cast(), saveGame: () => this.saveGame(), loadGame: () => this.loadGame(), saveMsg: s.saveMsg, hasSlot: !!localStorage.getItem(SAVE_SLOT),
+      talkLabel: this.nearPond() && !who ? (s.fishing ? '…' : 'CAST') : 'TALK',
+      bagTitle: s.tab === 'creatures' ? 'Your creatures' : s.tab === 'items' ? 'Your bag' : 'Wallet',
+      tabs: ['creatures', 'items', 'wallet'].map(t => ({ label: t.toUpperCase(), pick: () => this.setState({ tab: t }), bg: s.tab === t ? '#26443a' : '#ece4c3', fg: s.tab === t ? '#f6efd2' : '#26443a' })),
+      tabCreatures: s.tab === 'creatures', tabItems: s.tab === 'items', tabWallet: s.tab === 'wallet',
+      items: [
+        { name: 'Fishing Rod', qty: s.rod ? 1 : 0, icon: 'shop/icon-rod.png', desc: 'Stand at the pond edge and tap CAST.' },
+        { name: 'Capture Capsule', qty: s.capsules, icon: 'shop/icon-capsule.png', desc: 'Throw at a weakened creature (14 HP or less).' },
+        { name: 'Herb Poultice', qty: s.poultice, icon: 'shop/icon-poultice.png', desc: 'Restores 15 HP to one creature.' },
+        { name: 'Charge Tonic', qty: s.tonic, icon: 'shop/icon-tonic.png', desc: 'Restores every charge of one move.' },
+        { name: 'Ranger’s Map', qty: s.map, icon: 'shop/icon-map.png', desc: 'Reveals the path past the meadow.' },
+      ].map(i => ({ ...i, bg: 'url(' + i.icon + ')', opacity: i.qty ? 1 : 0.45 })),
+      walletOff: !s.wallet, walletOn: s.wallet, connectLabel: s.connecting ? 'CONNECTING…' : 'CONNECT WALLET',
+      connect: () => { if (s.connecting) return; this.setState({ connecting: true }); setTimeout(() => { localStorage.setItem('wildstate.wallet', '1'); this.setState({ wallet: true, connecting: false }); }, 900); },
+      disconnect: () => { localStorage.setItem('wildstate.wallet', '0'); this.setState({ wallet: false }); },
+      holder: 'dsm1q…7k2m / player', revision: 12, lastCmd: 'c-0012', consumed: ['campaign/1/crossroads', 'encounter/2', 'encounter/1'],
+      creatures: s.creatures.map((c, i) => ({ name: c.nick || SPECIES[c.species][0], species: c.nick ? SPECIES[c.species][0] : '', isLead: i === s.lead, notLead: i !== s.lead, bgCard: i === s.lead ? '#f3ecc9' : '#ece4c3', setLead: () => { const sv = { ...loadSave(), lead: i }; writeSave(sv); this.setState({ lead: i }); }, bg: `url(creatures/${c.species}.png)`, elLabel: EL[SPECIES[c.species][1]][0], elColor: EL[SPECIES[c.species][1]][1], hp: c.hp, hpMax: maxHpAt(lvOf(c.xp)), hpPct: c.hp / maxHpAt(lvOf(c.xp)) * 100 + '%', hpColor: hpColor(c.hp), level: lvOf(c.xp), dmg: lvOf(c.xp) - 1, xpPct: (lvOf(c.xp) >= LV_CAP ? 1 : (c.xp % XP_PER) / XP_PER) * 100 + '%', xpLabel: lvOf(c.xp) >= LV_CAP ? 'MAX' : `${c.xp % XP_PER}/${XP_PER} XP`, charges: chargeLabel(c), owner: (s.wallet ? 'dsm1q…7k2m' : 'local') + (i === 0 ? ' / starter' : ' / captured · ' + c.id) })),
+      talking: !!s.talking, speaker: lineObj?.speaker || '', line: lineObj?.message || '', nextLine: () => this.nextLine(),
+      portrait: lineObj ? React.createElement('img', { key: 'p', src: `portraits/${lineObj.portrait}.png`, alt: lineObj.portrait, style: { width: 64, height: 64, flex: 'none', objectFit: 'cover', objectPosition: '50% 8%', imageRendering: 'pixelated', background: '#f6efd2', boxShadow: '0 0 0 2px #26443a, 0 0 0 4px #9ccf6e' } }) : null,
+      noticeShow: !!s.notice && !s.talking, encTitle: String(s.wild || '').startsWith('trainer:') ? 'TRAINER BATTLE' : 'WILD ENCOUNTER', encLine: String(s.wild || '').startsWith('trainer:') ? `${TRAINERS[s.wild.slice(8)].name} wants to battle!` : 'A wild creature appeared!', battleHref: 'Battle mobile.dc.html?wild=' + (s.wild || 'mossling'), notice: s.notice, encounter: s.encounter, shop: !!s.shop,
+      up: () => this.move('up'), down: () => this.move('down'), left: () => this.move('left'), right: () => this.move('right'), tapMove: e => this.tapMove(e),
+      talk: () => this.talk(), talkBg: who ? '#5a9a3a' : (this.nearPond() ? '#2f6f9e' : '#8a5a2a'),
+      hint: s.talking ? 'Tap to continue' : who ? (TRAINERS[who] ? `Challenge ${TRAINERS[who].name}` : `Talk to ${who === 'mira' ? 'Mira' : 'Rowan'}`) : s.fishing ? 'Waiting for a bite…' : this.nearPond() ? 'Cast your line into the pond' : 'East: the glowing meadow. North-east: Bramble’s trading post. South-east: the pond.',
+    };
+  }
+}
+</script>
+</body>
+</html>

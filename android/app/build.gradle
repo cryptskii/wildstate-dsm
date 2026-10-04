@@ -1,0 +1,37 @@
+apply plugin: 'com.android.application'
+def gameUrl = providers.environmentVariable('WILDSTATE_GAME_URL').getOrElse('http://192.168.4.46:5173/')
+def releaseRequested = gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }
+def endpoint = new URI(gameUrl)
+if (!(endpoint.scheme in ['http','https']) || !endpoint.host || endpoint.userInfo || endpoint.fragment || endpoint.query) throw new GradleException('WILDSTATE_GAME_URL must be an HTTP(S) game URL without credentials, query or fragment.')
+if (releaseRequested && (endpoint.scheme != 'https' || endpoint.host == 'localhost' || endpoint.host.endsWith('.local') || endpoint.host ==~ /(?:\d+\.){3}\d+/ || endpoint.host.contains(':'))) throw new GradleException('Release builds require a public HTTPS hostname in WILDSTATE_GAME_URL.')
+def signingPath = System.getenv('WILDSTATE_KEYSTORE_PATH')
+if (releaseRequested && (!signingPath || !System.getenv('WILDSTATE_KEYSTORE_PASSWORD') || !System.getenv('WILDSTATE_KEY_ALIAS') || !System.getenv('WILDSTATE_KEY_PASSWORD'))) throw new GradleException('Release signing requires all four WILDSTATE_KEYSTORE/KEY environment variables. See docs/android-app.md.')
+android {
+    namespace 'org.deterministicstatemachine.wildstate'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'org.deterministicstatemachine.wildstate'
+        minSdk 26
+        targetSdk 35
+        versionCode Integer.parseInt(System.getenv('WILDSTATE_VERSION_CODE') ?: '1')
+        versionName System.getenv('WILDSTATE_VERSION_NAME') ?: '0.1.0'
+        buildConfigField 'String', 'GAME_URL', groovy.json.JsonOutput.toJson(gameUrl)
+        resValue 'string', 'app_name', 'Wildstate'
+    }
+    buildFeatures { buildConfig true }
+    signingConfigs {
+        if (signingPath) {
+            release {
+                storeFile file(signingPath)
+                storePassword System.getenv('WILDSTATE_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('WILDSTATE_KEY_ALIAS')
+                keyPassword System.getenv('WILDSTATE_KEY_PASSWORD')
+            }
+        }
+    }
+    buildTypes {
+        debug { applicationIdSuffix '.preview'; versionNameSuffix '-preview'; resValue 'string', 'app_name', 'Wildstate Preview' }
+        release { if (signingPath) signingConfig signingConfigs.release; minifyEnabled false }
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
