@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import { rpgjs, tiledMapFolderPlugin } from '@rpgjs/vite';
 import vue from '@vitejs/plugin-vue';
 import startServer from './src/server';
+import { PROTOCOL } from './src/protocol';
 
 export default defineConfig(({ command }) => {
   // Wildstate runs on DSM: what a player owns is in their wallet, and the game's
@@ -14,6 +15,18 @@ export default defineConfig(({ command }) => {
       include: ['pixi.js > @xmldom/xmldom']
     },
     plugins: [vue(),
+      // The development server answers the clients' version check as scripts/server.mjs does,
+      // including for a debug Android build, whose bundled client has its own origin.
+      {
+        name: 'wildstate:version',
+        configureServer(server) {
+          server.middlewares.use('/version', (_request, response) => {
+            response.setHeader('Access-Control-Allow-Origin', '*');
+            response.setHeader('Content-Type', 'application/json');
+            response.end(JSON.stringify({ protocol: PROTOCOL }));
+          });
+        },
+      },
       tiledMapFolderPlugin({
         sourceFolder: './src/tiled',      // Folder containing your TMX files
         publicPath: '/map',               // Public URL path for maps

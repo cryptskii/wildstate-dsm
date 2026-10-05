@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { WebSocketServer } from 'ws';
 import { createRpgServerTransport, createSqliteNodeRoomStorage } from '@rpgjs/server/node';
-import ServerModule from '../dist/server/server.js';
+import ServerModule, { PROTOCOL } from '../dist/server/server.js';
 
 const required = name => {
   const value = process.env[name];
@@ -47,6 +47,12 @@ const server = http.createServer((request, response) => {
   }
   if (request.url === '/healthz') {
     response.writeHead(ready ? 200 : 503, { 'Content-Type': 'text/plain' }).end(ready ? 'ok' : 'starting');
+    return;
+  }
+  // Clients ask before connecting; installed apps keep their client, so they need to know when to update.
+  if (request.url === '/version') {
+    if (!ready) response.writeHead(503, { 'Content-Type': 'text/plain' }).end('starting');
+    else response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify({ protocol: PROTOCOL }));
     return;
   }
   void transport.handleNodeRequest(request, response, () => response.writeHead(404).end()).catch(error => {
