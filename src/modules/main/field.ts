@@ -68,7 +68,7 @@ useReadState((player) => session(player).read());
 useHudData((player) => hudData(player));
 export function fieldHud(player: RpgPlayer) {
   const hud = player.gui('field-hud');
-  hud.on<{ action: string; creatureId?: string; nick?: string; item?: string }>('field', async ({ action, creatureId, nick, item }) => {
+  hud.on<{ action: string; creatureId?: string; creatureIds?: unknown[]; nick?: string; item?: string }>('field', async ({ action, creatureId, creatureIds, nick, item }) => {
     // The tap a card is waiting for: the battle (or the shop) opens behind it.
     if (!isCurrentAvatar(player)) return;
     if (action === 'fight') { taps.get(player)?.(); return; }
@@ -88,6 +88,7 @@ export function fieldHud(player: RpgPlayer) {
     }
     if (action === 'cast') { if (nearPond(player)) await startBattle(player, 'cast'); return; }
     if (action === 'set-lead' && creatureId) { tryCommit(player, { type: 'set-lead', creatureId }); return; }
+    if (action === 'set-team' && Array.isArray(creatureIds)) { tryCommit(player, { type: 'set-team', creatureIds: creatureIds.filter((x): x is string => typeof x === 'string') }); return; }
     if (action === 'rename' && creatureId) { tryCommit(player, { type: 'rename', creatureId, nick: nick ?? '' }); return; }
     if (action === 'shop' || action === 'enter-shop') {
       hud.update(hudData(player));

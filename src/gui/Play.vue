@@ -3,7 +3,7 @@ import { computed, inject, ref, watch, onUnmounted, onMounted } from 'vue';
 import { Direction } from '@rpgjs/common';
 import { heldDirection, type MovementControls } from './held-direction';
 import Joystick from './Joystick.vue';
-import { SPECIES, TRAINERS, NICK_MAX, XP_PER_LEVEL, LEVEL_CAP, multiplier, displayName, level, maxHp, maxCharges, damageBonus, type GameState, type Element, type MoveFx } from '../domain/game';
+import { SPECIES, TRAINERS, TEAM_SIZE, KO_TO_WIN, NICK_MAX, XP_PER_LEVEL, LEVEL_CAP, multiplier, displayName, level, maxHp, maxCharges, damageBonus, type GameState, type Element, type MoveFx } from '../domain/game';
 const xpLabel = (c: { xp: number }) => level(c) >= LEVEL_CAP ? 'MAX' : `${c.xp % XP_PER_LEVEL}/${XP_PER_LEVEL} XP`;
 const xpPct = (c: { xp: number }) => (level(c) >= LEVEL_CAP ? 1 : (c.xp % XP_PER_LEVEL) / XP_PER_LEVEL) * 100 + '%';
 const growth = computed(() => { const g = props.state.battle?.growth; return g && g.to > g.from ? g : null; });
@@ -100,6 +100,22 @@ watch(() => [props.mode, props.state.battle?.outcome, props.encounter, party.val
   if (props.mode !== 'field' || props.state.battle?.outcome === 'active' || props.encounter || party.value) stopWalk();
 });
 function field(action: string, data: Record<string, unknown> = {}) { interact('field-hud', 'field', { action, ...data }); }
+/** The team for trainer battles: up to three creatures, in the order they were picked. */
+const teamSlot = (id: string) => props.state.team.indexOf(id);
+function toggleTeam(id: string) {
+  const team = props.state.team.filter(x => props.state.creatures.some(c => c.id === x));
+  const next = team.includes(id) ? team.filter(x => x !== id) : team.length < TEAM_SIZE ? [...team, id] : team;
+  field('set-team', { creatureIds: next });
+}
+/** Team battle standing: who has fallen on each side, for the pips. */
+const teamView = computed(() => {
+  const b = view.value.battle;
+  if (!b || b.format !== 'team3') return null;
+  const own = b.roster.map(id => view.value.creatures.find(c => c.id === id)).filter(Boolean).map(c => ({ id: c!.id, down: c!.hp === 0, active: c!.id === b.creatureId }));
+  const foeTotal = 1 + b.bench.length + b.ko.foe;
+  const foe = Array.from({ length: foeTotal }, (_, i) => ({ id: String(i), down: i < b.ko.foe, active: i === b.ko.foe }));
+  return { own, foe, ko: b.ko };
+});
 function startRename(c: { id: string; nick?: string | null }) { renaming.value = c.id; newNick.value = c.nick ?? ''; }
 function confirmRename(creatureId: string) { field('rename', { creatureId, nick: newNick.value.trim().slice(0, NICK_MAX) }); renaming.value = null; }
 const capture = () => action('capture');
@@ -155,6 +171,13 @@ watch(() => [props.state.revision, props.error], async () => {
     message.value = 'Capsule away!'; await set('cap-throw', { dir: 'own' }, 600); await set('cap-open', {}, 650);
     message.value = '…'; await set('cap-shake', {}, 1400); message.value = 'Gotcha!'; await set('cap-catch', {}, 500);
   } else if (props.lastAction === 'escape') { message.value = 'You slipped away safely.'; await set('escape', {}, 650); }
+  // Team battles: say who fainted and who was sent in before the new creature appears.
+  for (const e of next.battle?.events ?? []) {
+    const who = e.side === 'own' ? next.creatures.find(c => c.id === e.creature) : (e.creature === next.battle!.wild.id ? next.battle!.wild : undefined);
+    const name = who ? displayName(who) : e.side === 'own' ? ownName : wildName;
+    message.value = e.kind === 'faint' ? `${e.side === 'own' ? name : wildName} fainted!` : e.side === 'own' ? `Go, ${name}!` : `${trainer.value?.name ?? 'The trainer'} sends out ${name}!`;
+    await wait(900);
+  }
   view.value = next; await set('');
   const outcome = next.battle?.outcome;
   // Named only once it is caught: the capsule is thrown first.
@@ -172,7 +195,7 @@ watch(() => [props.state.revision, props.error], async () => {
     <aside v-if="party" class="win cream party"><div class="row between"><span class="h">{{ tab === 'creatures' ? 'Your creatures' : tab === 'items' ? 'Your bag' : 'Wallet' }}</span><button class="px tiny" @click="party = false">CLOSE</button></div>
       <div class="tabs"><button v-for="t in (['creatures','items','wallet'] as const)" :key="t" class="px tab" :class="{ on: tab === t }" @click="tab = t">{{ t.toUpperCase() }}</button></div>
       <template v-if="tab === 'creatures'">
-      <div v-for="(c, i) in state.creatures" :key="c.id" class="prow" :class="{ lead: i === state.lead }"><div class="thumb" :style="{ backgroundImage: `url(creatures/${c.species}.png)` }"></div><div class="grow"><div class="row between"><span class="row"><b>{{ displayName(c) }}</b><small v-if="c.nick" class="muted">{{ SPECIES[c.species].name }}</small></span><span class="row"><span class="chip px" :style="{ background: EL[SPECIES[c.species].el].color }">{{ EL[SPECIES[c.species].el].label }}</span><span v-if="i === state.lead" class="chip px lead">LEAD</span><button v-else class="px tiny swap" @click="field('set-lead', { creatureId: c.id })">SWAP IN</button></span></div>
+      <div v-for="(c, i) in state.creatures" :key="c.id" class="prow" :class="{ lead: i === state.lead }"><div class="thumb" :style="{ backgroundImage: `url(creatures/${c.species}.png)` }"></div><div class="grow"><div class="row between"><span class="row"><b>{{ displayName(c) }}</b><small v-if="c.nick" class="muted">{{ SPECIES[c.species].name }}</small></span><span class="row"><span class="chip px" :style="{ background: EL[SPECIES[c.species].el].color }">{{ EL[SPECIES[c.species].el].label }}</span><span v-if="i === state.lead" class="chip px lead">LEAD</span><button v-else class="px tiny swap" @click="field('set-lead', { creatureId: c.id })">SWAP IN</button><button class="px tiny swap teamBtn" :class="{ on: teamSlot(c.id) >= 0 }" :disabled="teamSlot(c.id) < 0 && state.team.length >= TEAM_SIZE" @click="toggleTeam(c.id)" :title="'Trainer battles field up to ' + TEAM_SIZE">{{ teamSlot(c.id) >= 0 ? 'TEAM ' + (teamSlot(c.id) + 1) : 'TEAM +' }}</button></span></div>
         <div class="row hp"><span class="px lbl">HP</span><div class="bar"><i :style="{ width: c.hp / maxHp(c) * 100 + '%', background: hpColor(c.hp) }"></i></div><small>{{ c.hp }}/{{ maxHp(c) }}</small></div>
         <div class="row hp xp"><span class="px lbl gold">LV {{ level(c) }}</span><div class="bar"><i class="gold" :style="{ width: xpPct(c) }"></i></div><small>{{ xpLabel(c) }}</small></div>
         <small class="muted">DMG +{{ damageBonus(c) }} · <span v-for="m in SPECIES[c.species].moves.filter(m => m.max)" :key="m.id">{{ m.name }} {{ c.charges[m.id] ?? 0 }}/{{ maxCharges(m, c) }} · </span></small>
@@ -220,7 +243,7 @@ watch(() => [props.state.revision, props.error], async () => {
   <!-- BATTLE -->
   <div v-else class="battle">
     <div class="card win dark">
-      <div class="head px"><span>{{ trainer ? `TRAINER BATTLE · ${trainer.name.toUpperCase()}` : 'WILD ENCOUNTER' }}</span><span class="meta"><span>{{ trainer ? trainer.title : view.battle?.source === 'pond' ? 'Pond' : 'Meadow' }}</span><i>·</i><span>Turn {{ (view.battle?.turn || 0) + 1 }}</span></span></div>
+      <div class="head px"><span>{{ trainer ? `TRAINER BATTLE · ${trainer.name.toUpperCase()}` : 'WILD ENCOUNTER' }}</span><span class="meta"><span>{{ trainer ? trainer.title : view.battle?.source === 'pond' ? 'Pond' : 'Meadow' }}</span><i>·</i><span>Turn {{ (view.battle?.turn || 0) + 1 }}</span><template v-if="teamView"><i>·</i><span class="koCount">KO {{ teamView.ko.foe }}/{{ KO_TO_WIN }}</span></template></span></div>
       <div class="arena" :class="{ shake: fx.kind === 'impact' }">
         <div class="flash" v-if="fx.kind === 'impact' && fx.crit"></div>
         <img class="sprite wild" :class="{ flinch: fx.kind === 'impact' && fx.dir === 'own', windupR: fx.kind === 'windup' && fx.dir === 'wild', suck: fx.kind === 'cap-open', gone: ['cap-shake','cap-catch'].includes(fx.kind) || view.battle?.outcome === 'victory' || view.battle?.outcome === 'captured', counter: fx.kind === 'counter' }" :style="pose(wild?.species || 'mossling', 'wild')" :src="`creatures/${wild?.species || 'mossling'}.png`" :alt="wildSp.name"/>
@@ -243,8 +266,8 @@ watch(() => [props.state.revision, props.error], async () => {
         <i v-if="fx.kind === 'cap-shake'" class="fx capsule wobble"></i>
         <template v-if="fx.kind === 'cap-catch'"><i class="fx capsule glow"></i><i class="fx burst own catch" style="background-image:url(/fx/burst.png)"></i></template>
         <!-- status windows -->
-        <div class="status win cream wildS"><div class="row between"><b class="name">{{ wild ? displayName(wild) : wildSp.name }}</b><span class="muted">{{ trainer ? `${trainer.name}’s · Lv ${wild ? level(wild) : 1}` : `Wild · Lv ${wild ? level(wild) : 1}` }}</span></div><div class="chips"><span class="chip px" :style="{ background: EL[wildSp.el].color }">{{ EL[wildSp.el].label }}</span><span v-for="st in statuses(wild || { guard: false, statuses: [] })" :key="st.id" class="chip px ink">{{ st.id }} {{ st.turns }}</span></div><div class="row hp"><span class="px lbl">HP</span><div class="bar"><i :style="{ width: (wild ? wild.hp / maxHp(wild) : 0) * 100 + '%', background: hpColor(wild?.hp || 0) }"></i></div><small><b>{{ wild?.hp }}</b><span class="muted">/{{ wild ? maxHp(wild) : 0 }}</span></small></div></div>
-        <div class="status win cream ownS"><div class="row between"><b class="name">{{ displayName(own) }}</b><span class="muted">Lv {{ level(own) }} · {{ xpLabel(own) }}</span></div><div class="chips"><span class="chip px" :style="{ background: EL[ownSp.el].color }">{{ EL[ownSp.el].label }}</span><span v-for="st in statuses(own)" :key="st.id" class="chip px ink">{{ st.id }} {{ st.turns }}</span></div><div class="row hp"><span class="px lbl">HP</span><div class="bar"><i :style="{ width: own.hp / maxHp(own) * 100 + '%', background: hpColor(own.hp) }"></i></div><small><b>{{ own.hp }}</b><span class="muted">/{{ maxHp(own) }}</span></small></div></div>
+        <div class="status win cream wildS"><div v-if="teamView" class="pips team" aria-label="Opponent team"><i v-for="f in teamView.foe" :key="f.id" :class="{ down: f.down, on: f.active }"></i></div><div class="row between"><b class="name">{{ wild ? displayName(wild) : wildSp.name }}</b><span class="muted">{{ trainer ? `${trainer.name}’s · Lv ${wild ? level(wild) : 1}` : `Wild · Lv ${wild ? level(wild) : 1}` }}</span></div><div class="chips"><span class="chip px" :style="{ background: EL[wildSp.el].color }">{{ EL[wildSp.el].label }}</span><span v-for="st in statuses(wild || { guard: false, statuses: [] })" :key="st.id" class="chip px ink">{{ st.id }} {{ st.turns }}</span></div><div class="row hp"><span class="px lbl">HP</span><div class="bar"><i :style="{ width: (wild ? wild.hp / maxHp(wild) : 0) * 100 + '%', background: hpColor(wild?.hp || 0) }"></i></div><small><b>{{ wild?.hp }}</b><span class="muted">/{{ wild ? maxHp(wild) : 0 }}</span></small></div></div>
+        <div class="status win cream ownS"><div v-if="teamView" class="pips team" aria-label="Your team"><i v-for="f in teamView.own" :key="f.id" :class="{ down: f.down, on: f.active }"></i></div><div class="row between"><b class="name">{{ displayName(own) }}</b><span class="muted">Lv {{ level(own) }} · {{ xpLabel(own) }}</span></div><div class="chips"><span class="chip px" :style="{ background: EL[ownSp.el].color }">{{ EL[ownSp.el].label }}</span><span v-for="st in statuses(own)" :key="st.id" class="chip px ink">{{ st.id }} {{ st.turns }}</span></div><div class="row hp"><span class="px lbl">HP</span><div class="bar"><i :style="{ width: own.hp / maxHp(own) * 100 + '%', background: hpColor(own.hp) }"></i></div><small><b>{{ own.hp }}</b><span class="muted">/{{ maxHp(own) }}</span></small></div></div>
       </div>
       <div class="bottom">
         <div class="msg win dark"><img class="portrait" :src="`portraits/${speaker}.png`" alt=""/><p role="status">{{ message }}</p><small v-if="active" class="px hint">{{ matchup }}</small><span class="cursor">▼</span></div>
@@ -372,4 +395,6 @@ header{position:absolute;top:16px;left:16px;right:16px;display:flex;justify-cont
 .moves{gap:8px;padding:4px}.move{min-height:0;padding:6px 8px;gap:3px}.move b{font-size:19px}.move small{font-size:14px;line-height:1.1}.move .tiny{font-size:8px}
 .cmd{padding:6px 10px;margin:0 4px}.cmd b{font-size:18px}.cmd small{font-size:14px}.ledger{padding-top:6px}
 }
+.pips.team{display:flex;gap:4px;margin-bottom:3px}.pips.team i{width:9px;height:9px;border-radius:50%;background:#4da96c;box-shadow:0 0 0 2px #26443a;display:block}.pips.team i.down{background:#7a3b1e;opacity:.6}.pips.team i.on{background:#e9d86b}
+.koCount{color:#e9d86b}.teamBtn.on{background:#e9d86b;color:#26443a}
 </style>
