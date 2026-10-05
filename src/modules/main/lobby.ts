@@ -14,12 +14,13 @@ import { isFighting, setFighting } from './field';
 import { isSpeaking } from './dialogue';
 import { TEAM_SIZE, type Creature, type GameState } from '../../domain/game';
 import { claimUsername, freshProfile, resolvePlayer, shownName, HISTORY_MAX, RENAME_COOLDOWN_MS, type Directory, type MatchSummary } from '../../domain/username';
-import { pair, window, STAKE_TIERS, type Ticket } from '../../domain/matchmaker';
+import { pair, window, validStake, STAKE_TIERS, MAX_STAKE, type Ticket } from '../../domain/matchmaker';
 import { choose, expire, forfeit, other, startMatch, type Match, type Side } from '../../domain/match';
 import { rate } from '../../domain/rating';
 
-/** Stakes open today. Wagers (5/10/25 WILD) open once escrow locking is in the DSM wallet. */
-export const OPEN_STAKES: readonly number[] = [0];
+/** Wagers open once escrow locking is in the DSM wallet; until then only free matches. */
+const WAGERS_OPEN = false;
+const stakeOpen = (stake: number) => validStake(stake) && (stake === 0 || WAGERS_OPEN);
 const CHALLENGE_MS = 120_000;
 /** A player who drops out of a match has this long to come back before forfeiting. */
 const GRACE_MS = 60_000;
@@ -55,7 +56,7 @@ async function lobbyView(player: RpgPlayer) {
   return {
     now,
     me: { id: wallet, name: me.username, rating: me.rating, wins: me.wins, losses: me.losses, games: me.games, renameReadyAt: me.username ? me.renamedAt + RENAME_COOLDOWN_MS : 0 },
-    stakes: STAKE_TIERS, openStakes: OPEN_STAKES,
+    stakes: STAKE_TIERS, maxStake: MAX_STAKE, wagersOpen: WAGERS_OPEN,
     queued: ticket ? { stake: ticket.stake, since: ticket.since, window: window(now - ticket.since) } : null,
     incoming: [...challenges.values()].filter(c => c.to === wallet).map(c => ({ id: c.id, from: brief(c.from), stake: c.stake, expiresAt: c.at + CHALLENGE_MS })),
     outgoing: [...challenges.values()].filter(c => c.from === wallet).map(c => ({ id: c.id, to: brief(c.to), stake: c.stake, expiresAt: c.at + CHALLENGE_MS })),
@@ -125,7 +126,8 @@ export async function openLobby(player: RpgPlayer): Promise<void> {
       }
       case 'challenge': {
         const to = String(d.to ?? ''), stake = Number(d.stake ?? 0);
-        if (!OPEN_STAKES.includes(stake)) say('Wagers open once escrow locking is in the DSM wallet.');
+        if (!validStake(stake)) say('Name a whole amount of WILD.');
+        else if (!stakeOpen(stake)) say('Wagers open once escrow locking is in the DSM wallet.');
         else if (to === wallet || !playerOfWallet(to)) say('That player is not online.');
         else if (liveOf.has(to) || liveOf.has(wallet)) say('One of you is already in a match.');
         else { const id = `ch/${Date.now().toString(36)}/${serial++}`; challenges.set(id, { id, from: wallet, to, stake, at: Date.now() }); say(`Challenge sent to @${shownName(dir, to)}.`); void refreshLobby(to); }
@@ -146,7 +148,8 @@ export async function openLobby(player: RpgPlayer): Promise<void> {
       }
       case 'queue': {
         const stake = Number(d.stake ?? 0);
-        if (!OPEN_STAKES.includes(stake)) { say('Wagers open once escrow locking is in the DSM wallet.'); break; }
+        if (!(STAKE_TIERS as readonly number[]).includes(stake)) { say('Pick one of the matchmaker stakes.'); break; }
+        if (!stakeOpen(stake)) { say('Wagers open once escrow locking is in the DSM wallet.'); break; }
         queue.set(wallet, { wallet, rating: (dir.players[wallet] ?? freshProfile()).rating, stake, since: Date.now() });
         break;
       }

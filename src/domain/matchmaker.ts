@@ -3,9 +3,11 @@
  * rating gap widens the longer either of them has waited, so nobody waits forever: after a minute
  * anyone at the same stake will do. Pure: the same queue and time always pair the same way.
  */
-/** Stakes players can wager, in WILD; 0 is a free match. */
-export const STAKE_TIERS = [0, 5, 10, 25] as const;
-export type Stake = (typeof STAKE_TIERS)[number];
+/** Matchmaker stakes, in WILD (0 is a free match): it pairs only equal stakes, so they come in tiers. */
+export const STAKE_TIERS = [0, 10, 100, 500, 1000, 2000] as const;
+/** A friend challenge can name any whole amount up to this. */
+export const MAX_STAKE = 1_000_000;
+export const validStake = (stake: number) => Number.isSafeInteger(stake) && stake >= 0 && stake <= MAX_STAKE;
 
 export interface Ticket { wallet: string; rating: number; stake: number; since: number }
 
