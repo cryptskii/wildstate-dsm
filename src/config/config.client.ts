@@ -1,5 +1,5 @@
-import { provideI18n, provideClientGlobalConfig, provideClientModules, Presets } from "@rpgjs/client";
-import { Animation } from "@rpgjs/common";
+import { provideI18n, provideClientGlobalConfig, provideClientModules } from "@rpgjs/client";
+import { Animation, Direction } from "@rpgjs/common";
 import i18n from "../i18n";
 import { provideTiledMap } from "@rpgjs/tiledmap/client";
 
@@ -10,6 +10,23 @@ import Shop from '../gui/Shop.vue';
 import DsmPanel from '../gui/DsmPanel.vue';
 import DsmConnect from '../gui/DsmConnect.vue';
 import Market from '../gui/Market.vue';
+
+/**
+ * RPG Maker character sheets (3 frames × 4 directions) with a full gait: step, pass, step, pass
+ * (frames 0-1-2-1). The preset's three-frame loop ran the feet slower than the ground and skipped
+ * the passing pose, so walking read as sliding.
+ */
+const ROW: Record<string, number> = { [Direction.Down]: 0, [Direction.Left]: 1, [Direction.Right]: 2, [Direction.Up]: 3 };
+const STEP_TICKS = 8;
+const walker = () => ({
+  framesWidth: 3, framesHeight: 4,
+  textures: {
+    [Animation.Stand]: { animations: ({ direction }: { direction: string }) => [[{ time: 0, frameX: 1, frameY: ROW[direction] }]] },
+    [Animation.Walk]: { animations: ({ direction }: { direction: string }) => [[
+      ...[0, 1, 2, 1].map((frameX, i) => ({ time: i * STEP_TICKS, frameX, frameY: ROW[direction] })), { time: 4 * STEP_TICKS },
+    ]] },
+  },
+});
 
 export default {
   providers: [
@@ -28,10 +45,10 @@ export default {
           vueGui({id: 'dsm-connect', component: DsmConnect}), vueGui({id: 'dsm-market', component: Market}), vueGui({id: 'bramble-shop', component: Shop}), vueGui({id: 'dsm-panel', component: DsmPanel}),
         ],
         spritesheets: [
-          { id: 'ranger', image: 'spritesheets/rowan-walk-v4.png', ...Presets.RMSpritesheet(3, 4) },
+          { id: 'ranger', image: 'spritesheets/rowan-walk-v4.png', ...walker() },
           // All five characters share 32×40px map frames and four-direction walk/stand animations.
-          { id: 'kade', image: 'spritesheets/kade-walk-v4.png', ...Presets.RMSpritesheet(3, 4) },
-          { id: 'nessa', image: 'spritesheets/nessa-walk-v4.png', ...Presets.RMSpritesheet(3, 4) },
+          { id: 'kade', image: 'spritesheets/kade-walk-v4.png', ...walker() },
+          { id: 'nessa', image: 'spritesheets/nessa-walk-v4.png', ...walker() },
           // Three 32px frames at 8 fps, looping while the fire stands.
           {
             id: 'campfire', image: 'fx/campfire.png', framesWidth: 3, framesHeight: 1,
@@ -39,8 +56,8 @@ export default {
               { time: 0, frameX: 0, frameY: 0 }, { time: 8, frameX: 1, frameY: 0 }, { time: 16, frameX: 2, frameY: 0 }, { time: 24 },
             ]] } },
           },
-          { id: 'hero', image: 'spritesheets/player-walk-v4.png', ...Presets.RMSpritesheet(3, 4) },
-          { id: 'female', image: 'spritesheets/mira-walk-v4.png', ...Presets.RMSpritesheet(3, 4) }
+          { id: 'hero', image: 'spritesheets/player-walk-v4.png', ...walker() },
+          { id: 'female', image: 'spritesheets/mira-walk-v4.png', ...walker() }
         ]
       }
     ])
