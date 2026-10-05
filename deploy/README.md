@@ -32,7 +32,7 @@ The account uses the committed DSM integration checkout revision `9723f2cca`, wh
 - Public `80`: HTTPS redirect and certificate issuance.
 - Public `8443`: wallet DSM Connect relay at `https://34.58.75.224:8443`. Its self-signed certificate is pinned by the wallet-connect code, as in the existing DSM host implementation.
 
-The backend accepts browser origins `https://wildstate-dsm.vercel.app` and its own HTTPS origin. Map publication runs internally from trusted Tiled files, protected by `RPGJS_MAP_UPDATE_TOKEN`. Caddy rejects the public map-update route. The browser never receives that token or the account mnemonic.
+The backend accepts browser origins `https://wildstate-dsm.vercel.app`, the Android app's bundled client at `https://appassets.androidplatform.net`, and its own HTTPS origin. `/version` reports the client protocol (`src/protocol.ts`) that clients check before connecting; deploy a backend before the frontend or APK that expects it. Map publication runs internally from trusted Tiled files, protected by `RPGJS_MAP_UPDATE_TOKEN`. Caddy rejects the public map-update route. The browser never receives that token or the account mnemonic.
 
 The initial backend hostname uses sslip.io to resolve the existing fleet IP. It can be replaced with an owned DNS name by changing `WILDSTATE_BACKEND_DOMAIN`, the allowed origins, and the Vercel frontend's `VITE_GAME_HOST`. The wallet relay endpoint and TLS identity must be handled consistently with issued connect codes.
 
