@@ -337,7 +337,7 @@ watch(() => [props.state.revision, props.error], async () => {
           <small v-if="(growth.to >= 4 && growth.from < 4) || (growth.to >= 7 && growth.from < 7)" class="green">+1 charge on every special move</small>
           <small class="px owner">XP IS CARRIED ON THE CREATURE’S DSM STATE · TAP TO CONTINUE</small>
         </div>
-        <button v-else-if="view.battle?.outcome !== 'active' && !naming" class="cmd go" :disabled="busy" @click="action('continue')">Return to exploring ▶</button>
+        <button v-else-if="view.battle?.outcome !== 'active' && !naming" class="cmd go" :disabled="busy" @click="action('continue')">{{ pvp ? 'Back to the lobby ▶' : 'Return to exploring ▶' }}</button>
         <div v-if="naming" class="naming win cream"><small class="px lbl">GOTCHA! NAME YOUR {{ wildSp.name.toUpperCase() }}</small><input v-model="nick" :maxlength="NICK_MAX" :placeholder="wildSp.name" autofocus @keydown.enter="confirmName()"/><div class="row gap"><button class="cmd go grow" @click="confirmName()">Save name ▶</button><button class="cmd" @click="naming = null">Skip</button></div></div>
         <div class="ledger px"><span><em>REV {{ view.revision }}</em><em>{{ view.commandIds.at(-1)?.split('/').pop() }}</em><em>{{ view.consumed.at(-1) ?? '—' }}</em></span><span class="res">◉ {{ view.inventory.capsules }} <span class="gold">✦ {{ view.coins }} WILD</span></span></div>
       </div>
