@@ -7,7 +7,7 @@ import { connectWallet, leave, openPanel } from './dsm';
 export const player: RpgPlayerHooks = {
   props: { creatureSave: String },
   async onConnected(player) {
-    player.speed = 1.5; // Player walks 50% faster than NPC patrols.
+    player.speed = 1.8; // Responsive player pace; NPC patrol speed stays at 1.
     player.setHitbox(16, 16); // Footprint leaves eight pixels of clearance on each side of the gate.
     player.throughEvent = false; // Characters remain solid; NPC routes avoid the main path.
     player.name = player.t('game.name'); player.graphics.set([]);
@@ -19,7 +19,7 @@ export const player: RpgPlayerHooks = {
     player.animationFixed = false;
     player.directionFixed = false;
     player.breakRoutes(true);
-    player.speed = 1.5; // Reapply after a reconnect restores the player snapshot.
+    player.speed = 1.8; // Reapply after a reconnect restores the player snapshot.
     player.setHitbox(16, 16);
     player.graphics.set([]);
     player.through = true;

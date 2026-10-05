@@ -1,36 +1,45 @@
-export type MovementControls = { applyControl(name: string, isDown?: boolean): Promise<void> };
-/** Use the engine's repeating input so prediction, facing and walk frames stay together. */
+type BoundMovement = {
+  actionName: string;
+  options: { keyDown?: (binding: BoundMovement) => void; keyUp?: (binding: BoundMovement) => void };
+};
+export type MovementControls = { getControls(): Record<string, BoundMovement> };
+
+/** Sample one engine movement callback per tick; applyControl fans out to three devices. */
 export function heldDirection(controls: () => MovementControls | null | undefined) {
   let timer: ReturnType<typeof setInterval> | undefined;
-  let held: { controls: MovementControls; direction: string } | undefined;
-  const apply = (target: MovementControls, direction: string, down: boolean) => {
-    void target.applyControl(direction, down).catch(error => console.warn('Movement input failed', error));
-  };
+  let held: { controls: MovementControls; direction: string; binding: BoundMovement } | undefined;
+  const bindingFor = (target: MovementControls, direction: string) =>
+    Object.values(target.getControls()).find(binding => binding.actionName === direction);
   function stop() {
     clearInterval(timer);
     timer = undefined;
     const previous = held;
     held = undefined;
-    if (previous) apply(previous.controls, previous.direction, false);
+    previous?.binding.options.keyUp?.(previous.binding);
+  }
+  function sample() {
+    if (!held) return;
+    const current = controls();
+    if (!current) { stop(); return; }
+    const binding = bindingFor(current, held.direction);
+    if (!binding) { stop(); return; }
+    if (current !== held.controls) {
+      held.binding.options.keyUp?.(held.binding);
+      held.controls = current;
+    }
+    held.binding = binding;
+    binding.options.keyDown?.(binding);
   }
   return {
     start(direction: string) {
       stop();
       const target = controls();
       if (!target) return;
-      held = { controls: target, direction };
-      apply(target, direction, true);
-      // Rendering can reset or replace the keyboard directive while a finger
-      // stays down. Renew the held state without adding another movement route.
-      timer = setInterval(() => {
-        const current = controls();
-        if (!current || !held) return;
-        if (current !== held.controls) {
-          apply(held.controls, direction, false);
-          held.controls = current;
-        }
-        apply(current, direction, true);
-      }, 16);
+      const binding = bindingFor(target, direction);
+      if (!binding) return;
+      held = { controls: target, direction, binding };
+      sample();
+      timer = setInterval(sample, 1000 / 60);
     },
     stop,
   };

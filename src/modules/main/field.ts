@@ -129,7 +129,6 @@ export async function checkEncounter(player: RpgPlayer) {
   }
   const x = player.x(), y = player.y();
   const inWild = x >= MEADOW.x0 && x < MEADOW.x1 && y >= MEADOW.y0 && y < MEADOW.y1;
-  if (atShopDoor(player)) { player.getGui('field-hud')?.update(hudData(player, { door: true })); }
   if (!inWild) { inside.delete(player); return; }
   if (inside.has(player) || fighting.has(player)) return;
   inside.add(player);
