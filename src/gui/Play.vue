@@ -25,9 +25,18 @@ const EL: Record<Element, { label: string; color: string; bg: string }> = {
 };
 const PROJ: Partial<Record<Element, string>> = { fire: 'fire', grass: 'leaf', water: 'water', electric: 'bolt' };
 const DESC: Record<string, string> = { strike: '8 damage', flare: '14 fire damage', 'ember-bite': '9 fire · Burn 3×2', 'warm-coat': 'Guard · halve next hit', 'leaf-cut': '12 grass damage', 'root-bind': '6 grass · Root 1 turn', photosynth: 'Heal 12 HP', 'tide-lash': '12 water damage', soak: '7 water · Soak, clears Burn', 'mist-veil': 'Guard · halve next hit', 'volt-charge': '12 volt damage', 'static-tusk': '7 volt · Stun 1 turn', bristle: 'Guard · halve next hit', 'tongue-lash': '12 grass damage', 'sticky-snare': '6 grass · Root 1 turn', camouflage: 'Guard · halve next hit', 'brine-jet': '12 water damage', 'barnacle-bash': '7 water · Soaked 2 turns', 'shell-up': 'Guard · halve next hit', 'chain-whip': '12 water damage', 'lure-flash': '6 water · Stun 1 turn', 'rust-hide': 'Guard · halve next hit' };
-/** foot: the empty share of the image below the creature's feet, so phones can stand it on its pad. */
-const ART: Record<string, { faces: 'left' | 'right'; scale: number; lift?: number; foot: number }> = { embercub: { faces: 'right', scale: 1.25, foot: 8.1 }, mossling: { faces: 'left', scale: 1.3, foot: 1.4 }, tidefin: { faces: 'left', scale: 1.15, foot: 5.5 }, voltusk: { faces: 'left', scale: 1.2, foot: 5.5 }, leon: { faces: 'right', scale: 1.25, lift: 36, foot: 0 }, brineback: { faces: 'left', scale: 1.25, lift: 24, foot: 0 }, rattlefin: { faces: 'left', scale: 1.3, lift: 20, foot: 0 } };
-const pose = (sp: string, side: 'own' | 'wild') => ({ '--flip': flip(sp, side), '--foot': `${ART[sp]?.foot ?? 0}%`, '--lift': `${side === 'wild' ? ART[sp]?.lift ?? 0 : 0}px`, scale: ART[sp]?.scale });
+/**
+ * Where each creature's feet are in its art, measured from the image (lowest solid row, and the
+ * middle of the feet): `foot` is the empty share below them, `footX` how far to shift so the feet
+ * sit on the image's centre line. Every arena places a creature's feet on the centre of its pad.
+ */
+const ART: Record<string, { faces: 'left' | 'right'; scale: number; foot: number; footX: number }> = {
+  embercub: { faces: 'right', scale: 1.25, foot: 8.2, footX: -9.5 }, mossling: { faces: 'left', scale: 1.3, foot: 1.4, footX: 1.1 },
+  tidefin: { faces: 'left', scale: 1.15, foot: 6.3, footX: 13.8 }, voltusk: { faces: 'left', scale: 1.2, foot: 5.7, footX: 1.2 },
+  leon: { faces: 'right', scale: 1.25, foot: 0.1, footX: -8.2 }, brineback: { faces: 'left', scale: 1.25, foot: 0.1, footX: -8.9 },
+  rattlefin: { faces: 'left', scale: 1.3, foot: 0.1, footX: -12.3 },
+};
+const pose = (sp: string, side: 'own' | 'wild') => ({ '--flip': flip(sp, side), '--foot': `${ART[sp]?.foot ?? 0}%`, '--footX': `${ART[sp]?.footX ?? 0}%`, scale: ART[sp]?.scale });
 const ITEMS = (s: GameState) => [
   { id: 'rod', name: 'Fishing Rod', qty: s.inventory.rod ? 1 : 0, desc: 'Stand at the pond edge and tap CAST.' },
   { id: 'capsule', name: 'Capture Capsule', qty: s.inventory.capsules, desc: 'Throw at a weakened creature (14 HP or less).' },
@@ -47,6 +56,23 @@ async function playAttack(f: MoveFx | undefined, el: Element, dir: 'own' | 'wild
   else if (PROJ[el]) await set('proj', { fxKind: 'proj' }, 420);
   else await set('lunge', { melee: false, fxKind: 'melee' }, 300);
 }
+/**
+ * Each new battle moves on to the next arena, in turn; the arena holds for the whole battle, every
+ * creature of a team included. The place in the rotation is remembered on this device.
+ */
+const ARENAS = ['forest', 'water', 'desert', 'ring'] as const;
+const ARENA_KEY = 'wildstate.arena';
+const arenaKind = ref<(typeof ARENAS)[number]>(ARENAS[0]);
+watch(() => props.state.battle?.id, id => {
+  if (!id) return;
+  let seen = { id: '', i: -1 };
+  try { seen = { ...seen, ...JSON.parse(localStorage.getItem(ARENA_KEY) ?? '{}') }; } catch { /* storage unavailable: start the rotation here */ }
+  if (seen.id !== id) {
+    seen = { id, i: (seen.i + 1) % ARENAS.length };
+    try { localStorage.setItem(ARENA_KEY, JSON.stringify(seen)); } catch { /* storage unavailable */ }
+  }
+  arenaKind.value = ARENAS[seen.i] ?? ARENAS[0];
+}, { immediate: true });
 const flip = (sp: string, side: 'own' | 'wild') => (ART[sp]?.faces ?? 'right') === (side === 'own' ? 'right' : 'left') ? 'none' : 'scaleX(-1)';
 
 const view = ref<GameState>(JSON.parse(JSON.stringify(props.state)));
@@ -126,7 +152,8 @@ const teamView = computed(() => {
   const b = view.value.battle;
   if (!b || b.format !== 'team3') return null;
   const own = b.roster.map(id => view.value.creatures.find(c => c.id === id)).filter(Boolean).map(c => ({ id: c!.id, down: c!.hp === 0, active: c!.id === b.creatureId }));
-  const foeTotal = 1 + b.bench.length + b.ko.foe;
+  // The fielded opponent counts once: after the final knockout it is already in ko.foe.
+  const foeTotal = b.ko.foe + b.bench.length + (b.wild && b.wild.hp > 0 ? 1 : 0);
   const foe = Array.from({ length: foeTotal }, (_, i) => ({ id: String(i), down: i < b.ko.foe, active: i === b.ko.foe }));
   return { own, foe, ko: b.ko };
 });
@@ -292,7 +319,7 @@ watch(() => [props.state.revision, props.error], async () => {
   <div v-else class="battle">
     <div class="card win dark">
       <div class="head px"><span>{{ pvp ? `MATCH · VS @${pvp.opponent.toUpperCase()}` : trainer ? `TRAINER BATTLE · ${trainer.name.toUpperCase()}` : 'WILD ENCOUNTER' }}</span><span class="meta"><span>{{ pvp ? (active ? `${secondsLeft}s` : 'Over') : trainer ? trainer.title : view.battle?.source === 'pond' ? 'Pond' : 'Meadow' }}</span><i>·</i><span>Turn {{ (view.battle?.turn || 0) + 1 }}</span><template v-if="teamView"><i>·</i><span class="koCount">KO {{ teamView.ko.foe }}/{{ teamView.foe.length }}</span></template></span></div>
-      <div class="arena" :class="{ shake: fx.kind === 'impact' }">
+      <div class="arena" :class="[arenaKind, { shake: fx.kind === 'impact' }]">
         <div class="flash" v-if="fx.kind === 'impact' && fx.crit"></div>
         <img class="sprite wild" :class="{ flinch: fx.kind === 'impact' && fx.dir === 'own', windupR: fx.kind === 'windup' && fx.dir === 'wild', suck: fx.kind === 'cap-open', gone: ['cap-shake','cap-catch'].includes(fx.kind) || view.battle?.outcome === 'victory' || view.battle?.outcome === 'captured', counter: fx.kind === 'counter' }" :style="pose(wild?.species || 'mossling', 'wild')" :src="`creatures/${wild?.species || 'mossling'}.png`" :alt="wildSp.name"/>
         <img class="sprite own" :class="{ flinchL: fx.kind === 'impact' && fx.dir === 'wild', windup: fx.kind === 'windup' && fx.dir === 'own', lunge: fx.kind === 'lunge', run: fx.kind === 'escape', camo: fx.kind === 'camo' }" :style="pose(own.species, 'own')" :src="`creatures/${own.species}.png`" :alt="ownSp.name"/>
@@ -370,13 +397,22 @@ header{position:absolute;top:16px;left:16px;right:16px;display:flex;justify-cont
 .battle{position:fixed;inset:0;display:grid;place-items:center;background:#0e2620;background-image:radial-gradient(#153429 1px,transparent 1px);background-size:8px 8px;pointer-events:auto;font-size:15px;animation:reveal .5s}
 .card{width:min(948px,calc(100vw - 24px));background:#142f26;overflow:hidden}
 .head{display:flex;justify-content:space-between;align-items:center;background:#1b3a2e;padding:12px 20px;font-size:12px;font-weight:700;border-bottom:4px solid #0b1a15}.meta{display:flex;gap:10px;align-items:center;color:#b9cdb6;font-weight:400}.meta i{opacity:.5;font-style:normal}
-.arena{height:min(440px,46vh);position:relative;overflow:hidden;background:url(/tiles/arena-desktop.png) 0 0/100% 100% no-repeat;image-rendering:pixelated;border-bottom:4px solid #0b1a15}
+.arena{height:min(440px,46vh);position:relative;overflow:hidden;background:0 0/100% 100% no-repeat;image-rendering:pixelated;border-bottom:4px solid #0b1a15}
 .arena.shake{animation:shake .4s}.flash{position:absolute;inset:0;background:#fff;pointer-events:none;animation:flash .45s forwards}
-.sprite{position:absolute;transform:var(--flip);image-rendering:pixelated;filter:drop-shadow(0 9px 8px #28482c55);transform-origin:bottom center;animation:breathe 2s ease-in-out infinite;transition:opacity .3s}.sprite.wild{width:200px;right:90px;top:44px;margin-top:var(--lift)}.sprite.own{width:236px;left:70px;bottom:36px}
+.sprite{position:absolute;transform:var(--flip) translate(var(--footX), var(--foot));image-rendering:pixelated;filter:drop-shadow(0 9px 8px #28482c55);transform-origin:bottom center;animation:breathe 2s ease-in-out infinite;transition:opacity .3s}/* Each arena names its pads: the centre of each pad's top face, measured from its art. Creatures stand
+   with their feet there. Wide screens use the wide art; there is no wide ring, so a match uses the forest. */
+.arena{--ww:18.5%;--ow:25%}
+.arena.ring{background-image:url(/tiles/arena-ring-desktop.png);--padWX:67.9%;--padWY:54%;--padOX:30.3%;--padOY:76%}
+.arena.forest{background-image:url(/tiles/arena-forest-desktop.png);--padWX:68.4%;--padWY:54.8%;--padOX:28.7%;--padOY:75.2%}
+.arena.water{background-image:url(/tiles/arena-water-desktop.png);--padWX:67.7%;--padWY:53.3%;--padOX:30.1%;--padOY:74.8%}
+.arena.desert{background-image:url(/tiles/arena-desert-desktop.png);--padWX:68.5%;--padWY:54.5%;--padOX:29.3%;--padOY:74.6%}
+/* --sink sets the creatures a little below the pad's centre line, so they stand in the pad rather than on its far edge. */
+.arena{--sink:4%}
+.sprite.wild{width:var(--ww);left:calc(var(--padWX) - var(--ww) / 2);bottom:calc(100% - var(--padWY) - var(--sink))}.sprite.own{width:var(--ow);left:calc(var(--padOX) - var(--ow) / 2);bottom:calc(100% - var(--padOY) - var(--sink))}
 .gone{opacity:0!important}.counter{animation:counter .5s!important}.camo{animation:camoFade 1s ease-in-out!important}.flinch{animation:flinch .5s!important}.flinchL{animation:flinchL .5s!important}.windup{animation:windup .38s ease-in-out!important}.windupR{animation:windupR .38s ease-in-out!important}.lunge{animation:lunge .3s!important}.run{animation:run .65s forwards!important}.suck{animation:suckIn .6s ease-in forwards!important}
-.status{position:absolute;z-index:2;width:232px;padding:9px 12px 10px}.wildS{left:30px;top:28px}.ownS{right:30px;bottom:28px}.status .name{font-size:30px;line-height:1}.status .muted{font-size:16px;white-space:nowrap}.chips{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;min-height:18px}
+.status{position:absolute;z-index:2;width:232px;padding:9px 12px 10px}.wildS{left:30px;top:28px;scale:.9;transform-origin:top left}.ownS{right:30px;bottom:28px}.status .name{font-size:30px;line-height:1}.status .muted{font-size:16px;white-space:nowrap}.chips{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;min-height:18px}
 /* x0/y0: our creature (left-anchored); x1/y1: the wild one, anchored to the arena's right edge, so measured from it. */
-.fx{position:absolute;z-index:6;width:32px;height:32px;background-size:128px 32px;image-rendering:pixelated;pointer-events:none;--x0:172px;--y0:238px;--x1:calc(100% - 206px);--y1:132px;--len:calc(var(--x1) - var(--x0) - 10px);--capY:calc(var(--y1) + 80px)}
+.fx{position:absolute;z-index:6;width:32px;height:32px;background-size:128px 32px;image-rendering:pixelated;pointer-events:none;--x0:calc(var(--padOX) - 16px);--y0:calc(var(--padOY) - 120px);--x1:calc(var(--padWX) - 16px);--y1:calc(var(--padWY) - 100px);--len:calc(var(--x1) - var(--x0) - 10px);--capY:calc(var(--padWY) - 30px)}
 .proj{scale:2.6;animation:projOwn .42s cubic-bezier(.3,0,.8,1) forwards,frames4 .22s steps(4) infinite;rotate:-22deg}.proj.wild{animation-name:projWild,frames4;rotate:158deg}.proj.fire{filter:drop-shadow(0 0 6px #ff7a2b)}
 .burst{left:var(--x1);top:var(--y1);scale:3.6;animation:frames4 .45s steps(4) forwards,burstPop .5s ease-out forwards}.burst.wild{left:var(--x0);top:var(--y0)}.burst.small{scale:1.8}.burst.s1{margin:-14px 0 0 -30px}.burst.s2{margin:-22px 0 0 26px}.burst.s3{margin:26px 0 0 12px}.burst.fire{scale:4.4}.burst.grass{filter:sepia(1) saturate(2) hue-rotate(60deg)}.burst.water{filter:sepia(1) saturate(2) hue-rotate(170deg)}.burst.catch{top:var(--capY);scale:2}
 .bite{left:calc(var(--x1) - 6px);top:calc(var(--y1) - 10px);scale:4.6;background-image:url(/fx/bite.png);animation:frames4 .45s steps(4) forwards,slash .5s ease-out forwards}.bite.wild{left:var(--x0);top:var(--y0);rotate:180deg}
@@ -384,8 +420,8 @@ header{position:absolute;top:16px;left:16px;right:16px;display:flex;justify-cont
 .tongueLine{left:calc(var(--x0) + 60px);top:calc(var(--y0) - 20px);width:var(--len);height:14px;border-radius:7px;background:linear-gradient(#f3a6bd,#d9557a 55%,#8a2a48);box-shadow:0 0 0 3px #3a0f1e,inset 0 3px 0 #ffffff55;transform-origin:0 50%;rotate:-10deg;animation:tongueOut .55s cubic-bezier(.2,.9,.3,1) forwards;z-index:5}.chainLine{height:12px;background:url(/fx/chain.png) 0 0/96px 12px repeat-x;box-shadow:0 0 0 3px #2a1a0a;image-rendering:pixelated;animation:tongueOut .55s cubic-bezier(.2,.9,.3,1) forwards,jetFlow .12s linear infinite}.chainTip{scale:2.6;animation:tongueTip .55s cubic-bezier(.2,.9,.3,1) forwards}.slap{left:calc(var(--x1) - 10px);top:calc(var(--y1) - 30px);font-size:14px;color:#fff;text-shadow:2px 2px 0 #3a0f1e,-2px 2px 0 #3a0f1e,2px -2px 0 #3a0f1e,-2px -2px 0 #3a0f1e;animation:dmgPop .5s ease-out .22s forwards;opacity:0;width:auto;height:auto;background:none}.slap.wild{left:calc(var(--x0) + 30px);top:calc(var(--y0) - 40px)}.lure{left:calc(var(--x0) + 50px);top:calc(var(--y0) - 70px);scale:4.8;animation:frames4 .3s steps(4) infinite,lurePulse .9s ease-out forwards;filter:drop-shadow(0 0 10px #2fb5c7)}.lure.wild{left:calc(var(--x1) + 20px);top:calc(var(--y1) - 20px)}.lureFlash{position:absolute;inset:0;z-index:4;background:radial-gradient(circle at 30% 60%,#bfffff 0,#2fb5c799 18%,transparent 55%);animation:flash .9s ease-out forwards;pointer-events:none}.lureFlash.wild{background:radial-gradient(circle at 75% 35%,#bfffff 0,#2fb5c799 18%,transparent 55%)}.splashHit.small{scale:2}.splashHit.k1{margin:-24px 0 0 -24px}.splashHit.k2{margin:-16px 0 0 22px}.splashHit.k3{margin:22px 0 0 6px}.tongueLine.wild{left:var(--x1);top:calc(var(--y1) + 20px);rotate:170deg}.tongueTip{scale:2.2;--tx0:calc(var(--x0) + 46px);--ty0:calc(var(--y0) - 32px);--tx1:var(--x1);--ty1:var(--y1);animation:tongueTip .5s ease-in-out forwards,frames4 .2s steps(4) infinite}.tongueTip.wild{--tx0:var(--x1);--ty0:calc(var(--y1) + 8px);--tx1:calc(var(--x0) + 30px);--ty1:calc(var(--y0) - 10px)}
 .jetLine{left:calc(var(--x0) + 50px);top:var(--y0);width:var(--len);height:22px;border-radius:11px;box-shadow:0 0 0 3px #163a5a,inset 0 4px 0 #ffffff66;background:repeating-linear-gradient(90deg,#e9f7ff 0 8px,#5aa9d6 8px 20px,#2f6f9e 20px 24px);transform-origin:0 50%;rotate:-10deg;animation:jetOut .5s ease-out forwards,jetFlow .25s linear infinite;filter:drop-shadow(0 0 4px #5aa9d6);z-index:5}.jetLine.wild{left:var(--x1);top:calc(var(--y1) + 30px);rotate:170deg}.drop{width:4px;height:4px;background:#e9f7ff;left:calc(var(--x0) + 50px + (var(--x1) - var(--x0)) * var(--k));top:calc(var(--y0) + (var(--y1) - var(--y0)) * var(--k));animation:dropFall .5s ease-in forwards}.drop.wild{left:calc(var(--x1) - (var(--x1) - var(--x0)) * var(--k))}
 .vine{left:calc(var(--x1) - 10px);top:calc(var(--y1) - 10px);scale:4.4;animation:frames4 .5s steps(4) infinite,snareHold .9s ease-out forwards}.vine.wild{left:var(--x0);top:var(--y0)}.splashHit{left:calc(var(--x1) - 6px);top:var(--y1);scale:3.6;animation:frames4 .45s steps(4) forwards,burstPop .5s ease-out forwards}.splashHit.wild{left:var(--x0);top:var(--y0)}.spark{left:var(--x1);top:var(--y1);scale:3;animation:frames4 .3s steps(4) forwards,burstPop .4s ease-out forwards}.spark.wild{left:var(--x0);top:var(--y0)}.spark.k1{margin:-16px 0 0 -20px}.spark.k2{margin:6px 0 0 0}.spark.k3{margin:-16px 0 0 18px}.camoLeaf{filter:hue-rotate(10deg)}
-.shield{left:162px;top:208px;scale:5.7;background-image:url(/fx/shield.png);animation:frames4 .5s steps(4) forwards,shieldUp .9s ease-out forwards}
-.heal{top:228px;scale:2.3;background-image:url(/fx/heal.png);animation:frames4 .5s steps(4) infinite,healRise 1s ease-out forwards}
+.shield{left:var(--x0);top:var(--y0);scale:5.7;background-image:url(/fx/shield.png);animation:frames4 .5s steps(4) forwards,shieldUp .9s ease-out forwards}
+.heal{top:var(--y0);scale:2.3;background-image:url(/fx/heal.png);animation:frames4 .5s steps(4) infinite,healRise 1s ease-out forwards}
 /* Whole-number scales keep the 32px pixel art crisp. */
 .capsule{background-image:url(/fx/capsule.png);scale:2;z-index:8;left:var(--x1);top:var(--capY);filter:drop-shadow(0 3px 0 #0b1a1566)}.capsule.throw{animation:capThrow .6s cubic-bezier(.4,0,.6,1) forwards}.capsule.open{background-position:-64px 0}.capsule.wobble{animation:capWobble .45s ease-in-out 3}.capsule.glow{background-position:-96px 0;animation:capGlow .5s ease-out}
 .beam{left:var(--x1);top:var(--y1);scale:6.2;background-image:url(/fx/beam.png);animation:frames4 .5s steps(4) infinite,beamSpin 1.2s linear infinite;filter:drop-shadow(0 0 6px #fff)}
@@ -401,7 +437,7 @@ header{position:absolute;top:16px;left:16px;right:16px;display:flex;justify-cont
 @keyframes counter{50%{translate:-65px 30px}}@keyframes tongueOut{0%{scale:0 .6}35%{scale:1.04 1.1}55%{scale:1 1}100%{scale:0 .6;opacity:.8}}@keyframes tongueTip{0%{left:var(--tx0);top:var(--ty0);scale:1.2}35%,55%{left:var(--tx1);top:var(--ty1)}100%{left:var(--tx0);top:var(--ty0);opacity:0}}@keyframes jetOut{0%{scale:0 .3;opacity:0}25%{scale:1 1.15;opacity:1}80%{scale:1 1;opacity:1}100%{scale:1 .15;opacity:0}}@keyframes lurePulse{0%{opacity:0;scale:.4}30%,60%{opacity:1;scale:1}100%{opacity:0;scale:1.6}}@keyframes jetFlow{to{background-position:22px 0}}@keyframes dropFall{to{translate:0 24px;opacity:0}}@keyframes snareHold{0%{opacity:0;scale:1.3}20%,80%{opacity:1}100%{opacity:0}}@keyframes camoFade{0%,100%{opacity:1}50%{opacity:.15;filter:saturate(.3)}}
 @keyframes shieldUp{0%{opacity:0;translate:0 10px}30%,70%{opacity:1;translate:0 0}100%{opacity:0}}@keyframes healRise{0%{opacity:0;translate:0 16px}30%{opacity:1}100%{opacity:0;translate:0 -36px}}
 @keyframes capThrow{0%{left:var(--x0);top:var(--y0);rotate:0deg}50%{top:calc((var(--y0) + var(--y1)) / 2 - 90px)}100%{left:var(--x1);top:var(--capY);rotate:720deg}}@keyframes capWobble{0%,100%{rotate:0deg;translate:0 0}15%{rotate:-18deg;translate:-5px 0}45%{rotate:18deg;translate:5px 0}75%{rotate:-12deg;translate:-3px 0}}@keyframes capGlow{50%{filter:brightness(2.2) drop-shadow(0 0 8px #fff)}}@keyframes suckIn{40%{opacity:.9;filter:brightness(2.5) saturate(0)}100%{opacity:0;scale:.05;translate:-30px 60px;filter:brightness(3) saturate(0)}}@keyframes beamSpin{to{rotate:360deg}}
-@media(max-width:650px){.arena{height:380px;background-image:url(/tiles/arena-mobile.png)}.sprite.wild{width:140px;right:24px;top:80px}.sprite.own{width:160px;left:6px;bottom:44px}.status{width:176px;padding:7px 10px 8px}.wildS{left:12px;top:12px}.ownS{right:12px;bottom:12px}.status .name{font-size:22px}.tongueTip{scale:1.6}.vine{scale:3}.splashHit{scale:2.6}.spark{scale:2.2}.proj{scale:2}.burst{scale:2.8}.burst.small{scale:1.4}.moves{grid-template-columns:1fr 1fr;gap:10px}.move{min-height:58px}.move b{font-size:20px}.move small{font-size:15px}.msg p{font-size:18px}.bottom{padding:10px 14px}.head{padding:10px 14px}header{top:8px;left:8px;right:8px}}
+@media(max-width:650px){.arena{height:380px}.status{width:176px;padding:7px 10px 8px}.wildS{left:12px;top:12px}.ownS{right:12px;bottom:12px}.status .name{font-size:22px}.tongueTip{scale:1.6}.vine{scale:3}.splashHit{scale:2.6}.spark{scale:2.2}.proj{scale:2}.burst{scale:2.8}.burst.small{scale:1.4}.moves{grid-template-columns:1fr 1fr;gap:10px}.move{min-height:58px}.move b{font-size:20px}.move small{font-size:15px}.msg p{font-size:18px}.bottom{padding:10px 14px}.head{padding:10px 14px}header{top:8px;left:8px;right:8px}}
 /* Phones: the drop's layout as designed. Long move text wraps and the ledger clips inside the
    width instead of widening their columns past the screen; the capsule and run buttons put their
    line under their name, whole; the heading leaves room for the DSM button. */
@@ -438,13 +474,16 @@ header{position:absolute;top:16px;left:16px;right:16px;display:flex;justify-cont
 .battle .card{display:flex;flex-direction:column;width:100%;height:calc(100svh - var(--dsm-strip-offset,0px));max-height:none;box-shadow:none}
 .head{flex:none}.bottom{flex:1 1 auto;min-height:0;overflow-y:auto;align-content:start;gap:10px}
 .arena{flex:none;height:48svh;min-height:240px;background-size:100% 100%;background-position:0 0}
-/* Pads in arena-mobile.png: the wild one centred at 76% / 53%, ours at 23% / 86%. Feet stand on them. */
-.sprite{transform:var(--flip) translateY(var(--foot))}
-.sprite.wild{width:36%;left:58%;right:auto;top:auto;bottom:47%;margin-top:0}.sprite.own{width:36%;left:5%;bottom:14%}
+/* Phone art: the square arenas, with their own pad centres. */
+.arena{--ww:30%;--ow:36%}
+.arena.forest{background-image:url(/tiles/arena-forest-mobile.png);--padWX:68.7%;--padWY:50.3%;--padOX:31.1%;--padOY:80.7%}
+.arena.water{background-image:url(/tiles/arena-water-mobile.png);--padWX:68.6%;--padWY:51.1%;--padOX:29.9%;--padOY:74.8%}
+.arena.desert{background-image:url(/tiles/arena-desert-mobile.png);--padWX:68.3%;--padWY:49.4%;--padOX:31.2%;--padOY:78%}
+.arena.ring{background-image:url(/tiles/arena-ring-mobile.png);--padWX:68.7%;--padWY:50.6%;--padOX:31.8%;--padOY:79.9%}
 .status{width:43%;min-width:0;padding:5px 8px 6px}.status .row.between{flex-wrap:wrap;gap:0 6px}.status .name{font-size:20px}.status .muted{font-size:14px}.status .chips{margin-top:3px;min-height:0;gap:4px}.status .chip{font-size:8px;padding:2px 4px}.status .hp{margin-top:4px;gap:5px}.status .lbl{font-size:8px}.status .bar{height:8px}.status .hp small{font-size:15px}.wildS{left:6px;top:6px}.ownS{right:6px;bottom:6px}
-.fx{--x0:calc(23% - 16px);--y0:calc(86% - 70px);--x1:calc(76% - 16px);--y1:calc(53% - 66px);--capY:calc(53% - 22px)}
+.fx{--y0:calc(var(--padOY) - 70px);--y1:calc(var(--padWY) - 66px);--capY:calc(var(--padWY) - 22px)}
 .dmg{left:68%;top:20%;font-size:20px}.dmg.wild{left:16%;top:56%}
-.capsule{scale:1}.beam{scale:2}.burst.catch{scale:1}.shield{left:var(--x0);top:var(--y0);scale:3.4}.heal{top:var(--y0)}
+.capsule{scale:1}.beam{scale:2}.burst.catch{scale:1}.shield{scale:3.4}
 .bottom{padding:8px 10px 10px;gap:8px}.msg{min-height:44px;padding:6px 10px;gap:10px;margin:2px 4px 0}.portrait{width:38px;height:38px}.msg p{font-size:17px;line-height:1.15}.msg .hint{font-size:8px}
 .moves{gap:8px;padding:4px}.move{min-height:0;padding:6px 8px;gap:3px}.move b{font-size:19px}.move small{font-size:14px;line-height:1.1}.move .tiny{font-size:8px}
 .cmd{padding:6px 10px;margin:0 4px}.cmd b{font-size:18px}.cmd small{font-size:14px}.ledger{padding-top:6px}
