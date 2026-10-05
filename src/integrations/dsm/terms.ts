@@ -1,7 +1,7 @@
 /** The game's economic terms on DSM: what it creates and offers. Shared by the server and its screens. */
 export const COIN = { ticker: 'WILD', alias: 'Wildstate coin', supply: 1_000_000n };
 /** What the game's account puts in the market: WILD and ERA (ERA has two decimals). */
-export const MARKET = { wild: '2000', era: '40', feeBps: 30 };
+export const MARKET = { wild: '50000', era: '1000', feeBps: 30 };
 /** Bramble's board (the design's Shop page): what each item costs, in WILD, paid from the wallet. */
 export const ITEM_PRICES = { capsule: 3n, poultice: 4n, tonic: 5n, map: 12n } as const;
 export type ShopItem = keyof typeof ITEM_PRICES;

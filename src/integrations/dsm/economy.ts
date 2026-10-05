@@ -63,7 +63,8 @@ export interface EconomyRecord {
 /** The fee a token's creation burns, in ERA base units (`TOKEN_CREATION_FEE_ERA`). */
 export const CREATION_FEE_ERA = 1_000n;
 /** ERA the account keeps before it creates anything: the coin, the market, a few creatures. */
-const ERA_TO_START = 1_000n + 4_000n + 3n * CREATION_FEE_ERA;
+// Fund the market and retain 200 ERA for issuing creatures, after WILD's creation fee.
+const ERA_TO_START = BigInt(MARKET.era) * 100n + CREATION_FEE_ERA + 20_000n;
 
 const CODE: Record<Species, string> = { embercub: 'EM', mossling: 'MS', tidefin: 'TF', voltusk: 'VT', leon: 'LN', rattlefin: 'RF', brineback: 'BB' };
 
@@ -119,11 +120,15 @@ export class Economy {
 
   /** ERA enough for `needed` base units: a faucet claim when the account holds less. */
   async ensureEra(needed: bigint, say: (line: string) => void): Promise<void> {
-    if ((await this.era()) >= needed) return;
-    say('The game account claims ERA from the network faucet to pay token creation fees');
-    const claimed = await this.host.claimFaucet(fromB32(this.record.account));
-    if (!claimed.success) throw new Error(`faucet.claim: ${claimed.message}`);
-    if ((await this.era()) < needed) throw new Error('the game account still holds too little ERA');
+    let available = await this.era();
+    while (available < needed) {
+      say('The game account claims ERA from the network faucet for liquidity and token creation fees');
+      const claimed = await this.host.claimFaucet(fromB32(this.record.account));
+      if (!claimed.success) throw new Error(`faucet.claim: ${claimed.message}`);
+      const next = await this.era();
+      if (next <= available) throw new Error('the accepted faucet claim did not increase available ERA');
+      available = next;
+    }
   }
 
   /** The coin and the market, once. */

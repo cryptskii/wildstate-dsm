@@ -1,0 +1,85 @@
+# One persistent production account, independent of the storage-node service.
+# Create ./account owned by uid/gid 10001 with mode 700 before starting.
+# ./network holds the pinned dsm_env_config.toml and ca.crt, both public files.
+services:
+  account:
+    image: wildstate-account:production
+    restart: unless-stopped
+    network_mode: host
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 256
+    mem_limit: 1g
+    tmpfs: ['/tmp:size=64m,mode=1777']
+    volumes:
+      - ./account:/data
+      - ./network:/network:ro
+    command:
+      - --data-dir
+      - /data
+      - --env-config
+      - /network/dsm_env_config.toml
+      - --game-bind
+      - 127.0.0.1:8787
+      - --relay-bind
+      - 0.0.0.0:8443
+      - --relay-endpoint
+      - ${WILDSTATE_RELAY_ENDPOINT:?Public HTTPS relay endpoint required}
+      - --relay-name
+      - ${WILDSTATE_RELAY_NAME:?Public relay hostname or IP required}
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+
+  game:
+    image: wildstate-game:production
+    restart: unless-stopped
+    network_mode: host
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 256
+    mem_limit: 768m
+    tmpfs: ['/tmp:size=64m,mode=1777']
+    depends_on: [account]
+    volumes:
+      - ./game:/data
+    environment:
+      WILDSTATE_ALLOWED_ORIGINS: https://wildstate-dsm.vercel.app,https://${WILDSTATE_BACKEND_DOMAIN:?Public backend hostname required}
+      RPGJS_MAP_UPDATE_TOKEN: ${RPGJS_MAP_UPDATE_TOKEN:?Private map publication secret required}
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://127.0.0.1:3000/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+
+  https:
+    image: caddy:2.11-alpine
+    restart: unless-stopped
+    network_mode: host
+    read_only: true
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 256m
+    environment:
+      WILDSTATE_BACKEND_DOMAIN: ${WILDSTATE_BACKEND_DOMAIN:?Public backend hostname required}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./https-data:/data
+      - ./https-config:/config
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
