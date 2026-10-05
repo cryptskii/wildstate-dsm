@@ -1,6 +1,6 @@
 /**
- * A player-vs-player match: two teams of up to three, one creature out at a time, first to knock
- * out two wins. Both players choose a move each turn without seeing the other's; the turn resolves
+ * A player-vs-player match: two teams of up to three, one creature out at a time, whoever knocks
+ * out all of the other side's creatures wins. Both players choose a move each turn without seeing the other's; the turn resolves
  * once both are in, through the same exchange every battle uses (src/domain/duel.ts). Each team is a
  * snapshot of the creatures as the player prepared them (HP and charges, so healing and charging
  * beforehand matters); the match never writes back to the players' own creatures.
@@ -9,7 +9,7 @@
  * The battle and its result are the game server's (Web2), never DSM evidence.
  */
 import { exchange, type Action, type ExchangeEntry } from './duel';
-import { ITEMS, KO_TO_WIN, SPECIES, applyItem, level, type Creature, type UsableItem } from './game';
+import { ITEMS, SPECIES, applyItem, level, type Creature, type UsableItem } from './game';
 
 export type Side = 'a' | 'b';
 export const other = (s: Side): Side => (s === 'a' ? 'b' : 'a');
@@ -145,7 +145,7 @@ function resolve(m: Match, now: number) {
     if (c.hp > 0) continue;
     side.ko += 1;
     m.events.push({ side: s, kind: 'faint', creature: c.id });
-    const next = side.ko < KO_TO_WIN ? side.team.findIndex(x => x.hp > 0) : -1;
+    const next = side.team.findIndex(x => x.hp > 0);
     if (next < 0) { finish(m, other(s), 'knockouts'); return; }
     side.active = next;
     m.events.push({ side: s, kind: 'switch', creature: side.team[next].id });

@@ -76,12 +76,12 @@ export const ITEMS = { poultice: { heal: 15 }, tonic: { charges: true } } as con
 export type UsableItem = keyof typeof ITEMS;
 /**
  * Trainers who wait on the map. They field a team of three at full strength (no wild handicap),
- * one at a time; knocking out two wins, and pays a bounty from the game account. A trainer can be
+ * one at a time; knocking out all three wins, and pays a bounty from the game account. A trainer can be
  * challenged again after the party rests at camp.
  */
 export type TrainerDef = { name: string; title: string; team: { species: keyof typeof SPECIES; nick: string }[]; greeting: string[]; win: string; lose: string; beaten: string };
-/** Team battles: each side fields up to three, one at a time; the first to knock out two wins. */
-export const TEAM_SIZE = 3, KO_TO_WIN = 2;
+/** Team battles: each side fields up to three, one at a time; whoever knocks out all of the other side's wins. */
+export const TEAM_SIZE = 3;
 export const TRAINERS: Record<string, TrainerDef> = {
   kade: { name: 'Kade', title: 'Meadow Drifter', team: [{ species: 'mossling', nick: 'Burr' }, { species: 'voltusk', nick: 'Static' }, { species: 'leon', nick: 'Lash' }], greeting: ['Hey, trainer. Burr and I take on anyone who crosses this meadow.', 'Twelve WILD says you can’t knock him down. Paid straight to your wallet if you do.'], win: 'Ha! Burr hasn’t hit the grass in weeks. The bounty’s yours, fair and square.', lose: 'That’s how it goes. Rest up with Mira and come find me again.', beaten: 'You already took my WILD today. Rest at camp and I’ll go another round.' },
   nessa: { name: 'Nessa', title: 'Pond Keeper', team: [{ species: 'tidefin', nick: 'Ripple' }, { species: 'brineback', nick: 'Barnacle' }, { species: 'rattlefin', nick: 'Lantern' }], greeting: ['Careful by the water. Ripple doesn’t like strangers near her pond.', 'One bout. Beat her and the bounty is yours; lose and you walk back to camp.'], win: 'Ripple! …Fine. You earned that bounty. Well fought.', lose: 'The pond stays ours. Come back when your creature has rested.', beaten: 'Ripple needs to rest after your last bout. So do you, by the look of it. Come back after camp.' },
@@ -354,11 +354,11 @@ export function transition(parent: GameState, expected: number, commandId: strin
         else if (combatant.hp === 0) finish('defeat');
         break;
       }
-      // Team battle: a fainted creature is replaced by the next one standing, until two are down.
+      // Team battle: a fainted creature is replaced by the next one standing, until a side has none left.
       if (wild.hp === 0) {
         battle!.ko.foe += 1;
         battle!.events.push({ side: 'foe', kind: 'faint', creature: wild.id });
-        const next = battle!.ko.foe < KO_TO_WIN ? battle!.bench.shift() : undefined;
+        const next = battle!.bench.shift();
         if (!next) { win(); break; }
         battle!.wild = next;
         battle!.events.push({ side: 'foe', kind: 'switch', creature: next.id });
@@ -367,7 +367,7 @@ export function transition(parent: GameState, expected: number, commandId: strin
         battle!.ko.own += 1;
         battle!.events.push({ side: 'own', kind: 'faint', creature: combatant.id });
         const next = battle!.roster.map(id => s.creatures.find(c => c.id === id)!).find(c => c.hp > 0);
-        if (battle!.ko.own >= KO_TO_WIN || !next) { finish('defeat'); break; }
+        if (!next) { finish('defeat'); break; }
         clearBattleOnly(combatant);
         battle!.creatureId = next.id;
         battle!.events.push({ side: 'own', kind: 'switch', creature: next.id });

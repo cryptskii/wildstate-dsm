@@ -3,7 +3,7 @@ import { computed, inject, ref, watch, onUnmounted, onMounted } from 'vue';
 import { Direction } from '@rpgjs/common';
 import { heldDirection, type MovementControls } from './held-direction';
 import Joystick from './Joystick.vue';
-import { SPECIES, TRAINERS, ITEMS as ITEM_EFFECTS, TEAM_SIZE, KO_TO_WIN, NICK_MAX, XP_PER_LEVEL, LEVEL_CAP, multiplier, displayName, level, maxHp, maxCharges, damageBonus, type GameState, type Element, type MoveFx } from '../domain/game';
+import { SPECIES, TRAINERS, ITEMS as ITEM_EFFECTS, TEAM_SIZE, NICK_MAX, XP_PER_LEVEL, LEVEL_CAP, multiplier, displayName, level, maxHp, maxCharges, damageBonus, type GameState, type Element, type MoveFx } from '../domain/game';
 const xpLabel = (c: { xp: number }) => level(c) >= LEVEL_CAP ? 'MAX' : `${c.xp % XP_PER_LEVEL}/${XP_PER_LEVEL} XP`;
 const xpPct = (c: { xp: number }) => (level(c) >= LEVEL_CAP ? 1 : (c.xp % XP_PER_LEVEL) / XP_PER_LEVEL) * 100 + '%';
 const growth = computed(() => { const g = props.state.battle?.growth; return g && g.to > g.from ? g : null; });
@@ -291,7 +291,7 @@ watch(() => [props.state.revision, props.error], async () => {
   <!-- BATTLE -->
   <div v-else class="battle">
     <div class="card win dark">
-      <div class="head px"><span>{{ pvp ? `MATCH · VS @${pvp.opponent.toUpperCase()}` : trainer ? `TRAINER BATTLE · ${trainer.name.toUpperCase()}` : 'WILD ENCOUNTER' }}</span><span class="meta"><span>{{ pvp ? (active ? `${secondsLeft}s` : 'Over') : trainer ? trainer.title : view.battle?.source === 'pond' ? 'Pond' : 'Meadow' }}</span><i>·</i><span>Turn {{ (view.battle?.turn || 0) + 1 }}</span><template v-if="teamView"><i>·</i><span class="koCount">KO {{ teamView.ko.foe }}/{{ KO_TO_WIN }}</span></template></span></div>
+      <div class="head px"><span>{{ pvp ? `MATCH · VS @${pvp.opponent.toUpperCase()}` : trainer ? `TRAINER BATTLE · ${trainer.name.toUpperCase()}` : 'WILD ENCOUNTER' }}</span><span class="meta"><span>{{ pvp ? (active ? `${secondsLeft}s` : 'Over') : trainer ? trainer.title : view.battle?.source === 'pond' ? 'Pond' : 'Meadow' }}</span><i>·</i><span>Turn {{ (view.battle?.turn || 0) + 1 }}</span><template v-if="teamView"><i>·</i><span class="koCount">KO {{ teamView.ko.foe }}/{{ teamView.foe.length }}</span></template></span></div>
       <div class="arena" :class="{ shake: fx.kind === 'impact' }">
         <div class="flash" v-if="fx.kind === 'impact' && fx.crit"></div>
         <img class="sprite wild" :class="{ flinch: fx.kind === 'impact' && fx.dir === 'own', windupR: fx.kind === 'windup' && fx.dir === 'wild', suck: fx.kind === 'cap-open', gone: ['cap-shake','cap-catch'].includes(fx.kind) || view.battle?.outcome === 'victory' || view.battle?.outcome === 'captured', counter: fx.kind === 'counter' }" :style="pose(wild?.species || 'mossling', 'wild')" :src="`creatures/${wild?.species || 'mossling'}.png`" :alt="wildSp.name"/>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { initialState, transition, score, SPECIES, newCreature, grantXp, level, maxHp, maxCharges, xpGain, wildLevel, salePrice, TRAINER_LEVEL, KO_TO_WIN, HP_PER_LEVEL, SHOP_QTY_MAX, type Command, type GameState } from '../src/domain/game';
+import { initialState, transition, score, SPECIES, newCreature, grantXp, level, maxHp, maxCharges, xpGain, wildLevel, salePrice, TRAINER_LEVEL, HP_PER_LEVEL, SHOP_QTY_MAX, type Command, type GameState } from '../src/domain/game';
 
 const step = (s: GameState, c: Command) => transition(s, s.revision, `command/${s.revision}`, c);
 const encounter = () => step(initialState('alice'), { type: 'encounter' });
@@ -257,7 +257,7 @@ describe('shop items and trainer battles', () => {
     expect(after.creatures[0].charges.flare).toBe(5);
     expect(after.inventory.tonic).toBe(0);
   });
-  it('fights a trainer team of three at its level, one at a time; two knockouts win, then it reopens after a rest', () => {
+  it('fights a trainer team of three at its level, one at a time; knocking out all three wins, then it reopens after a rest', () => {
     // A team of three strong creatures, chosen in order.
     let strong = structuredClone(alice);
     strong.creatures = [newCreature('alice/starter', 'embercub', undefined, 8), newCreature('alice/volt', 'voltusk', undefined, 8), newCreature('alice/moss', 'mossling', undefined, 8)];
@@ -286,8 +286,8 @@ describe('shop items and trainer battles', () => {
       events.push(...won.battle!.events.map(e => `${e.side}:${e.kind}`));
     }
     expect(won.battle!.outcome).toBe('victory');
-    expect(won.battle!.ko.foe).toBe(KO_TO_WIN);
-    expect(won.battle!.bench.map(c => c.species)).toEqual(['leon']);
+    expect(won.battle!.ko.foe).toBe(3);
+    expect(won.battle!.bench).toEqual([]);
     expect(events).toEqual(expect.arrayContaining(['foe:faint', 'foe:switch']));
     expect(won.trainersBeaten).toEqual(['kade']);
     expect(won.coins).toBe(alice.coins);
@@ -297,7 +297,7 @@ describe('shop items and trainer battles', () => {
     expect(step(rested, { type: 'challenge', trainer: 'kade' }).battle!.id).toBe('alice/trainer/kade/1');
     expect(() => step(alice, { type: 'challenge', trainer: 'nobody' })).toThrow('unknown-trainer');
   });
-  it('sends in the next creature when one faints, and loses when two are down or none stand', () => {
+  it('sends in the next creature when one faints, and loses when none stand', () => {
     let pair = structuredClone(alice);
     pair.creatures = [newCreature('alice/starter', 'embercub'), newCreature('alice/second', 'mossling')];
     let s = step(pair, { type: 'challenge', trainer: 'nessa' });

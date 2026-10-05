@@ -123,7 +123,7 @@ async function copyId() { await navigator.clipboard.writeText(props.me.id); copi
           </template>
           <template v-else>
             <b class="big">Ready to battle</b>
-            <small>Your team of three (pick it in the BAG) fights at full strength; first to two knockouts wins.</small>
+            <small>Your team (pick it in TEAM) fights as you left it; knock out all of theirs to win.</small>
             <button class="px go wide" :disabled="!open(stake)" @click="send('queue', { stake })">FIND A MATCH</button>
           </template>
         </div>
