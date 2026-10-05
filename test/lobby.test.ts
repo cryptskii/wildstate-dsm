@@ -3,7 +3,7 @@ import { claimUsername, resolvePlayer, validateUsername, freshProfile, RENAME_CO
 import { rate, expected, START_RATING } from '../src/domain/rating';
 import { pair, window } from '../src/domain/matchmaker';
 import { choose, expire, forfeit, firstToAct, startMatch, MISSES_TO_FORFEIT, TURN_MS, type Match } from '../src/domain/match';
-import { newCreature, KO_TO_WIN } from '../src/domain/game';
+import { newCreature } from '../src/domain/game';
 
 const A = 'MJPG8P38E3AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', B = '4BKF028R0BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
 const dir = (): Directory => ({ players: {}, usernames: {} });
@@ -92,7 +92,7 @@ describe('player-vs-player match', () => {
     const play = () => { const m = fresh(); for (let i = 0; i < 40 && m.phase === 'battle'; i++) { choose(m, 'a', 'flare', i); choose(m, 'b', 'volt-charge', i); if (m.phase !== 'battle') break; } return m; };
     expect(play()).toEqual(play());
   });
-  it('switches in the next creature on a knockout and ends at two', () => {
+  it('switches in the next creature on a knockout and ends when one side has none standing', () => {
     const m = fresh();
     const seen: string[] = [];
     for (let i = 0; i < 80 && m.phase === 'battle'; i++) {
@@ -103,7 +103,9 @@ describe('player-vs-player match', () => {
     }
     expect(m.phase).toBe('done');
     expect(m.reason).toBe('knockouts');
-    expect(m[m.winner === 'a' ? 'b' : 'a'].ko).toBe(KO_TO_WIN);
+    const loser = m[m.winner === 'a' ? 'b' : 'a'];
+    expect(loser.ko).toBe(loser.team.length);
+    expect(loser.team.every(c => c.hp === 0)).toBe(true);
     expect(seen).toContain(`${m.winner === 'a' ? 'b' : 'a'}:switch`);
   });
   it('plays Strike for a missed turn and forfeits after three misses', () => {
