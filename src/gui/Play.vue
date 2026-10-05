@@ -407,8 +407,9 @@ header{position:absolute;top:16px;left:16px;right:16px;display:flex;justify-cont
 .arena.water{background-image:url(/tiles/arena-water-desktop.png);--padWX:67.7%;--padWY:53.3%;--padOX:30.1%;--padOY:74.8%}
 .arena.desert{background-image:url(/tiles/arena-desert-desktop.png);--padWX:68.5%;--padWY:54.5%;--padOX:29.3%;--padOY:74.6%}
 /* --sink sets the creatures a little below the pad's centre line, so they stand in the pad rather than on its far edge. */
-.arena{--sink:4%}
-.sprite.wild{width:var(--ww);left:calc(var(--padWX) - var(--ww) / 2);bottom:calc(100% - var(--padWY) - var(--sink))}.sprite.own{width:var(--ow);left:calc(var(--padOX) - var(--ow) / 2);bottom:calc(100% - var(--padOY) - var(--sink))}
+/* --spread moves them apart, each toward its pad's outer side; the far one less, as it is further back. */
+.arena{--sink:4%;--spread:3%}
+.sprite.wild{width:var(--ww);left:calc(var(--padWX) - var(--ww) / 2 + var(--spread) * .6);bottom:calc(100% - var(--padWY) - var(--sink))}.sprite.own{width:var(--ow);left:calc(var(--padOX) - var(--ow) / 2 - var(--spread));bottom:calc(100% - var(--padOY) - var(--sink))}
 .gone{opacity:0!important}.counter{animation:counter .5s!important}.camo{animation:camoFade 1s ease-in-out!important}.flinch{animation:flinch .5s!important}.flinchL{animation:flinchL .5s!important}.windup{animation:windup .38s ease-in-out!important}.windupR{animation:windupR .38s ease-in-out!important}.lunge{animation:lunge .3s!important}.run{animation:run .65s forwards!important}.suck{animation:suckIn .6s ease-in forwards!important}
 .status{position:absolute;z-index:2;width:232px;padding:9px 12px 10px}.wildS{left:30px;top:28px;scale:.9;transform-origin:top left}.ownS{right:30px;bottom:28px}.status .name{font-size:30px;line-height:1}.status .muted{font-size:16px;white-space:nowrap}.chips{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;min-height:18px}
 /* x0/y0: our creature (left-anchored); x1/y1: the wild one, anchored to the arena's right edge, so measured from it. */
