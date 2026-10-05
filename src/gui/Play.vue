@@ -2,6 +2,7 @@
 import { computed, inject, ref, watch, onUnmounted, onMounted } from 'vue';
 import { Direction } from '@rpgjs/common';
 import { heldDirection, type MovementControls } from './held-direction';
+import Joystick from './Joystick.vue';
 import { SPECIES, TRAINERS, NICK_MAX, XP_PER_LEVEL, LEVEL_CAP, multiplier, displayName, level, maxHp, maxCharges, damageBonus, type GameState, type Element, type MoveFx } from '../domain/game';
 const xpLabel = (c: { xp: number }) => level(c) >= LEVEL_CAP ? 'MAX' : `${c.xp % XP_PER_LEVEL}/${XP_PER_LEVEL} XP`;
 const xpPct = (c: { xp: number }) => (level(c) >= LEVEL_CAP ? 1 : (c.xp % XP_PER_LEVEL) / XP_PER_LEVEL) * 100 + '%';
@@ -80,37 +81,21 @@ function action(action: string) {
   interact('creature-battle', 'battle', { action, revision: props.state.revision });
   pending = setTimeout(() => { busy.value = false; message.value = 'No response yet. Try again.'; }, 5000);
 }
-const engine = inject<{ activeKeyboardControls: () => MovementControls | null }>('rpgEngine');
-const movementControls = () => engine?.activeKeyboardControls();
-let tapWalk: ReturnType<typeof setTimeout> | undefined;
-function step(direction: Direction) { stopWalk(); heldWalk.start(direction); tapWalk = setTimeout(stopWalk, 100); }
-const heldWalk = heldDirection(movementControls);
-let walkPointer: number | undefined;
-function startWalk(direction: Direction, event: PointerEvent) {
-  if (event.button !== 0 || event.isPrimary === false || walkPointer !== undefined) return;
-  event.preventDefault();
-  const pad = (event.currentTarget as HTMLElement).closest('.dpad') as HTMLElement;
-  clearTimeout(tapWalk);
-  walkPointer = event.pointerId;
-  pad.setPointerCapture(event.pointerId);
-  heldWalk.start(direction);
+type ClientEngine = { activeKeyboardControls: () => MovementControls | null; getCurrentPlayer?: () => unknown; sceneMap?: { stopMovement?: (player: unknown) => void } };
+const engine = inject<ClientEngine>('rpgEngine');
+const heldWalk = heldDirection(() => engine?.activeKeyboardControls() ?? null);
+/** The thumbstick's direction, held as one engine input per frame; on release the character stops at once. */
+function steer(direction: Direction | null) {
+  if (direction) { heldWalk.set(direction); return; }
+  stopWalk();
 }
-function dragWalk(event: PointerEvent) {
-  if (event.pointerId !== walkPointer) return;
-  const box = (event.currentTarget as HTMLElement).getBoundingClientRect();
-  // Thumb drift within the pad should not cancel a down/up/left/right hold.
-  const slop = 12;
-  if (event.clientX < box.left - slop || event.clientX > box.right + slop || event.clientY < box.top - slop || event.clientY > box.bottom + slop) stopWalk(event);
-}
-function stopWalk(event?: Event) {
-  if (event && 'pointerId' in event && (event as PointerEvent).pointerId !== walkPointer) return;
-  clearTimeout(tapWalk);
-  walkPointer = undefined;
+function stopWalk() {
   heldWalk.stop();
+  // The engine otherwise lets the body glide until its 100 ms no-input watchdog.
+  const player = engine?.getCurrentPlayer?.();
+  if (player) engine?.sceneMap?.stopMovement?.(player);
 }
-const hideWalk = () => { if (document.hidden) stopWalk(); };
-onMounted(() => { window.addEventListener('blur', stopWalk); window.addEventListener('pagehide', stopWalk); document.addEventListener('visibilitychange', hideWalk); });
-onUnmounted(() => { stopWalk(); window.removeEventListener('blur', stopWalk); window.removeEventListener('pagehide', stopWalk); document.removeEventListener('visibilitychange', hideWalk); });
+onUnmounted(stopWalk);
 watch(() => [props.mode, props.state.battle?.outcome, props.encounter, party.value], () => {
   if (props.mode !== 'field' || props.state.battle?.outcome === 'active' || props.encounter || party.value) stopWalk();
 });
@@ -226,8 +211,8 @@ watch(() => [props.state.revision, props.error], async () => {
     </aside>
     <button v-if="encounter" class="tapCard" @click="field('fight')"><span class="tapBox"><span class="px t">{{ encounter.title }}</span><span class="l">{{ encounter.line }}</span><span class="px tap">TAP TO FIGHT ▶</span></span></button>
     <button v-else-if="door" class="tapCard" @click="field('enter-shop')"><span class="tapBox"><span class="px t">TRADING POST</span><span class="l">Bramble’s door creaks open.</span><span class="px tap">TAP TO ENTER ▶</span></span></button>
-    <nav v-if="state.battle?.outcome !== 'active'" class="controls" aria-label="Movement">
-      <div class="dpad" @pointermove="dragWalk" @pointerup="stopWalk" @pointercancel="stopWalk" @lostpointercapture="stopWalk"><i class="v"></i><i class="h"></i><button aria-label="Walk up" class="up" @pointerdown="startWalk(Direction.Up, $event)" @click="$event.detail === 0 && step(Direction.Up)">▲</button><button aria-label="Walk left" class="left" @pointerdown="startWalk(Direction.Left, $event)" @click="$event.detail === 0 && step(Direction.Left)">◀</button><button aria-label="Walk right" class="right" @pointerdown="startWalk(Direction.Right, $event)" @click="$event.detail === 0 && step(Direction.Right)">▶</button><button aria-label="Walk down" class="down" @pointerdown="startWalk(Direction.Down, $event)" @click="$event.detail === 0 && step(Direction.Down)">▼</button><i class="hub"><i></i></i></div>
+    <Joystick v-if="state.battle?.outcome !== 'active' && !encounter && !party" @direction="steer"/>
+    <nav v-if="state.battle?.outcome !== 'active'" class="controls" aria-label="Actions">
       <div class="side"><div v-if="nearNpc || atShop || nearPond" class="hint">{{ (nearTrainer ? (trainerBeaten ? `${nearNpc} is beaten · rest at camp for a rematch` : `${nearNpc} wants a battle · ${TRAINER_REWARD} WILD bounty`) : nearNpc ? (nearNpc === 'Wayfinding sign' ? 'Read the sign' : `Talk to ${nearNpc}`) : atShop ? 'Bramble’s trading post' : nearPond ? 'Cast your line into the pond' : '') }}</div><button class="talk px" :class="{ near: nearNpc && !nearTrainer, fight: nearTrainer, pond: nearPond && !nearNpc }" @click="field(nearTrainer ? 'challenge' : nearPond && !nearNpc ? 'cast' : 'talk')">{{ nearNpc === 'Wayfinding sign' ? 'READ' : nearTrainer ? 'FIGHT' : nearPond && !nearNpc ? 'CAST' : 'TALK' }}</button></div>
     </nav>
   </div>
@@ -294,7 +279,7 @@ button{font:inherit;cursor:pointer;border:0;color:#f3f3df;background:#1f4434;box
 .chip{padding:3px 6px;color:#f6efd2;border:2px solid #26443a;line-height:1;font-size:9px}.chip.ink{background:#26443a}.chip.dim{background:#0b1a15;border:0;opacity:.85;font-size:8px}
 .hp{margin-top:6px}.lbl{font-size:9px;color:#4c6a5c}.bar{flex:1;height:10px;background:#3b3f2e;border:2px solid #26443a}.bar i{display:block;height:100%;transition:width .45s;box-shadow:inset 0 2px 0 #ffffff55}.hp small{font-size:18px;font-variant-numeric:tabular-nums}
 /* field */
-.field{position:fixed;inset:0;pointer-events:none;font-size:16px}.field header,.field aside,.field nav{pointer-events:auto}
+.field{position:fixed;inset:0;pointer-events:none;font-size:16px}.field header,.field aside,.field nav .side{pointer-events:auto}
 header{position:absolute;top:16px;left:16px;right:16px;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px}header b{font-size:11px}.hudLogo{display:block;width:132px;height:auto;margin-bottom:3px}header small{display:block;font-size:14px;color:#b9cdb6;line-height:1}.res{display:flex;align-items:center;gap:10px;font-size:17px;white-space:nowrap}
 .party{position:absolute;left:16px;right:16px;top:90px;max-width:420px;padding:12px;display:grid;gap:10px}.party .h{font-size:22px}.prow{display:flex;align-items:center;gap:10px;padding:8px;background:#ece4c3;box-shadow:0 0 0 2px #26443a}.thumb{width:52px;height:52px;flex:none;background:center/contain no-repeat;image-rendering:pixelated}.prow b{font-size:20px}.prow small.muted{font-size:14px}
 .tabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}.tab{padding:7px 4px;color:#26443a;background:#ece4c3;box-shadow:0 0 0 2px #26443a;font-size:9px}.tab.on{background:#26443a;color:#f6efd2}.prow.lead{background:#f3ecc9}.prow.dim{opacity:.45}.prow.col{display:grid;gap:2px}.chip.lead{background:#e9d86b;color:#26443a}.swap{background:#26503c;padding:2px 6px;font-size:8px}.owner{font-size:7px;color:#6c8a7c;display:block;margin-top:3px}.thumb.icon{width:40px;height:40px}.coins{padding:6px 8px;font-size:16px}.walletOn{display:grid;gap:8px}.dot{width:10px;height:10px;background:#4da96c;box-shadow:0 0 0 2px #26443a;flex:none}
@@ -302,8 +287,7 @@ header{position:absolute;top:16px;left:16px;right:16px;display:flex;justify-cont
 .naming{padding:10px 12px;margin:0 6px;display:grid;gap:10px}.naming input{font:inherit;font-size:24px;color:#26443a;background:#ece4c3;border:0;box-shadow:0 0 0 2px #26443a;padding:6px 10px;outline:none;width:100%}
 .tapCard{position:absolute;inset:0;z-index:20;display:grid;place-items:center;border:0;padding:0;font:inherit;color:#f3f3df;background:#081c1ad9;cursor:pointer;pointer-events:auto;animation:reveal .35s}.tapBox{text-align:center;display:grid;gap:14px;padding:22px 28px;background:#1b3a2e;box-shadow:0 0 0 2px #0b1a15,0 0 0 4px #9ccf6e,0 0 0 6px #0b1a15}.tapBox .t{font-size:12px;color:#c4ec79}.tapBox .l{font-size:26px;line-height:1.1}.tapBox .tap{font-size:9px;color:#d7e6cf;animation:blink 1s steps(1) infinite}.useOn{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px}.talk.fight{background:radial-gradient(circle at 40% 30%,#ffffff40,transparent 60%),#b5522a}
 .talk.near{background:radial-gradient(circle at 40% 30%,#ffffff40,transparent 60%),#5a9a3a}.talk.pond{background:radial-gradient(circle at 40% 30%,#ffffff40,transparent 60%),#2f6f9e}
-.controls{position:absolute;left:16px;right:16px;bottom:24px;display:flex;justify-content:space-between;align-items:flex-end;gap:12px}
-.dpad{position:relative;width:120px;height:120px;filter:drop-shadow(0 3px 0 #0b1a15)}.dpad::before{content:'';position:absolute;left:-4px;top:-4px;width:128px;height:128px;background:#2b1a10;clip-path:polygon(40px 0,88px 0,88px 40px,128px 40px,128px 88px,88px 88px,88px 128px,40px 128px,40px 88px,0 88px,0 40px,40px 40px)}.dpad::after{content:'';position:absolute;left:-2px;top:-2px;width:124px;height:124px;background:linear-gradient(#c9c9c0,#8f8f85);clip-path:polygon(40px 0,84px 0,84px 40px,124px 40px,124px 84px,84px 84px,84px 124px,40px 124px,40px 84px,0 84px,0 40px,40px 40px);z-index:0}.dpad i.v,.dpad i.h{position:absolute;background:#3e3e3a;z-index:1}.dpad i.v{left:40px;top:0;width:40px;height:120px}.dpad i.h{left:0;top:40px;width:120px;height:40px}.dpad button{position:absolute;z-index:2;font-family:'Silkscreen',monospace;font-size:11px;color:#f6efd2;text-shadow:0 1px 0 #2b1a10;background:linear-gradient(#a8743c,#8a5a2a);box-shadow:inset 0 2px 0 #d9a86a,inset 0 -3px 0 #5a3a1a;display:grid;place-items:center}.dpad button:active{translate:0;background:#7a4e22;box-shadow:inset 0 3px 0 #5a3a1a}.dpad .up{left:42px;top:2px;width:36px;height:38px;border-radius:4px 4px 0 0}.dpad .down{left:42px;top:80px;width:36px;height:38px;border-radius:0 0 4px 4px}.dpad .left{left:2px;top:42px;width:38px;height:36px;border-radius:4px 0 0 4px}.dpad .right{left:80px;top:42px;width:38px;height:36px;border-radius:0 4px 4px 0}.dpad .hub{position:absolute;z-index:2;left:44px;top:44px;width:32px;height:32px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#6a6a64,#3e3e3a);box-shadow:inset 0 2px 0 #2a2a27}.dpad .hub i{display:none}
+.controls{position:absolute;left:16px;right:16px;bottom:24px;z-index:6;display:flex;justify-content:flex-end;align-items:flex-end;gap:12px}
 .side{display:grid;gap:8px;justify-items:end}.hint{font-size:15px;color:#2b1a10;background:#e9dcb4;padding:5px 9px;box-shadow:0 0 0 2px #2b1a10,inset 0 -2px 0 #c9b98a;max-width:200px;text-align:right;line-height:1.15}.talk{width:78px;height:78px;border-radius:50%;font-size:11px;color:#f6efd2;text-shadow:0 1px 0 #2b1a10;background:radial-gradient(circle at 40% 30%,#ffffff40,transparent 60%),#8a5a2a;box-shadow:0 0 0 3px #2b1a10,0 0 0 6px #c9892a,0 0 0 8px #2b1a10,inset 0 4px 0 #ffffff33,inset 0 -5px 0 #00000044,0 3px 0 #0b1a15}.talk:active{translate:0 3px}
 /* battle */
 .battle{position:fixed;inset:0;display:grid;place-items:center;background:#0e2620;background-image:radial-gradient(#153429 1px,transparent 1px);background-size:8px 8px;pointer-events:auto;font-size:15px;animation:reveal .5s}
@@ -354,7 +338,6 @@ header{position:absolute;top:16px;left:16px;right:16px;display:flex;justify-cont
 .field header,.field .party{transform:translateY(var(--dsm-strip-offset,0px))}
 @media(min-width:651px){.field header{padding-right:88px}}
 
-.dpad,.dpad button{touch-action:none;user-select:none;-webkit-user-select:none}
 /* Wallet identifiers must wrap inside their card instead of stretching the bag. */
 .party{min-width:0;max-height:calc(100svh - 286px - var(--dsm-strip-offset,0px));overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-width:thin}
 .walletOn,.walletOn *{min-width:0}

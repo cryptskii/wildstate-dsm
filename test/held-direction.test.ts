@@ -51,3 +51,11 @@ it('steps every displayed frame where frames exist, since phones starve timers',
   vi.advanceTimersByTime(240); expect(control.down).toHaveBeenCalledTimes(count);
  } finally { vi.unstubAllGlobals(); }
 });
+it('holds a direction through repeated set() and stops on set(null)', () => {
+ vi.useFakeTimers(); const control = directive(), hold = heldDirection(() => control);
+ hold.set('left'); vi.advanceTimersByTime(100); hold.set('left'); vi.advanceTimersByTime(100);
+ expect(control.up).not.toHaveBeenCalled();
+ hold.set('up'); expect(control.up).toHaveBeenCalledWith('left');
+ hold.set(null); expect(control.up).toHaveBeenLastCalledWith('up');
+ const count = control.down.mock.calls.length; vi.advanceTimersByTime(200); expect(control.down).toHaveBeenCalledTimes(count);
+});

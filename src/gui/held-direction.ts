@@ -55,6 +55,11 @@ export function heldDirection(controls: () => MovementControls | null | undefine
       sample();
       cancel = everyFrame(sample);
     },
+    /** Hold `direction`, or stop for null; holding the same direction again changes nothing. */
+    set(direction: string | null) {
+      if (direction === null) { stop(); return; }
+      if (held?.direction !== direction) this.start(direction);
+    },
     stop,
   };
 }
