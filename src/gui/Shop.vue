@@ -64,7 +64,8 @@ function confirm() {
 }
 const nextLine = () => { line.value = (Math.max(0, line.value) + 1) % LINES.length; };
 
-// The design is a 402 x 874 phone frame; scale it to the screen without stretching it.
+// The design is a 402 x 874 phone frame; scale it to the screen without stretching it. Scaling does
+// not shrink its layout box, so the frame is centred by its own middle rather than laid out.
 const k = ref(1);
 const fit = () => { k.value = Math.min(window.innerWidth / 402, window.innerHeight / 874); };
 onMounted(() => { fit(); window.addEventListener('resize', fit); });
@@ -73,7 +74,7 @@ onUnmounted(() => window.removeEventListener('resize', fit));
 
 <template>
   <div class="shop">
-    <div class="frame" :style="{ transform: `scale(${k})` }">
+    <div class="frame" :style="{ transform: `translate(-50%, -50%) scale(${k})` }">
       <img class="interior" :src="INTERIOR" alt="" />
       <i class="lantern"></i>
 
@@ -113,8 +114,8 @@ onUnmounted(() => window.removeEventListener('resize', fit));
 
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=VT323&display=swap');
-.shop{position:fixed;inset:0;background:#2a1a10;display:grid;justify-items:center;align-items:start;overflow:hidden;pointer-events:auto;font-family:'VT323',ui-monospace,monospace;font-size:18px;color:#f3f3df}
-.frame{position:relative;width:402px;height:874px;transform-origin:top center;overflow:hidden;background:#2a1a10}
+.shop{position:fixed;inset:0;background:#2a1a10;overflow:hidden;pointer-events:auto;font-family:'VT323',ui-monospace,monospace;font-size:18px;color:#f3f3df}
+.frame{position:absolute;left:50%;top:50%;width:402px;height:874px;transform-origin:center;overflow:hidden;background:#2a1a10}
 .px{font-family:'Silkscreen',monospace;letter-spacing:0}
 button{font:inherit;cursor:pointer;border:0}
 button:disabled{cursor:default}
