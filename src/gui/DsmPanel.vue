@@ -36,7 +36,7 @@ const dsmCount = computed(() => (props.entries ?? []).filter((e) => e.lane === '
 function onKey(e: KeyboardEvent) {
   const target = e.target as HTMLElement | null;
   if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
-  if (e.key === 'd' || e.key === 'D') open.value = !open.value;
+  if ((e.key === 'd' || e.key === 'D') && props.wallet) open.value = !open.value;
 }
 onMounted(() => window.addEventListener('keydown', onKey));
 onUnmounted(() => { window.removeEventListener('keydown', onKey); document.documentElement.classList.remove('dsm-strip-open'); });
@@ -47,7 +47,8 @@ const seconds = (ms?: number) => (ms === undefined ? '' : `${(ms / 1000).toFixed
 
 <template>
   <div class="dsm-root">
-    <button v-if="!open" class="toggle" title="Show DSM (D)" aria-controls="dsm-activity" :aria-expanded="open" @click="open = true">
+    <!-- Only once a wallet is connected: before that it would sit over the connect screen. -->
+    <button v-if="!open && wallet" class="toggle" title="Show DSM (D)" aria-controls="dsm-activity" :aria-expanded="open" @click="open = true">
       DSM <small>{{ dsmCount }}</small>
     </button>
     <aside v-if="open" id="dsm-activity" class="panel" aria-label="DSM activity">
