@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { exchange } from './duel';
+import { exchange, type Action } from './duel';
 
 export type Element = 'fire' | 'grass' | 'water' | 'electric' | 'none';
 export type StatusId = 'burn' | 'root' | 'stun' | 'soaked';
@@ -150,6 +150,10 @@ export type Command =
   | { type: 'set-lead'; creatureId: string } | { type: 'rename'; creatureId: string; nick: string }
   /** Choose up to three creatures, in order, for team battles. */
   | { type: 'set-team'; creatureIds: string[] }
+  /** Spend this battle turn on a bag item for one of the fielded creatures; the opponent still acts. */
+  | { type: 'battle-item'; item: UsableItem; creatureId: string }
+  /** A bag item spent in a player-vs-player match (the match applies its effect to its own snapshot). */
+  | { type: 'consume-item'; item: UsableItem }
   /** DSM ledger: a capsule for a payment the game's account accepted (`fact` is that transfer's id). */
   | { type: 'grant-capsule'; fact: string }
   /** Server-timed game item gift; never a DSM coin issuance. */
@@ -215,6 +219,11 @@ export function multiplier(attack: Element, defender: Element): number {
 }
 function fail(code: ErrorCode): never { throw new GameError(code); }
 
+/** A bag item's effect: a poultice heals, a tonic refills every charge. */
+export function applyItem(c: Creature, item: UsableItem) {
+  if (item === 'poultice') c.hp = Math.min(maxHp(c), c.hp + ITEMS.poultice.heal);
+  else c.charges = newCreature(c.id, c.species, undefined, level(c)).charges;
+}
 function clearBattleOnly(c: Creature) { c.guard = false; c.statuses = []; }
 /** Wild creatures spawn at a level with 70% of that level's max HP (the old 28/40). */
 function wildAt(id: string, species: keyof typeof SPECIES, lvl: number): Creature { const c = newCreature(id, species, undefined, lvl); c.hp = Math.round(maxHp(c) * 0.7); return c; }
@@ -290,8 +299,7 @@ export function transition(parent: GameState, expected: number, commandId: strin
       if (!c) fail('unknown-creature');
       if (!(command.item in ITEMS) || s.inventory[command.item] === 0) fail('no-item');
       s.inventory[command.item] -= 1;
-      if (command.item === 'poultice') c!.hp = Math.min(maxHp(c!), c!.hp + ITEMS.poultice.heal);
-      else c!.charges = newCreature(c!.id, c!.species, undefined, level(c!)).charges;
+      applyItem(c!, command.item);
       break;
     }
     case 'set-team': {
@@ -309,12 +317,29 @@ export function transition(parent: GameState, expected: number, commandId: strin
       if (!c) fail('unknown-creature');
       c.nick = cleanNick(command.nick); break;
     }
+    case 'consume-item': {
+      if (!(command.item in ITEMS) || s.inventory[command.item] === 0) fail('no-item');
+      s.inventory[command.item] -= 1; break;
+    }
+    case 'battle-item':
     case 'move': {
       if (!active) fail('no-battle');
       if (combatant.hp === 0) fail('fainted');
-      const own = SPECIES[combatant.species].moves.find(m => m.id === command.move);
-      if (!own) fail('invalid-command');
-      if (own.max && (combatant.charges[own.id] ?? 0) === 0) fail('no-charges');
+      let own: Action;
+      if (command.type === 'battle-item') {
+        // The item goes to a fielded creature still standing; the creature in front then does nothing else this turn.
+        const target = battle!.roster.includes(command.creatureId) ? s.creatures.find(c => c.id === command.creatureId) : undefined;
+        if (!target || target.hp === 0) fail('unknown-creature');
+        if (!(command.item in ITEMS) || s.inventory[command.item] === 0) fail('no-item');
+        s.inventory[command.item] -= 1;
+        applyItem(target!, command.item);
+        own = { item: command.item };
+      } else {
+        const move = SPECIES[combatant.species].moves.find(m => m.id === command.move);
+        if (!move) fail('invalid-command');
+        if (move.max && (combatant.charges[move.id] ?? 0) === 0) fail('no-charges');
+        own = move;
+      }
       const wild = battle!.wild;
       battle!.events = [];
       // Opponent action: a wild creature always uses its signature move (index 1), weakened for

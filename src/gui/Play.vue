@@ -3,7 +3,7 @@ import { computed, inject, ref, watch, onUnmounted, onMounted } from 'vue';
 import { Direction } from '@rpgjs/common';
 import { heldDirection, type MovementControls } from './held-direction';
 import Joystick from './Joystick.vue';
-import { SPECIES, TRAINERS, TEAM_SIZE, KO_TO_WIN, NICK_MAX, XP_PER_LEVEL, LEVEL_CAP, multiplier, displayName, level, maxHp, maxCharges, damageBonus, type GameState, type Element, type MoveFx } from '../domain/game';
+import { SPECIES, TRAINERS, ITEMS as ITEM_EFFECTS, TEAM_SIZE, KO_TO_WIN, NICK_MAX, XP_PER_LEVEL, LEVEL_CAP, multiplier, displayName, level, maxHp, maxCharges, damageBonus, type GameState, type Element, type MoveFx } from '../domain/game';
 const xpLabel = (c: { xp: number }) => level(c) >= LEVEL_CAP ? 'MAX' : `${c.xp % XP_PER_LEVEL}/${XP_PER_LEVEL} XP`;
 const xpPct = (c: { xp: number }) => (level(c) >= LEVEL_CAP ? 1 : (c.xp % XP_PER_LEVEL) / XP_PER_LEVEL) * 100 + '%';
 const growth = computed(() => { const g = props.state.battle?.growth; return g && g.to > g.from ? g : null; });
@@ -133,6 +133,15 @@ const teamView = computed(() => {
 function startRename(c: { id: string; nick?: string | null }) { renaming.value = c.id; newNick.value = c.nick ?? ''; }
 function confirmRename(creatureId: string) { field('rename', { creatureId, nick: newNick.value.trim().slice(0, NICK_MAX) }); renaming.value = null; }
 const capture = () => action('capture');
+/** Spending a turn on a bag item: pick the item, then which fielded creature gets it. */
+const itemMenu = ref<'poultice' | 'tonic' | null>(null), itemsOpen = ref(false);
+const ITEM_NAMES = { poultice: 'Herb Poultice', tonic: 'Charge Tonic' } as const;
+const fielded = computed(() => {
+  const b = view.value.battle;
+  const ids = b?.roster.length ? b.roster : b ? [b.creatureId] : [];
+  return ids.map(id => view.value.creatures.find(c => c.id === id)!).filter(c => c && c.hp > 0);
+});
+function useBattleItem(item: 'poultice' | 'tonic', creatureId: string) { itemsOpen.value = false; itemMenu.value = null; action(`item:${item}:${creatureId}`); }
 function confirmName() {
   const nickname = nick.value.trim().slice(0, NICK_MAX);
   if (naming.value && nickname) interact('creature-battle', 'battle', { action: 'rename', creatureId: naming.value, nick: nickname, revision: props.state.revision });
@@ -149,9 +158,23 @@ watch(() => [props.state.revision, props.error], async () => {
   busy.value = true;
   const next: GameState = JSON.parse(JSON.stringify(props.state));
   const b = next.battle!, ownName = displayName(own.value), wildName = wild.value ? displayName(wild.value) : wildSp.value.name;
-  if (props.lastAction && b.log.length && SPECIES[own.value.species].moves.some(m => m.id === props.lastAction)) {
+  if (props.lastAction && b.log.length && (props.lastAction.startsWith('item:') || SPECIES[own.value.species].moves.some(m => m.id === props.lastAction))) {
     const mine = b.log.find(e => e.actor === 'own'), theirs = b.log.find(e => e.actor === 'wild');
+    /** A turn spent on an item: show it, and take the healed or recharged creature from the new state. */
+    const itemTurn = async (entry: NonNullable<typeof b.log[number]>, mine: boolean) => {
+      const item = entry.move.slice('item:'.length) as 'poultice' | 'tonic';
+      const target = mine ? (props.lastAction ?? '').split(':').slice(2).join(':') : '';
+      const who = mine ? next.creatures.find(c => c.id === target) : undefined;
+      message.value = mine ? `You used ${ITEM_NAMES[item]} on ${who ? displayName(who) : ownName}.` : `${foeTrainer.value} used ${ITEM_NAMES[item]}.`;
+      await set('heal', { el: 'none', dir: mine ? 'own' : 'wild' }, 700);
+      if (mine && who && who.id === own.value.id) { own.value.hp = who.hp; own.value.charges = { ...who.charges }; }
+      if (!mine && wild.value) { wild.value.hp = b.wild.hp; }
+      if (mine && item === 'poultice') message.value += ` +${ITEM_EFFECTS.poultice.heal} HP.`;
+      if (entry.burn) { await set('', {}, 300); const t = mine ? wild.value! : own.value; t.hp = Math.max(0, t.hp - entry.burn); message.value = `${mine ? wildName : ownName} takes ${entry.burn} burn damage.`; await set('impact', { el: 'fire', dir: mine ? 'own' : 'wild', dmg: entry.burn, crit: false }, 550); }
+      await set('');
+    };
     const ownTurn = async (mine: NonNullable<typeof b.log[number]>) => {
+      if (mine.move.startsWith('item:')) return itemTurn(mine, true);
       const m = ownSp.value.moves.find(x => x.id === mine.move)!;
       message.value = `${ownName} used ${m.name}!`;
       if (m.max && !mine.skipped) own.value.charges[m.id] = Math.max(0, (own.value.charges[m.id] ?? 0) - 1);
@@ -171,6 +194,7 @@ watch(() => [props.state.revision, props.error], async () => {
     };
     const foeTurn = async (theirs: NonNullable<typeof b.log[number]>) => {
       await wait(350);
+      if (theirs.move.startsWith('item:')) return itemTurn(theirs, false);
       if (theirs.skipped) { message.value = `${wildName} ${wild.value!.statuses.some(x => x.id === 'stun') ? 'is stunned' : 'is rooted'} and cannot move.`; await wait(600); }
       else {
         const wm = wildSp.value.moves.find(x => x.id === theirs.move)!;
@@ -299,8 +323,14 @@ watch(() => [props.state.revision, props.error], async () => {
           <div class="moves"><button v-for="m in moves" :key="m.id" class="move" :disabled="m.disabled" :style="{ background: EL[m.el].bg, borderLeftColor: EL[m.el].color }" @click="action(m.id)">
             <div class="row between"><b>{{ m.name }}</b><span class="chip px dim">{{ EL[m.el].label }}</span></div><small>{{ m.desc }}</small>
             <div class="row between"><span class="pips"><i v-for="(f, i) in m.pips" :key="i" :class="{ on: f }"></i></span><small class="px tiny">{{ m.max ? `${m.left}/${m.max}` : '∞' }}</small></div></button></div>
-          <div class="row gap"><button v-if="!trainer && !pvp" class="cmd grow" :disabled="!canCapture" @click="capture()"><b>◉ Capsule ×{{ view.inventory.capsules }}</b><small>{{ captureHint }}</small></button><button class="cmd grow" :disabled="busy" @click="action('escape')"><b>{{ trainer || pvp ? 'Forfeit' : 'Run' }}</b><small>{{ pvp ? 'Concede the match' : trainer ? 'No bounty' : view.battle?.source === 'pond' ? 'To the pond' : 'To the meadow' }}</small></button></div>
+          <div class="row gap"><button v-if="!trainer && !pvp" class="cmd grow" :disabled="!canCapture" @click="capture()"><b>◉ Capsule ×{{ view.inventory.capsules }}</b><small>{{ captureHint }}</small></button><button class="cmd grow" :disabled="busy || (!view.inventory.poultice && !view.inventory.tonic)" @click="itemsOpen = !itemsOpen"><b>Items</b><small>Uses your turn</small></button><button class="cmd grow" :disabled="busy" @click="action('escape')"><b>{{ trainer || pvp ? 'Forfeit' : 'Run' }}</b><small>{{ pvp ? 'Concede the match' : trainer ? 'No bounty' : view.battle?.source === 'pond' ? 'To the pond' : 'To the meadow' }}</small></button></div>
         </template>
+        <div v-if="itemsOpen && active" class="itemPick win cream">
+          <small class="px lbl">USE AN ITEM · YOUR TURN</small>
+          <div class="row gap"><button v-for="it in (['poultice', 'tonic'] as const)" :key="it" class="cmd" :class="{ sel: itemMenu === it }" :disabled="!view.inventory[it]" @click="itemMenu = it"><b>{{ ITEM_NAMES[it] }}</b><small>×{{ view.inventory[it] }}</small></button></div>
+          <div v-if="itemMenu" class="row gap wrap"><button v-for="c in fielded" :key="c.id" class="cmd" :disabled="busy || (itemMenu === 'poultice' && c.hp >= maxHp(c))" @click="useBattleItem(itemMenu, c.id)"><b>{{ displayName(c) }}</b><small>{{ c.hp }}/{{ maxHp(c) }}</small></button></div>
+          <button class="cmd" @click="itemsOpen = false; itemMenu = null">Cancel</button>
+        </div>
         <div v-if="growth && growthSeen !== view.battle?.id" class="levelup win cream" @click="growthSeen = view.battle?.id ?? ''">
           <div class="row between"><span class="px lbl gold">✦ LEVEL UP</span><b class="name">Lv {{ growth.from }} <span class="gold">▶</span> Lv {{ growth.to }}</b></div>
           <div class="row gap stats"><span><small class="muted">MAX HP</small><b>{{ 40 + 4 * (growth.from - 1) }} → {{ 40 + 4 * (growth.to - 1) }}</b></span><span><small class="muted">DAMAGE</small><b>+{{ growth.from - 1 }} → +{{ growth.to - 1 }}</b></span></div>
@@ -421,4 +451,5 @@ header{position:absolute;top:16px;left:16px;right:16px;display:flex;justify-cont
 }
 .pips.team{display:flex;gap:4px;margin-bottom:3px}.pips.team i{width:9px;height:9px;border-radius:50%;background:#4da96c;box-shadow:0 0 0 2px #26443a;display:block}.pips.team i.down{background:#7a3b1e;opacity:.6}.pips.team i.on{background:#e9d86b}
 .koCount{color:#e9d86b}.teamBtn.on{background:#e9d86b;color:#26443a}
+.itemPick{display:grid;gap:8px;padding:10px 12px;margin:0 6px;color:#26443a}.itemPick .cmd{color:#f3f3df}.itemPick .cmd.sel{background:#3f6e2a}.row.wrap{flex-wrap:wrap}
 </style>

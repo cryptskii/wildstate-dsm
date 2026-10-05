@@ -119,9 +119,11 @@ describe('player-vs-player match', () => {
     const own = team(A, ['embercub', 'mossling', 'tidefin']);
     own[0].hp = 3;
     const m = startMatch('m2', 0, { wallet: A, name: 'kai', team: own }, { wallet: B, name: 'ren', team: team(B, ['voltusk']) }, 0);
-    expect(m.a.team[0].hp).toBeGreaterThan(3);
+    // The team fights as the player prepared it, and the match never writes back.
+    expect(m.a.team[0].hp).toBe(3);
     choose(m, 'a', 'strike', 0); choose(m, 'b', 'strike', 0);
     expect(own[0].hp).toBe(3);
+    expect(own[0].statuses).toEqual([]);
     forfeit(m, 'b');
     expect(m).toMatchObject({ phase: 'done', winner: 'a', reason: 'forfeit' });
     expect(choose(m, 'a', 'strike', 1)).toBe('match-over');
@@ -142,5 +144,20 @@ describe('stakes', () => {
     expect(validStake(MAX_STAKE + 1)).toBe(false);
     expect(validStake(2.5)).toBe(false);
     expect(validStake(-1)).toBe(false);
+  });
+});
+
+describe('items in a match', () => {
+  it('spend the turn and the match\'s item; the opponent still acts', () => {
+    const own = [newCreature(`${A}/c0`, 'embercub', undefined, 5)];
+    own[0].hp = 10;
+    const m = startMatch('mi', 0, { wallet: A, name: 'kai', team: own, items: { poultice: 1 } }, { wallet: B, name: 'ren', team: [newCreature(`${B}/c0`, 'voltusk', undefined, 5)] }, 0);
+    expect(choose(m, 'a', `item:poultice:${A}/c0`, 0)).toBeNull();
+    expect(m.a.items.poultice).toBe(0);
+    choose(m, 'b', 'strike', 0);
+    expect(m.log.map(e => e.move)).toEqual(expect.arrayContaining(['item:poultice', 'strike']));
+    expect(m.a.team[0].hp).toBe(10 + 15 - m.log.find(e => e.side === 'b')!.dmg);
+    expect(choose(m, 'a', `item:poultice:${A}/c0`, 1)).toBe('no-item');
+    expect(choose(m, 'a', `item:tonic:nobody`, 1)).toBe('no-item');
   });
 });

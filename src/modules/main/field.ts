@@ -211,7 +211,10 @@ async function startBattle(player: RpgPlayer, kind: 'encounter' | 'cast' | 'chal
       const current = session(player).read();
       const combatant = current.creatures.find(c => c.id === current.battle?.creatureId) ?? current.creatures[current.lead];
       const isMove = SPECIES[combatant.species].moves.some(m => m.id === action);
+      const [kind, item, ...target] = action.split(':');
       const command: Command | undefined = isMove ? { type: 'move', move: action }
+        // An item spends the turn: `item:<poultice|tonic>:<creature id>`.
+        : kind === 'item' && (item === 'poultice' || item === 'tonic') && target.length ? { type: 'battle-item', item, creatureId: target.join(':') }
         : action === 'capture' ? { type: 'capture', nick } : action === 'escape' ? { type: 'escape' }
         // A creature is named after it is caught, while the battle screen is still open.
         : action === 'rename' && creatureId ? { type: 'rename', creatureId, nick: nick ?? '' } : undefined;

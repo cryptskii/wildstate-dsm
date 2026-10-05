@@ -352,3 +352,32 @@ describe('growth (flat 20 XP per level, cap 10)', () => {
     expect(after.battle!.log[0].dmg).toBe(10);
   });
 });
+
+describe('items in battle cost the turn', () => {
+  const step = (s: GameState, c: Command) => transition(s, s.revision, `command/${s.revision}`, c);
+  it('heals the creature in front, spends the item, and the wild creature still acts', () => {
+    let s = initialState('ivy');
+    s.creatures[0].hp = 20;
+    s = step(s, { type: 'encounter' });
+    const hpBefore = s.creatures[0].hp;
+    const next = step(s, { type: 'battle-item', item: 'poultice', creatureId: 'ivy/starter' });
+    expect(next.inventory.poultice).toBe(0);
+    expect(next.battle!.log.map(e => [e.actor, e.move])).toEqual([['own', 'item:poultice'], ['wild', next.battle!.log[1].move]]);
+    expect(next.battle!.turn).toBe(1);
+    expect(next.creatures[0].hp).toBe(hpBefore + 15 - next.battle!.log[1].dmg - next.battle!.log[1].burn);
+    expect(() => step(next, { type: 'battle-item', item: 'poultice', creatureId: 'ivy/starter' })).toThrow('no-item');
+  });
+  it('can heal a benched teammate in a team battle, but not a fainted or unknown one', () => {
+    let s = initialState('ivy');
+    s.creatures = [newCreature('ivy/starter', 'embercub', undefined, 8), newCreature('ivy/two', 'mossling', undefined, 8), newCreature('ivy/three', 'tidefin', undefined, 8)];
+    s.creatures[1].hp = 10; s.creatures[2].hp = 0; s.inventory.poultice = 3;
+    s = step(s, { type: 'set-team', creatureIds: ['ivy/starter', 'ivy/two', 'ivy/three'] });
+    s.creatures[2].hp = 1; // standing when the battle starts, so it is fielded
+    s = step(s, { type: 'challenge', trainer: 'kade' });
+    const healed = step(s, { type: 'battle-item', item: 'poultice', creatureId: 'ivy/two' });
+    expect(healed.creatures.find(c => c.id === 'ivy/two')!.hp).toBe(25);
+    const down = structuredClone(healed); down.creatures.find(c => c.id === 'ivy/three')!.hp = 0;
+    expect(() => step(down, { type: 'battle-item', item: 'poultice', creatureId: 'ivy/three' })).toThrow('unknown-creature');
+    expect(() => step(healed, { type: 'battle-item', item: 'poultice', creatureId: 'nobody' })).toThrow('unknown-creature');
+  });
+});

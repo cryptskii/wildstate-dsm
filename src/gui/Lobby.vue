@@ -18,11 +18,25 @@ const props = defineProps<{
   liveMatch: { id: string; stake: number; opponent: Brief } | null;
   found?: Brief | null;
   notice: string;
+  team: {
+    picked: string[]; chosen: string[]; poultice: number; tonic: number;
+    creatures: { id: string; name: string; species: string; level: number; hp: number; maxHp: number; charges: { name: string; left: number; max: number }[] }[];
+  };
 }>();
 const interact = inject<(id: string, event: string, data: unknown) => void>('rpgGuiInteraction')!;
 const send = (action: string, data: Record<string, unknown> = {}) => interact('lobby', 'lobby', { action, ...data });
 
-const tab = ref<'play' | 'friends' | 'history'>('play');
+const tab = ref<'team' | 'play' | 'friends' | 'history'>('team');
+const TEAM_SIZE = 3;
+const slot = (id: string) => props.team.chosen.indexOf(id);
+const pickedCreatures = computed(() => props.team.picked.map(id => props.team.creatures.find(c => c.id === id)!).filter(Boolean));
+function toggle(id: string) {
+  const chosen = props.team.chosen.filter(x => props.team.creatures.some(c => c.id === x));
+  const next = chosen.includes(id) ? chosen.filter(x => x !== id) : chosen.length < TEAM_SIZE ? [...chosen, id] : chosen;
+  send('set-team', { creatureIds: next });
+}
+const fullCharges = (c: { charges: { left: number; max: number }[] }) => c.charges.every(x => x.left >= x.max);
+const hpPct = (c: { hp: number; maxHp: number }) => `${(c.hp / c.maxHp) * 100}%`;
 const stake = ref(0);
 const nameDraft = ref('');
 const query = ref('');
@@ -62,14 +76,38 @@ async function copyId() { await navigator.clipboard.writeText(props.me.id); copi
       </form>
 
       <nav class="tabs">
-        <button v-for="t in (['play', 'friends', 'history'] as const)" :key="t" class="px" :class="{ on: tab === t }" @click="tab = t">{{ t === 'play' ? 'MATCHMAKER' : t.toUpperCase() }}<i v-if="t === 'friends' && incoming.length" class="badge">{{ incoming.length }}</i></button>
+        <button v-for="t in (['team', 'play', 'friends', 'history'] as const)" :key="t" class="px" :class="{ on: tab === t }" @click="tab = t">{{ t === 'play' ? 'MATCH' : t.toUpperCase() }}<i v-if="t === 'friends' && incoming.length" class="badge">{{ incoming.length }}</i></button>
       </nav>
 
       <p v-if="notice" class="notice">{{ notice }}</p>
 
       <div v-if="liveMatch" class="card live">You're in a match vs @{{ liveMatch.opponent.name }}.</div>
 
+      <template v-else-if="tab === 'team'">
+        <div class="card">
+          <b>Your team</b>
+          <small>Pick up to three, in order: they fight one at a time, as you leave them. Heal and recharge them before you battle.</small>
+          <small class="bag">Herb Poultice ×{{ team.poultice }} · Charge Tonic ×{{ team.tonic }}</small>
+        </div>
+        <div v-for="c in team.creatures" :key="c.id" class="card mon" :class="{ picked: slot(c.id) >= 0, down: c.hp === 0 }">
+          <div class="monRow">
+            <i class="thumb" :style="{ backgroundImage: `url(/creatures/${c.species}.png)` }"></i>
+            <div class="grow">
+              <b>{{ c.name }} <small>Lv {{ c.level }}</small></b>
+              <div class="hp"><i :style="{ width: hpPct(c) }"></i></div>
+              <small>{{ c.hp === 0 ? 'Fainted · heal before fielding' : `${c.hp}/${c.maxHp} HP` }}<template v-for="m in c.charges" :key="m.name"> · {{ m.name }} {{ m.left }}/{{ m.max }}</template></small>
+            </div>
+          </div>
+          <div class="row">
+            <button class="px pick" :class="{ on: slot(c.id) >= 0 }" :disabled="slot(c.id) < 0 && team.chosen.length >= 3" @click="toggle(c.id)">{{ slot(c.id) >= 0 ? `TEAM ${slot(c.id) + 1}` : 'ADD' }}</button>
+            <button class="px" :disabled="!team.poultice || c.hp >= c.maxHp" @click="send('use-item', { item: 'poultice', creatureId: c.id })">HEAL</button>
+            <button class="px" :disabled="!team.tonic || fullCharges(c)" @click="send('use-item', { item: 'tonic', creatureId: c.id })">CHARGE</button>
+          </div>
+        </div>
+      </template>
+
       <template v-else-if="tab === 'play'">
+        <button class="card strip" @click="tab = 'team'"><small class="px lbl">TEAM</small><span v-for="c in pickedCreatures" :key="c.id" class="mini"><i class="thumb" :style="{ backgroundImage: `url(/creatures/${c.species}.png)` }"></i><small>{{ c.hp }}/{{ c.maxHp }}</small></span><small v-if="!pickedCreatures.length">None standing · heal first</small></button>
         <div class="card">
           <small class="px lbl">STAKE</small>
           <div class="stakes">
@@ -92,6 +130,7 @@ async function copyId() { await navigator.clipboard.writeText(props.me.id); copi
       </template>
 
       <template v-else-if="tab === 'friends'">
+        <button class="card strip" @click="tab = 'team'"><small class="px lbl">TEAM</small><span v-for="c in pickedCreatures" :key="c.id" class="mini"><i class="thumb" :style="{ backgroundImage: `url(/creatures/${c.species}.png)` }"></i><small>{{ c.hp }}/{{ c.maxHp }}</small></span><small v-if="!pickedCreatures.length">None standing · heal first</small></button>
         <div v-for="c in incoming" :key="c.id" class="card challenge">
           <b>@{{ c.from.name }} challenges you</b>
           <small>{{ shortId(c.from.id) }} · rating {{ c.from.rating }} · {{ c.stake === 0 ? 'free match' : `for ${wild(c.stake)}` }}</small>
@@ -140,7 +179,7 @@ button:disabled{opacity:.4;cursor:default}
 .close{padding:6px 10px;font-size:11px}
 .nameForm{display:grid;grid-template-columns:1fr auto;gap:8px;padding:10px;background:#10261fef;box-shadow:0 0 0 2px #0b1a15}.nameForm small{grid-column:1/-1;color:#cfe3cb;font-size:15px}
 input,select{font:inherit;font-size:19px;color:#26443a;background:#f6efd2;border:0;box-shadow:0 0 0 2px #26443a;padding:6px 10px;min-width:0}
-.tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.tabs button{position:relative;padding:9px 4px;font-size:9px;background:#1b3a2e}.tabs button.on{background:#e9d86b;color:#26443a}
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.tabs button{position:relative;padding:9px 4px;font-size:9px;background:#1b3a2e}.tabs button.on{background:#e9d86b;color:#26443a}
 .badge{position:absolute;top:-6px;right:-4px;background:#dc6a4e;color:#fff;font-style:normal;font-size:9px;padding:2px 6px;border-radius:9px}
 .card{display:grid;gap:6px;padding:12px;background:#10261fef;box-shadow:0 0 0 2px #0b1a15,0 0 0 4px #26443a}
 .card small{color:#cfe3cb;font-size:16px}.lbl{font-size:9px;color:#c4ec79}
@@ -154,4 +193,11 @@ input,select{font:inherit;font-size:19px;color:#26443a;background:#f6efd2;border
 .live{text-align:center}
 .hist.win b{color:#c4ec79}.hist.loss b{color:#f0a58e}
 .fine{margin:4px 0 0;text-align:center;color:#d7e6cf;font-size:14px;text-shadow:0 1px 0 #000}
+.bag{color:#e9d86b!important}
+.mon{gap:8px}.monRow{display:flex;gap:10px;align-items:center}.grow{flex:1;min-width:0;display:grid;gap:3px}.grow b small{color:#b9cdb6;font-size:15px}
+.thumb{width:48px;height:48px;flex:none;background:center/contain no-repeat;image-rendering:pixelated;display:block}
+.hp{height:8px;background:#3b3f2e;box-shadow:0 0 0 2px #26443a}.hp i{display:block;height:100%;background:#4da96c}
+.mon.down .hp i{background:#7a3b1e}.mon.picked{box-shadow:0 0 0 2px #0b1a15,0 0 0 4px #e9d86b}
+.mon .row button{padding:7px 8px;font-size:9px;flex:1}.pick.on{background:#e9d86b;color:#26443a}
+.strip{display:flex;align-items:center;gap:8px;text-align:left;font:inherit;color:#f6efd2;background:#10261fef}.mini{display:grid;justify-items:center}.mini .thumb{width:36px;height:36px}.mini small{font-size:13px}
 </style>
