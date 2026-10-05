@@ -14,6 +14,8 @@
  * anchors are its coin and its creatures, its players' game profiles). It is
  * never evidence of ownership: holdings come from proofs the account verifies.
  */
+import type { Directory } from '../../domain/username';
+import type { Match } from '../../domain/match';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { SPECIES, type Creature, type GameState } from '../../domain/game';
@@ -58,6 +60,12 @@ export interface EconomyRecord {
   resume: Record<string, Login>;
   /** Wallets the starting coin was paid to. */
   welcomed: string[];
+  /** Lobby profiles (username, rating, history), keyed by the wallet's DSM identity. Game data. */
+  players: Directory['players'];
+  /** Username index into `players`: a human-friendly label bound to an identity. */
+  usernames: Directory['usernames'];
+  /** Player-vs-player matches by id: run by the game server (Web2), kept across restarts. */
+  matches: Record<string, Match>;
 }
 
 /** The fee a token's creation burns, in ERA base units (`TOKEN_CREATION_FEE_ERA`). */
@@ -76,7 +84,7 @@ export class Economy {
   constructor(readonly host: DsmHost, readonly path: string, account: string) {
     this.record = existsSync(path)
       ? (JSON.parse(readFileSync(path, 'utf8')) as EconomyRecord)
-      : { account, wild: null, vault: null, creatures: {}, nextSerial: 1, profiles: {}, stats: {}, inFlight: {}, resume: {}, welcomed: [] };
+      : { account, wild: null, vault: null, creatures: {}, nextSerial: 1, profiles: {}, stats: {}, inFlight: {}, resume: {}, welcomed: [], players: {}, usernames: {}, matches: {} };
     this.record.inFlight ??= {};
     this.record.resume ??= {};
     // Logins kept before they named their offer named only a session.
@@ -84,6 +92,9 @@ export class Economy {
       if (typeof login === 'string') this.record.resume[token] = { offer: '', session: login };
     }
     this.record.welcomed ??= [];
+    this.record.players ??= {};
+    this.record.usernames ??= {};
+    this.record.matches ??= {};
     if (this.record.account !== account) {
       throw new Error(`${path} is the record of account ${this.record.account}, not of ${account}`);
     }
