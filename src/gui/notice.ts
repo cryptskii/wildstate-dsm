@@ -1,4 +1,5 @@
 import type { Readiness } from '../gameServer';
+import { logo } from './logo';
 
 const RELEASES = 'https://github.com/cryptskii/wildstate-dsm/releases/latest';
 /** The Android app serves its bundled client from WebViewAssetLoader's origin. */
@@ -26,6 +27,8 @@ export function showNotice(state: Exclude<Readiness, 'ok'>): void {
   button.textContent = label;
   if (typeof action === 'string') (button as HTMLAnchorElement).href = action;
   else button.addEventListener('click', action);
-  card.append(heading, text, button);
+  const mark = logo('min(72vw, 420px)');
+  mark.style.marginBottom = '12px';
+  card.append(mark, heading, text, button);
   document.body.append(card);
 }

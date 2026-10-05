@@ -15,7 +15,7 @@ Bump `PROTOCOL` whenever a server change would break clients already installed. 
 
 ## Local preview
 
-Use JDK 17 or 21 and Android SDK 35. Set ANDROID_HOME, or create ignored android/local.properties with sdk.dir. `npm run android:debug` builds the web client and packages it; name the game server it connects to in VITE_GAME_HOST. Against the development server on this machine (`npm run dev`), use its LAN address with http://, for example `VITE_GAME_HOST=http://192.168.4.46:5173 npm run android:debug`; only debug builds may use plain http. The build refuses a client that names no game server. The preview installs as Wildstate Preview, with a separate app ID so it will not conflict with public releases. A debug APK is not the public release.
+Use JDK 17 or 21 and Android SDK 35. Set ANDROID_HOME, or create ignored android/local.properties with sdk.dir. `npm run android:debug` builds the web client and packages it; name the game server it connects to in VITE_GAME_HOST. Against the development server on this machine (`npm run dev`), use its LAN address with http://, for example `VITE_GAME_HOST=http://192.168.4.46:5173 npm run android:debug`; only debug builds may use plain http. The build refuses a client that names no game server. The preview is named Wildstate on the home screen but has a separate app ID (…wildstate.preview), so it does not conflict with public releases. A debug APK is not the public release.
 
 ## Public APK for GitHub
 
