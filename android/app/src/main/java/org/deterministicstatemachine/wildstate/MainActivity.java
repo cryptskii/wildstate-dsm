@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
@@ -17,7 +18,11 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import androidx.webkit.WebViewAssetLoader;
 
 /**
@@ -27,7 +32,11 @@ import androidx.webkit.WebViewAssetLoader;
  */
 public final class MainActivity extends Activity {
     private static final Uri GAME = Uri.parse("https://" + WebViewAssetLoader.DEFAULT_DOMAIN + "/index.html");
+    /** What a player owns lives in this wallet: without it on the phone there is no game. */
+    private static final String WALLET = "com.dsm.wallet";
     private WebView game;
+    private View walletNeeded;
+    private Bundle restored;
 
     @Override public void onCreate(Bundle savedState) {
         super.onCreate(savedState);
@@ -44,6 +53,8 @@ public final class MainActivity extends Activity {
         CookieManager.getInstance().setAcceptThirdPartyCookies(game, false);
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
         root.addView(game, new FrameLayout.LayoutParams(-1,-1));
+        walletNeeded = walletNeededScreen();
+        root.addView(walletNeeded, new FrameLayout.LayoutParams(-1,-1));
         setContentView(root);
         if (Build.VERSION.SDK_INT >= 30) {
             root.setOnApplyWindowInsetsListener((view, insets) -> {
@@ -77,7 +88,57 @@ public final class MainActivity extends Activity {
                 if (sameOrigin(Uri.parse(url))) hideSystemBars();
             }
         });
-        if (savedState == null || game.restoreState(savedState) == null) game.loadUrl(GAME.toString());
+        restored = savedState;
+        requireWallet();
+    }
+    private boolean walletInstalled() {
+        try { getPackageManager().getPackageInfo(WALLET, 0); return true; }
+        catch (PackageManager.NameNotFoundException missing) { return false; }
+    }
+    /** The game loads only while the DSM wallet is installed; removing it closes the game. */
+    private void requireWallet() {
+        boolean present = walletInstalled();
+        walletNeeded.setVisibility(present ? View.GONE : View.VISIBLE);
+        if (!present) {
+            game.setVisibility(View.GONE);
+            game.loadUrl("about:blank");
+            return;
+        }
+        game.setVisibility(View.VISIBLE);
+        String shown = game.getUrl();
+        if (shown != null && sameOrigin(Uri.parse(shown))) return;
+        if (restored == null || game.restoreState(restored) == null) game.loadUrl(GAME.toString());
+        restored = null;
+    }
+    private View walletNeededScreen() {
+        LinearLayout screen = new LinearLayout(this);
+        screen.setOrientation(LinearLayout.VERTICAL);
+        screen.setGravity(android.view.Gravity.CENTER);
+        screen.setPadding(48, 48, 48, 48);
+        screen.setBackgroundColor(Color.rgb(16,37,27));
+        ImageView logo = new ImageView(this);
+        logo.setImageResource(R.drawable.wildstate_logo);
+        logo.setAdjustViewBounds(true);
+        screen.addView(logo, new LinearLayout.LayoutParams(-1, -2));
+        TextView title = new TextView(this);
+        title.setText("Wildstate needs the DSM wallet");
+        title.setTextColor(Color.rgb(246,239,210));
+        title.setTextSize(22);
+        title.setGravity(android.view.Gravity.CENTER);
+        title.setPadding(0, 48, 0, 16);
+        screen.addView(title);
+        TextView detail = new TextView(this);
+        detail.setText("Your creatures and WILD live in your DSM wallet. Install it on this phone, then come back.");
+        detail.setTextColor(Color.rgb(207,227,203));
+        detail.setTextSize(16);
+        detail.setGravity(android.view.Gravity.CENTER);
+        detail.setPadding(0, 0, 0, 32);
+        screen.addView(detail);
+        Button retry = new Button(this);
+        retry.setText("I've installed it");
+        retry.setOnClickListener(v -> requireWallet());
+        screen.addView(retry);
+        return screen;
     }
     private static boolean sameOrigin(Uri url) {
         return GAME.getScheme().equals(url.getScheme()) && GAME.getHost().equalsIgnoreCase(url.getHost()) && url.getPort() < 0;
@@ -90,7 +151,7 @@ public final class MainActivity extends Activity {
     }
     @Override public void onWindowFocusChanged(boolean focus) { super.onWindowFocusChanged(focus); if (focus) hideSystemBars(); }
     @Override protected void onPause() { game.onPause(); CookieManager.getInstance().flush(); super.onPause(); }
-    @Override protected void onResume() { super.onResume(); if (game != null) game.onResume(); }
+    @Override protected void onResume() { super.onResume(); if (game != null) { game.onResume(); requireWallet(); } }
     @Override protected void onSaveInstanceState(Bundle state) { game.saveState(state); super.onSaveInstanceState(state); }
     @Override public void onBackPressed() { new AlertDialog.Builder(this).setTitle("Leave Wildstate?").setMessage("Your wallet holdings and saved progress are kept.").setNegativeButton("Keep playing",null).setPositiveButton("Leave",(dialog,which)->finish()).show(); }
     @Override protected void onDestroy() { game.stopLoading(); ((android.view.ViewGroup)game.getParent()).removeView(game); game.destroy(); super.onDestroy(); }
