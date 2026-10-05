@@ -250,7 +250,14 @@ function openMatch(player: RpgPlayer, m: Match, side: Side) {
     const { matches, save } = await lobbyRecord();
     const live = matches[m.id];
     if (!live) return;
-    if (action === 'continue') { if (live.phase !== 'battle') gui.close(); return; }
+    // After a match, players go back to the lobby for the next one, not out to the map.
+    if (action === 'continue') {
+      if (live.phase === 'battle') return;
+      gui.close();
+      setFighting(player, false);
+      await openLobby(player);
+      return;
+    }
     if (action === 'escape') forfeit(live, side);
     else {
       const error = choose(live, side, action, Date.now());
