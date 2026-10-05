@@ -116,7 +116,6 @@ interface Seat {
   session: Bytes | null;
   wallet: string | null;
   offerDigest: string | null;
-  queue: Promise<void>;
   coins: bigint | null;
   era: bigint | null;
   provenAt: bigint | null;
@@ -132,7 +131,7 @@ function seatOf(player: RpgPlayer): Seat {
   if (!seat) {
     seat = {
       player, feed: [...setupLines], session: null, wallet: null, offerDigest: null,
-      queue: Promise.resolve(), coins: null, era: null, provenAt: null, lastWalk: 0, resumeToken: null,
+      coins: null, era: null, provenAt: null, lastWalk: 0, resumeToken: null,
     };
     seats.set(player.id, seat);
   }
@@ -453,9 +452,15 @@ export async function claimScarecrowGift(player: RpgPlayer): Promise<number> {
   return 0;
 }
 
+/**
+ * DSM work runs one task at a time per wallet (not per connection): two pages of one wallet must
+ * never send over the same relationship at once.
+ */
+const walletQueues = new Map<string, Promise<void>>();
 function enqueue(player: RpgPlayer, title: string, task: () => Promise<void>): void {
   const seat = seatOf(player);
-  seat.queue = seat.queue.then(async () => {
+  const key = seat.wallet ?? `seat/${player.id}`;
+  const run = (walletQueues.get(key) ?? Promise.resolve()).then(async () => {
     const started = Date.now();
     try {
       await task();
@@ -464,6 +469,23 @@ function enqueue(player: RpgPlayer, title: string, task: () => Promise<void>): v
       pushEntries(seat, [entry('web2', `${title}: not done`, e instanceof Error ? e.message : String(e), 'fail', Date.now() - started)]);
     }
   });
+  walletQueues.set(key, run);
+}
+
+// --------------------------------- lobby ---------------------------------
+
+/** The connected wallet's DSM identity (Base32), or null before it connects. */
+export function walletOf(player: RpgPlayer): string | null {
+  return seats.get(player.id)?.wallet ?? null;
+}
+/** The connected player of a wallet, if one is online. */
+export function playerOfWallet(wallet: string): RpgPlayer | null {
+  return allSeats().find((s) => s.wallet === wallet && s.session !== null)?.player ?? null;
+}
+/** The lobby's records, kept in the game's own record (Web2 game data, never DSM evidence). */
+export async function lobbyRecord() {
+  const w = await world();
+  return { dir: { players: w.economy.record.players, usernames: w.economy.record.usernames }, matches: w.economy.record.matches, save: () => w.economy.save() };
 }
 
 let hudData: (player: RpgPlayer) => Record<string, unknown> = () => ({});

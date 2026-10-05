@@ -9,7 +9,9 @@ const xpPct = (c: { xp: number }) => (level(c) >= LEVEL_CAP ? 1 : (c.xp % XP_PER
 const growth = computed(() => { const g = props.state.battle?.growth; return g && g.to > g.from ? g : null; });
 const growthSeen = ref('');
 import { TRAINER_REWARD, VICTORY_REWARD } from '../integrations/dsm/terms';
-const props = defineProps<{ state: GameState; mode: string; lastAction?: string; error?: string; notice?: string; nearPond?: boolean; nearNpc?: string; atShop?: boolean; door?: boolean; encounter?: { title: string; line: string } | null; walletCoins?: number | null; trainerBeaten?: boolean }>();
+const props = defineProps<{ state: GameState; mode: string; lastAction?: string; error?: string; notice?: string; nearPond?: boolean; nearNpc?: string; atShop?: boolean; door?: boolean; encounter?: { title: string; line: string } | null; walletCoins?: number | null; trainerBeaten?: boolean;
+  /** Player-vs-player: the opponent, the stake, this turn's deadline, and whether we wait on them. */
+  pvp?: { opponent: string; stake: number; deadline: number; waiting: boolean; reason: string | null } }>();
 const useItem = ref<'poultice' | 'tonic' | null>(null);
 const wallet = computed(() => props.walletCoins ?? props.state.coins);
 const usable = (id: string): id is 'poultice' | 'tonic' => id === 'poultice' || id === 'tonic';
@@ -48,11 +50,21 @@ async function playAttack(f: MoveFx | undefined, el: Element, dir: 'own' | 'wild
 const flip = (sp: string, side: 'own' | 'wild') => (ART[sp]?.faces ?? 'right') === (side === 'own' ? 'right' : 'left') ? 'none' : 'scaleX(-1)';
 
 const view = ref<GameState>(JSON.parse(JSON.stringify(props.state)));
-const busy = ref(props.mode === 'battle'), message = ref(trainer.value && props.state.battle ? `${trainer.value.name} sends out ${displayName(props.state.battle.wild)}!` : 'A wild creature appeared!'), party = ref(false), tab = ref<'creatures' | 'items' | 'wallet'>('creatures');
+const inBattle = () => props.mode === 'battle' || props.mode === 'pvp';
+const busy = ref(inBattle()), message = ref(props.pvp && props.state.battle ? `@${props.pvp.opponent} sends out ${displayName(props.state.battle.wild)}!` : trainer.value && props.state.battle ? `${trainer.value.name} sends out ${displayName(props.state.battle.wild)}!` : 'A wild creature appeared!'), party = ref(false), tab = ref<'creatures' | 'items' | 'wallet'>('creatures');
 /** The creature just caught, waiting for the player to name it (or not). */
 const naming = ref<string | null>(null), nick = ref('');
 const renaming = ref<string | null>(null), newNick = ref('');
 const fx = ref<{ kind: string; el: Element; dir: 'own' | 'wild'; dmg?: number; crit?: boolean; melee?: boolean; fxKind?: string }>({ kind: '', el: 'none', dir: 'own' });
+/** Whose creature the other one is, for messages. */
+const foeOwner = computed(() => props.pvp ? `@${props.pvp.opponent}’s` : trainer.value ? `${trainer.value.name}’s` : 'Wild');
+const foeTrainer = computed(() => props.pvp ? `@${props.pvp.opponent}` : trainer.value?.name ?? 'The trainer');
+/** Seconds left to choose this match turn. */
+const clock = ref(Date.now());
+let clockTimer: ReturnType<typeof setInterval> | undefined;
+onMounted(() => { clockTimer = setInterval(() => { clock.value = Date.now(); }, 500); });
+onUnmounted(() => clearInterval(clockTimer));
+const secondsLeft = computed(() => props.pvp ? Math.max(0, Math.ceil((props.pvp.deadline - clock.value) / 1000)) : 0);
 const speaker = computed(() => props.state.battle?.trainer && fx.value.dir === 'wild' ? props.state.battle.trainer : 'player');
 const own = computed(() => view.value.creatures.find(c => c.id === view.value.battle?.creatureId) ?? view.value.creatures[0]);
 const wild = computed(() => view.value.battle?.wild);
@@ -72,13 +84,15 @@ const statuses = (c: { guard: boolean; statuses: { id: string; turns: number }[]
 
 const wait = (ms: number) => new Promise(r => setTimeout(r, ms));
 let pending: ReturnType<typeof setTimeout> | undefined, entrance: ReturnType<typeof setTimeout> | undefined;
-onMounted(() => { if (props.mode === 'battle') entrance = setTimeout(() => { busy.value = false; }, 650); });
+onMounted(() => { if (inBattle()) entrance = setTimeout(() => { busy.value = false; }, 650); });
 onUnmounted(() => { clearTimeout(pending); clearTimeout(entrance); });
 function action(action: string) {
   if (busy.value) return;
   if (action === 'continue') { interact('creature-battle', 'battle', { action, revision: props.state.revision }); return; }
   busy.value = true;
   interact('creature-battle', 'battle', { action, revision: props.state.revision });
+  // A match turn resolves when the opponent has chosen too, however long that takes.
+  if (props.pvp) { message.value = `Waiting for @${props.pvp.opponent}…`; return; }
   pending = setTimeout(() => { busy.value = false; message.value = 'No response yet. Try again.'; }, 5000);
 }
 type ClientEngine = { activeKeyboardControls: () => MovementControls | null; getCurrentPlayer?: () => unknown; sceneMap?: { stopMovement?: (player: unknown) => void } };
@@ -130,35 +144,37 @@ watch(() => [props.state.revision, props.error], async () => {
   // Background DSM work moved the revision; the battle itself did not change, so nothing animates.
   if (props.lastAction === 'sync') { if (!busy.value) view.value = JSON.parse(JSON.stringify(props.state)); return; }
   clearTimeout(pending);
-  if (props.mode !== 'battle') { view.value = JSON.parse(JSON.stringify(props.state)); return; }
+  if (!inBattle()) { view.value = JSON.parse(JSON.stringify(props.state)); return; }
   if (props.error) { message.value = props.error; busy.value = false; return; }
   busy.value = true;
   const next: GameState = JSON.parse(JSON.stringify(props.state));
   const b = next.battle!, ownName = displayName(own.value), wildName = wild.value ? displayName(wild.value) : wildSp.value.name;
   if (props.lastAction && b.log.length && SPECIES[own.value.species].moves.some(m => m.id === props.lastAction)) {
-    const [mine, theirs] = b.log;
-    const m = ownSp.value.moves.find(x => x.id === mine.move)!;
-    message.value = `${ownName} used ${m.name}!`;
-    if (m.max && !mine.skipped) own.value.charges[m.id] = Math.max(0, (own.value.charges[m.id] ?? 0) - 1);
-    if (mine.skipped) { message.value = `${ownName} ${own.value.statuses.some(x => x.id === 'stun') ? 'is stunned' : 'is rooted'} and cannot move.`; await wait(700); own.value.statuses = own.value.statuses.filter(x => x.id !== 'root' && x.id !== 'stun'); }
-    else if (m.guard) { await set(m.fx === 'camo' ? 'camo' : 'guard', { el: 'none', dir: 'own' }, 700); own.value.guard = true; message.value = `${ownName} braces for the next hit.`; }
-    else if (m.heal) { await set('heal', { el: 'none', dir: 'own' }, 700); own.value.hp = Math.min(maxHp(own.value), own.value.hp + m.heal); message.value = `${ownName} recovered ${m.heal} HP.`; }
-    else {
-      await set('windup', { el: m.el, dir: 'own' }, 380);
-      await playAttack(m.fx, m.el, 'own');
-      wild.value!.hp = Math.max(0, wild.value!.hp - mine.dmg);
-      message.value = mine.mult > 1 ? `Super effective! ${mine.dmg} damage.` : mine.mult < 1 ? `Not very effective… ${mine.dmg} damage.` : `${wildName} took ${mine.dmg} damage.`;
-      if (mine.status) { message.value += ` ${wildName} is ${mine.status === 'burn' ? 'burning' : mine.status === 'root' ? 'rooted' : mine.status === 'stun' ? 'stunned' : 'soaked'}.`; wild.value!.statuses = b.wild.statuses; }
-      await set('impact', { dmg: mine.dmg, crit: mine.mult > 1 }, mine.mult > 1 ? 650 : 550);
-    }
-    if (mine.burn) { await set('', {}, 300); wild.value!.hp = Math.max(0, wild.value!.hp - mine.burn); message.value = `${wildName} takes ${mine.burn} burn damage.`; await set('impact', { el: 'fire', dir: 'own', dmg: mine.burn, crit: false }, 550); }
-    await set('');
-    if (theirs && wild.value!.hp > 0) {
+    const mine = b.log.find(e => e.actor === 'own'), theirs = b.log.find(e => e.actor === 'wild');
+    const ownTurn = async (mine: NonNullable<typeof b.log[number]>) => {
+      const m = ownSp.value.moves.find(x => x.id === mine.move)!;
+      message.value = `${ownName} used ${m.name}!`;
+      if (m.max && !mine.skipped) own.value.charges[m.id] = Math.max(0, (own.value.charges[m.id] ?? 0) - 1);
+      if (mine.skipped) { message.value = `${ownName} ${own.value.statuses.some(x => x.id === 'stun') ? 'is stunned' : 'is rooted'} and cannot move.`; await wait(700); own.value.statuses = own.value.statuses.filter(x => x.id !== 'root' && x.id !== 'stun'); }
+      else if (m.guard) { await set(m.fx === 'camo' ? 'camo' : 'guard', { el: 'none', dir: 'own' }, 700); own.value.guard = true; message.value = `${ownName} braces for the next hit.`; }
+      else if (m.heal) { await set('heal', { el: 'none', dir: 'own' }, 700); own.value.hp = Math.min(maxHp(own.value), own.value.hp + m.heal); message.value = `${ownName} recovered ${m.heal} HP.`; }
+      else {
+        await set('windup', { el: m.el, dir: 'own' }, 380);
+        await playAttack(m.fx, m.el, 'own');
+        wild.value!.hp = Math.max(0, wild.value!.hp - mine.dmg);
+        message.value = mine.mult > 1 ? `Super effective! ${mine.dmg} damage.` : mine.mult < 1 ? `Not very effective… ${mine.dmg} damage.` : `${wildName} took ${mine.dmg} damage.`;
+        if (mine.status) { message.value += ` ${wildName} is ${mine.status === 'burn' ? 'burning' : mine.status === 'root' ? 'rooted' : mine.status === 'stun' ? 'stunned' : 'soaked'}.`; wild.value!.statuses = b.wild.statuses; }
+        await set('impact', { dmg: mine.dmg, crit: mine.mult > 1 }, mine.mult > 1 ? 650 : 550);
+      }
+      if (mine.burn) { await set('', {}, 300); wild.value!.hp = Math.max(0, wild.value!.hp - mine.burn); message.value = `${wildName} takes ${mine.burn} burn damage.`; await set('impact', { el: 'fire', dir: 'own', dmg: mine.burn, crit: false }, 550); }
+      await set('');
+    };
+    const foeTurn = async (theirs: NonNullable<typeof b.log[number]>) => {
       await wait(350);
       if (theirs.skipped) { message.value = `${wildName} ${wild.value!.statuses.some(x => x.id === 'stun') ? 'is stunned' : 'is rooted'} and cannot move.`; await wait(600); }
       else {
         const wm = wildSp.value.moves.find(x => x.id === theirs.move)!;
-        message.value = `${trainer.value ? trainer.value.name + '’s' : 'Wild'} ${wildName} used ${wm.name}!`;
+        message.value = `${foeOwner.value} ${wildName} used ${wm.name}!`;
         await set('windup', { el: wm.el, dir: 'wild' }, 380); await playAttack(wm.fx, wm.el, 'wild');
         own.value.hp = Math.max(0, own.value.hp - theirs.dmg); own.value.guard = false;
         message.value = `${ownName} took ${theirs.dmg} damage.${theirs.status ? ` ${ownName} is ${theirs.status === 'burn' ? 'burning' : theirs.status === 'root' ? 'rooted' : theirs.status === 'stun' ? 'stunned' : 'soaked'}.` : ''}`;
@@ -166,7 +182,10 @@ watch(() => [props.state.revision, props.error], async () => {
         await set('impact', { dmg: theirs.dmg, crit: false }, 550);
       }
       if (theirs.burn) { await set('', {}, 300); own.value.hp = Math.max(0, own.value.hp - theirs.burn); message.value = `${ownName} takes ${theirs.burn} burn damage.`; await set('impact', { el: 'fire', dir: 'wild', dmg: theirs.burn, crit: false }, 550); }
-    }
+    };
+    // Turns play in the order the server resolved them: in a match the opponent may act first.
+    if (b.log[0]?.actor === 'wild') { if (theirs) await foeTurn(theirs); if (mine && own.value.hp > 0) { await wait(350); await ownTurn(mine); } }
+    else { if (mine) await ownTurn(mine); if (theirs && wild.value!.hp > 0) await foeTurn(theirs); }
   } else if (props.lastAction === 'capture') {
     message.value = 'Capsule away!'; await set('cap-throw', { dir: 'own' }, 600); await set('cap-open', {}, 650);
     message.value = '…'; await set('cap-shake', {}, 1400); message.value = 'Gotcha!'; await set('cap-catch', {}, 500);
@@ -175,13 +194,18 @@ watch(() => [props.state.revision, props.error], async () => {
   for (const e of next.battle?.events ?? []) {
     const who = e.side === 'own' ? next.creatures.find(c => c.id === e.creature) : (e.creature === next.battle!.wild.id ? next.battle!.wild : undefined);
     const name = who ? displayName(who) : e.side === 'own' ? ownName : wildName;
-    message.value = e.kind === 'faint' ? `${e.side === 'own' ? name : wildName} fainted!` : e.side === 'own' ? `Go, ${name}!` : `${trainer.value?.name ?? 'The trainer'} sends out ${name}!`;
+    message.value = e.kind === 'faint' ? `${e.side === 'own' ? name : wildName} fainted!` : e.side === 'own' ? `Go, ${name}!` : `${foeTrainer.value} sends out ${name}!`;
     await wait(900);
   }
   view.value = next; await set('');
   const outcome = next.battle?.outcome;
   // Named only once it is caught: the capsule is thrown first.
   if (props.lastAction === 'capture' && outcome === 'captured') { naming.value = next.creatures.at(-1)?.id ?? null; nick.value = ''; }
+  if (props.pvp && (outcome === 'victory' || outcome === 'defeat')) {
+    const why = props.pvp.reason === 'forfeit' ? ' by forfeit' : props.pvp.reason === 'timeout' ? ' on time' : '';
+    message.value = outcome === 'victory' ? `You beat @${props.pvp.opponent}${why}!` : `@${props.pvp.opponent} wins${why}.`;
+    busy.value = false; return;
+  }
   message.value = outcome === 'captured' ? `${next.creatures.at(-1)?.nick || wildName} joined your collection! +5 XP · swap leads from the BAG` : outcome === 'victory' ? (trainer.value ? `${wildName} is down! +15 XP · ${TRAINER_REWARD} WILD bounty on its way to your wallet` : `${wildName} fainted. Victory! +10 XP · ${VICTORY_REWARD} WILD on its way to your wallet`)
     : outcome === 'defeat' ? `${ownName} fainted. Mira can help at camp.` : outcome === 'escaped' ? (trainer.value ? 'You forfeited. No bounty.' : 'Back to the meadow.') : 'Choose your next move.';
   busy.value = false;
@@ -191,7 +215,7 @@ watch(() => [props.state.revision, props.error], async () => {
 <template>
   <!-- FIELD HUD (over the engine canvas) -->
   <div v-if="mode === 'field'" class="field">
-    <header class="win dark"><div><!-- Static during play: its animation cost the phone half its frame rate. --><img class="hudLogo" src="/brand/logo.png" alt="Wildstate"/><small>{{ `Meadow camp · wallet ${state.holder.slice(0, 8)}… on DSM` }}</small></div><div class="res"><span title="Capture capsules"><span aria-hidden="true">◉</span> {{ state.inventory.capsules }} <small class="px">Capsules</small></span><span class="gold">✦ {{ wallet }} <small class="px">WILD</small></span><button class="px small" :disabled="state.battle?.outcome === 'active'" @click="field('shop')" title="Bramble’s trading post: buy with WILD from your wallet, or sell a creature">SHOP</button><button class="px small" :disabled="state.battle?.outcome === 'active'" @click="field('market')" title="Swap WILD and ERA through SoFi">MARKET</button><button class="px small" :disabled="state.battle?.outcome === 'active'" @click="party = !party">BAG</button></div></header>
+    <header class="win dark"><div><!-- Static during play: its animation cost the phone half its frame rate. --><img class="hudLogo" src="/brand/logo.png" alt="Wildstate"/><small>{{ `Meadow camp · wallet ${state.holder.slice(0, 8)}… on DSM` }}</small></div><div class="res"><span title="Capture capsules"><span aria-hidden="true">◉</span> {{ state.inventory.capsules }} <small class="px">Capsules</small></span><span class="gold">✦ {{ wallet }} <small class="px">WILD</small></span><button class="px small" :disabled="state.battle?.outcome === 'active'" @click="field('shop')" title="Bramble’s trading post: buy with WILD from your wallet, or sell a creature">SHOP</button><button class="px small" :disabled="state.battle?.outcome === 'active'" @click="field('market')" title="Swap WILD and ERA through SoFi">MARKET</button><button class="px small" :disabled="state.battle?.outcome === 'active'" @click="party = !party">BAG</button><button class="px small arenaBtn" :disabled="state.battle?.outcome === 'active'" @click="field('lobby')" title="Battle other players">ARENA</button></div></header>
     <aside v-if="party" class="win cream party"><div class="row between"><span class="h">{{ tab === 'creatures' ? 'Your creatures' : tab === 'items' ? 'Your bag' : 'Wallet' }}</span><button class="px tiny" @click="party = false">CLOSE</button></div>
       <div class="tabs"><button v-for="t in (['creatures','items','wallet'] as const)" :key="t" class="px tab" :class="{ on: tab === t }" @click="tab = t">{{ t.toUpperCase() }}</button></div>
       <template v-if="tab === 'creatures'">
@@ -243,7 +267,7 @@ watch(() => [props.state.revision, props.error], async () => {
   <!-- BATTLE -->
   <div v-else class="battle">
     <div class="card win dark">
-      <div class="head px"><span>{{ trainer ? `TRAINER BATTLE · ${trainer.name.toUpperCase()}` : 'WILD ENCOUNTER' }}</span><span class="meta"><span>{{ trainer ? trainer.title : view.battle?.source === 'pond' ? 'Pond' : 'Meadow' }}</span><i>·</i><span>Turn {{ (view.battle?.turn || 0) + 1 }}</span><template v-if="teamView"><i>·</i><span class="koCount">KO {{ teamView.ko.foe }}/{{ KO_TO_WIN }}</span></template></span></div>
+      <div class="head px"><span>{{ pvp ? `MATCH · VS @${pvp.opponent.toUpperCase()}` : trainer ? `TRAINER BATTLE · ${trainer.name.toUpperCase()}` : 'WILD ENCOUNTER' }}</span><span class="meta"><span>{{ pvp ? (active ? `${secondsLeft}s` : 'Over') : trainer ? trainer.title : view.battle?.source === 'pond' ? 'Pond' : 'Meadow' }}</span><i>·</i><span>Turn {{ (view.battle?.turn || 0) + 1 }}</span><template v-if="teamView"><i>·</i><span class="koCount">KO {{ teamView.ko.foe }}/{{ KO_TO_WIN }}</span></template></span></div>
       <div class="arena" :class="{ shake: fx.kind === 'impact' }">
         <div class="flash" v-if="fx.kind === 'impact' && fx.crit"></div>
         <img class="sprite wild" :class="{ flinch: fx.kind === 'impact' && fx.dir === 'own', windupR: fx.kind === 'windup' && fx.dir === 'wild', suck: fx.kind === 'cap-open', gone: ['cap-shake','cap-catch'].includes(fx.kind) || view.battle?.outcome === 'victory' || view.battle?.outcome === 'captured', counter: fx.kind === 'counter' }" :style="pose(wild?.species || 'mossling', 'wild')" :src="`creatures/${wild?.species || 'mossling'}.png`" :alt="wildSp.name"/>
@@ -275,7 +299,7 @@ watch(() => [props.state.revision, props.error], async () => {
           <div class="moves"><button v-for="m in moves" :key="m.id" class="move" :disabled="m.disabled" :style="{ background: EL[m.el].bg, borderLeftColor: EL[m.el].color }" @click="action(m.id)">
             <div class="row between"><b>{{ m.name }}</b><span class="chip px dim">{{ EL[m.el].label }}</span></div><small>{{ m.desc }}</small>
             <div class="row between"><span class="pips"><i v-for="(f, i) in m.pips" :key="i" :class="{ on: f }"></i></span><small class="px tiny">{{ m.max ? `${m.left}/${m.max}` : '∞' }}</small></div></button></div>
-          <div class="row gap"><button v-if="!trainer" class="cmd grow" :disabled="!canCapture" @click="capture()"><b>◉ Capsule ×{{ view.inventory.capsules }}</b><small>{{ captureHint }}</small></button><button class="cmd grow" :disabled="busy" @click="action('escape')"><b>{{ trainer ? 'Forfeit' : 'Run' }}</b><small>{{ trainer ? 'No bounty' : view.battle?.source === 'pond' ? 'To the pond' : 'To the meadow' }}</small></button></div>
+          <div class="row gap"><button v-if="!trainer && !pvp" class="cmd grow" :disabled="!canCapture" @click="capture()"><b>◉ Capsule ×{{ view.inventory.capsules }}</b><small>{{ captureHint }}</small></button><button class="cmd grow" :disabled="busy" @click="action('escape')"><b>{{ trainer || pvp ? 'Forfeit' : 'Run' }}</b><small>{{ pvp ? 'Concede the match' : trainer ? 'No bounty' : view.battle?.source === 'pond' ? 'To the pond' : 'To the meadow' }}</small></button></div>
         </template>
         <div v-if="growth && growthSeen !== view.battle?.id" class="levelup win cream" @click="growthSeen = view.battle?.id ?? ''">
           <div class="row between"><span class="px lbl gold">✦ LEVEL UP</span><b class="name">Lv {{ growth.from }} <span class="gold">▶</span> Lv {{ growth.to }}</b></div>

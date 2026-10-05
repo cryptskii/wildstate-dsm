@@ -1,3 +1,4 @@
+import { openLobby } from './lobby';
 import { isCurrentAvatar } from './presence';
 import { npcPosition, pauseNpc } from './patrol';
 import { type RpgPlayer } from '@rpgjs/server';
@@ -8,6 +9,9 @@ import { claimScarecrowGift, onCommitted, openMarket, openShop, useCommit, useHu
 const inside = new WeakSet<RpgPlayer>();
 const proximity = new WeakMap<RpgPlayer, string>();
 const fighting = new WeakSet<RpgPlayer>();
+/** A player in a battle or a match: field actions wait until it ends. */
+export const isFighting = (player: RpgPlayer) => fighting.has(player);
+export function setFighting(player: RpgPlayer, on: boolean) { if (on) fighting.add(player); else fighting.delete(player); }
 /** A card the player taps through (the encounter card, Bramble's door), waiting for its tap. */
 const taps = new WeakMap<RpgPlayer, () => void>();
 /** NPC anchors match server.ts event positions and the camp layout in simplemap.tmx (fieldmap-v10). */
@@ -90,6 +94,7 @@ export function fieldHud(player: RpgPlayer) {
     if (action === 'set-lead' && creatureId) { tryCommit(player, { type: 'set-lead', creatureId }); return; }
     if (action === 'set-team' && Array.isArray(creatureIds)) { tryCommit(player, { type: 'set-team', creatureIds: creatureIds.filter((x): x is string => typeof x === 'string') }); return; }
     if (action === 'rename' && creatureId) { tryCommit(player, { type: 'rename', creatureId, nick: nick ?? '' }); return; }
+    if (action === 'lobby') { await openLobby(player); return; }
     if (action === 'shop' || action === 'enter-shop') {
       hud.update(hudData(player));
       try { await openShop(player); }

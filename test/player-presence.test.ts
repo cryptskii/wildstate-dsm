@@ -3,6 +3,7 @@ const wallet=vi.hoisted(()=>({bind:undefined as undefined|((state:any)=>void)}))
 vi.mock('../src/modules/main/dsm',()=>({connectWallet:vi.fn(async(_p:any,b:any)=>{wallet.bind=b;}),leave:vi.fn(),openPanel:vi.fn()}));
 vi.mock('../src/modules/main/field',()=>({fieldHud:vi.fn(),checkEncounter:vi.fn(),commit:vi.fn()}));
 vi.mock('../src/modules/main/journey',()=>({openJourney:vi.fn(),session:vi.fn()}));
+vi.mock('../src/modules/main/lobby',()=>({leaveLobby:vi.fn(),rejoin:vi.fn(async()=>{})}));
 import { reconcileAvatars } from '../src/modules/main/presence';
 import { player } from '../src/modules/main/player';
 function fixture(){let save='',connected=true;const creatureSave:any=()=>save;creatureSave.set=(v:string)=>{save=v;};return {id:'current',t:()=>'',name:'',through:false,throughEvent:false,_graphicScale:Object.assign(()=>1,{set:vi.fn()}),graphics:Object.assign(()=>['hero'],{set:vi.fn()}),setGraphic:vi.fn(),setHitbox:vi.fn(),getGui:()=>undefined,breakRoutes:vi.fn(),changeMap:vi.fn(async()=>{}),getCurrentMap:()=>({getPlayers:()=>[]}),creatureSave,isConnected:()=>connected,disconnect:()=>{connected=false;}} as any;}

@@ -3,6 +3,7 @@ import { openJourney, session } from './journey';
 import { fieldHud, checkEncounter, commit } from './field';
 import { activateAvatar, isCurrentAvatar, releaseAvatar } from './presence';
 import { connectWallet, leave, openPanel } from './dsm';
+import { leaveLobby, rejoin } from './lobby';
 
 export const player: RpgPlayerHooks = {
   props: { creatureSave: String },
@@ -32,12 +33,13 @@ export const player: RpgPlayerHooks = {
     }
     // The player's wallet first: its account keys the game profile.
     openPanel(player);
-    if (player.creatureSave()) { activateAvatar(player, JSON.parse(player.creatureSave()).holder); fieldHud(player); return; }
+    if (player.creatureSave()) { activateAvatar(player, JSON.parse(player.creatureSave()).holder); fieldHud(player); void rejoin(player); return; }
     connectWallet(player, (state) => {
       if (!player.isConnected()) return;
       player.creatureSave.set(JSON.stringify(state));
       activateAvatar(player, state.holder);
       fieldHud(player);
+      void rejoin(player);
     }).catch((e) => {
       player.gui('dsm-connect').update({ code: '', status: `Connecting failed: ${e instanceof Error ? e.message : String(e)}` });
     });
@@ -48,6 +50,7 @@ export const player: RpgPlayerHooks = {
     if (action === 'escape' && session(player).read().battle?.outcome !== 'active') { await openJourney(player, commit); fieldHud(player); }
   },
   onDisconnected(player) {
+    leaveLobby(player);
     releaseAvatar(player);
     player.breakRoutes(true);
     player.graphics.set([]);

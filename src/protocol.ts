@@ -4,7 +4,7 @@
  * this when a server change would break installed clients, and they ask for an
  * update instead of playing against a server they no longer understand.
  */
-export const PROTOCOL = 1;
+export const PROTOCOL = 2;
 
 /** What a client makes of the protocol the game server reports. */
 export type Compatibility = 'ok' | 'update-client' | 'server-behind';
