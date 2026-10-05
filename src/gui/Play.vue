@@ -479,7 +479,7 @@ header{position:absolute;top:16px;left:16px;right:16px;display:flex;justify-cont
 .arena.forest{background-image:url(/tiles/arena-forest-mobile.png);--padWX:68.7%;--padWY:50.3%;--padOX:31.1%;--padOY:80.7%}
 .arena.water{background-image:url(/tiles/arena-water-mobile.png);--padWX:68.6%;--padWY:51.1%;--padOX:29.9%;--padOY:74.8%}
 .arena.desert{background-image:url(/tiles/arena-desert-mobile.png);--padWX:68.3%;--padWY:49.4%;--padOX:31.2%;--padOY:78%}
-.arena.ring{background-image:url(/tiles/arena-ring-mobile.png);--padWX:68.7%;--padWY:50.6%;--padOX:31.8%;--padOY:79.9%}
+.arena.ring{background-image:url(/tiles/arena-ring-mobile.png);--padWX:68.6%;--padWY:47.4%;--padOX:32.1%;--padOY:79.1%}
 .status{width:43%;min-width:0;padding:5px 8px 6px}.status .row.between{flex-wrap:wrap;gap:0 6px}.status .name{font-size:20px}.status .muted{font-size:14px}.status .chips{margin-top:3px;min-height:0;gap:4px}.status .chip{font-size:8px;padding:2px 4px}.status .hp{margin-top:4px;gap:5px}.status .lbl{font-size:8px}.status .bar{height:8px}.status .hp small{font-size:15px}.wildS{left:6px;top:6px}.ownS{right:6px;bottom:6px}
 .fx{--y0:calc(var(--padOY) - 70px);--y1:calc(var(--padWY) - 66px);--capY:calc(var(--padWY) - 22px)}
 .dmg{left:68%;top:20%;font-size:20px}.dmg.wild{left:16%;top:56%}
