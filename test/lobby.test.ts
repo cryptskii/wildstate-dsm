@@ -57,7 +57,7 @@ describe('rating', () => {
 describe('matchmaker', () => {
   const t = (wallet: string, rating: number, stake: number, since: number) => ({ wallet, rating, stake, since });
   it('pairs only equal stakes and never a wallet with itself', () => {
-    expect(pair([t(A, 1200, 5, 0), t(B, 1200, 10, 0)], 0)).toEqual([]);
+    expect(pair([t(A, 1200, 100, 0), t(B, 1200, 500, 0)], 0)).toEqual([]);
     expect(pair([t(A, 1200, 5, 0), t(A, 1200, 5, 0)], 0)).toEqual([]);
     expect(pair([t(A, 1200, 5, 0), t(B, 1250, 5, 0)], 0)).toHaveLength(1);
   });
@@ -131,5 +131,16 @@ describe('player-vs-player match', () => {
     expect(choose(m, 'a', 'tide-lash', 0)).toBe('unknown-move');
     m.a.team[0].charges.flare = 0;
     expect(choose(m, 'a', 'flare', 0)).toBe('no-charges');
+  });
+});
+
+describe('stakes', () => {
+  it('offers matchmaker tiers from free to 2,000 WILD, and any whole amount up to the cap for friends', async () => {
+    const { STAKE_TIERS, validStake, MAX_STAKE } = await import('../src/domain/matchmaker');
+    expect(STAKE_TIERS).toEqual([0, 10, 100, 500, 1000, 2000]);
+    expect(validStake(1234)).toBe(true);
+    expect(validStake(MAX_STAKE + 1)).toBe(false);
+    expect(validStake(2.5)).toBe(false);
+    expect(validStake(-1)).toBe(false);
   });
 });

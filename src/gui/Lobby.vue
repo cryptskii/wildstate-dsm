@@ -10,7 +10,7 @@ type Brief = { id: string; name: string; rating: number; online: boolean };
 const props = defineProps<{
   now: number;
   me: { id: string; name: string | null; rating: number; wins: number; losses: number; games: number; renameReadyAt: number };
-  stakes: number[]; openStakes: number[];
+  stakes: number[]; maxStake: number; wagersOpen: boolean;
   queued: { stake: number; since: number; window: number } | null;
   incoming: { id: string; from: Brief; stake: number; expiresAt: number }[];
   outgoing: { id: string; to: Brief; stake: number; expiresAt: number }[];
@@ -35,7 +35,11 @@ onUnmounted(() => clearInterval(timer));
 const waited = computed(() => props.queued ? Math.max(0, Math.round((clock.value - props.queued.since) / 1000)) : 0);
 const windowText = computed(() => !props.queued ? '' : Number.isFinite(props.queued.window) ? `±${props.queued.window} rating` : 'anyone at this stake');
 const shortId = (id: string) => `${id.slice(0, 6)}…${id.slice(-4)}`;
-const open = (s: number) => props.openStakes.includes(s);
+const open = (s: number) => s === 0 || props.wagersOpen;
+const wild = (s: number) => (s === 0 ? 'FREE' : `${s.toLocaleString()} WILD`);
+/** A friend challenge names any amount; the tiers are shortcuts. */
+const friendStake = ref(0);
+const friendStakeOk = computed(() => Number.isSafeInteger(friendStake.value) && friendStake.value >= 0 && friendStake.value <= props.maxStake && open(friendStake.value));
 async function copyId() { await navigator.clipboard.writeText(props.me.id); copied.value = true; }
 </script>
 
@@ -69,14 +73,14 @@ async function copyId() { await navigator.clipboard.writeText(props.me.id); copi
         <div class="card">
           <small class="px lbl">STAKE</small>
           <div class="stakes">
-            <button v-for="s in stakes" :key="s" class="px stake" :class="{ on: stake === s }" :disabled="!open(s) || !!queued" @click="stake = s">{{ s === 0 ? 'FREE' : `${s} WILD` }}</button>
+            <button v-for="s in stakes" :key="s" class="px stake" :class="{ on: stake === s }" :disabled="!open(s) || !!queued" @click="stake = s">{{ wild(s) }}</button>
           </div>
           <small class="hint">Wagers lock each stake in your DSM wallet's escrow; the game only referees. They open with the next wallet update.</small>
         </div>
         <div class="card">
           <template v-if="queued">
             <b class="big">Finding an opponent… {{ waited }}s</b>
-            <small>{{ queued.stake === 0 ? 'Free match' : `${queued.stake} WILD` }} · matching {{ windowText }}</small>
+            <small>{{ queued.stake === 0 ? 'Free match' : wild(queued.stake) }} · matching {{ windowText }}</small>
             <button class="px cancel" @click="send('leave-queue')">LEAVE QUEUE</button>
           </template>
           <template v-else>
@@ -90,7 +94,7 @@ async function copyId() { await navigator.clipboard.writeText(props.me.id); copi
       <template v-else-if="tab === 'friends'">
         <div v-for="c in incoming" :key="c.id" class="card challenge">
           <b>@{{ c.from.name }} challenges you</b>
-          <small>{{ shortId(c.from.id) }} · rating {{ c.from.rating }} · {{ c.stake === 0 ? 'free match' : `${c.stake} WILD` }}</small>
+          <small>{{ shortId(c.from.id) }} · rating {{ c.from.rating }} · {{ c.stake === 0 ? 'free match' : `for ${wild(c.stake)}` }}</small>
           <div class="row"><button class="px go" @click="send('accept', { id: c.id })">ACCEPT</button><button class="px cancel" @click="send('decline', { id: c.id })">DECLINE</button></div>
         </div>
         <form class="card" @submit.prevent="send('find', { query })">
@@ -100,10 +104,10 @@ async function copyId() { await navigator.clipboard.writeText(props.me.id); copi
         <div v-if="found" class="card">
           <b>@{{ found.name }}</b>
           <small>{{ shortId(found.id) }} · rating {{ found.rating }} · {{ found.online ? 'online' : 'offline' }}</small>
-          <div class="row">
-            <select v-model.number="stake"><option v-for="s in stakes" :key="s" :value="s" :disabled="!open(s)">{{ s === 0 ? 'Free' : `${s} WILD` }}</option></select>
-            <button class="px go" :disabled="!found.online || !open(stake)" @click="send('challenge', { to: found.id, stake })">CHALLENGE</button>
-          </div>
+          <small class="px lbl">STAKE · ANY AMOUNT</small>
+          <div class="row"><input v-model.number="friendStake" type="number" min="0" :max="maxStake" step="1" inputmode="numeric" /><span>WILD</span></div>
+          <div class="stakes"><button v-for="s in stakes" :key="s" type="button" class="px stake" :class="{ on: friendStake === s }" :disabled="!open(s)" @click="friendStake = s">{{ wild(s) }}</button></div>
+          <button class="px go wide" :disabled="!found.online || !friendStakeOk" @click="send('challenge', { to: found.id, stake: friendStake })">CHALLENGE{{ friendStake ? ` FOR ${friendStake.toLocaleString()} WILD` : '' }}</button>
         </div>
         <div v-for="c in outgoing" :key="c.id" class="card">
           <small>Waiting for @{{ c.to.name }} to accept…</small>
@@ -115,7 +119,7 @@ async function copyId() { await navigator.clipboard.writeText(props.me.id); copi
         <p v-if="!history.length" class="hint">No matches yet.</p>
         <div v-for="h in history" :key="h.matchId" class="card hist" :class="h.result">
           <b>{{ h.result === 'win' ? 'Won' : h.result === 'loss' ? 'Lost' : 'Void' }} vs @{{ h.opponentName }}</b>
-          <small>{{ h.stake === 0 ? 'Free' : `${h.stake} WILD` }} · rating {{ h.ratingDelta >= 0 ? '+' : '' }}{{ h.ratingDelta }}</small>
+          <small>{{ h.stake === 0 ? 'Free' : wild(h.stake) }} · rating {{ h.ratingDelta >= 0 ? '+' : '' }}{{ h.ratingDelta }}</small>
         </div>
       </template>
       <p class="fine">Matches run on the game server. Your rating and history belong to your DSM identity.</p>
@@ -141,7 +145,7 @@ input,select{font:inherit;font-size:19px;color:#26443a;background:#f6efd2;border
 .card{display:grid;gap:6px;padding:12px;background:#10261fef;box-shadow:0 0 0 2px #0b1a15,0 0 0 4px #26443a}
 .card small{color:#cfe3cb;font-size:16px}.lbl{font-size:9px;color:#c4ec79}
 .big{font-size:22px}
-.stakes{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.stake{padding:8px 2px;font-size:9px}.stake.on{background:#e9d86b;color:#26443a}
+.stakes{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.stake{padding:8px 2px;font-size:9px}.stake.on{background:#e9d86b;color:#26443a}
 .hint{color:#b9cdb6;font-size:15px;margin:0}
 .go{background:#3f6e2a;padding:8px 12px;font-size:10px}.go.wide{padding:12px;font-size:11px}
 .cancel{background:#7a3b1e;padding:8px 12px;font-size:10px;justify-self:start}
