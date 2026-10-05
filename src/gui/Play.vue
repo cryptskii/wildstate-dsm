@@ -79,13 +79,15 @@ function action(action: string) {
 }
 const engine = inject<{ activeKeyboardControls: () => MovementControls | null }>('rpgEngine');
 const movementControls = () => engine?.activeKeyboardControls();
-function step(direction: Direction) { void movementControls()?.applyControl(direction); }
+let tapWalk: ReturnType<typeof setTimeout> | undefined;
+function step(direction: Direction) { stopWalk(); heldWalk.start(direction); tapWalk = setTimeout(stopWalk, 100); }
 const heldWalk = heldDirection(movementControls);
 let walkPointer: number | undefined;
 function startWalk(direction: Direction, event: PointerEvent) {
   if (event.button !== 0 || event.isPrimary === false || walkPointer !== undefined) return;
   event.preventDefault();
   const pad = (event.currentTarget as HTMLElement).closest('.dpad') as HTMLElement;
+  clearTimeout(tapWalk);
   walkPointer = event.pointerId;
   pad.setPointerCapture(event.pointerId);
   heldWalk.start(direction);
@@ -99,14 +101,15 @@ function dragWalk(event: PointerEvent) {
 }
 function stopWalk(event?: Event) {
   if (event && 'pointerId' in event && (event as PointerEvent).pointerId !== walkPointer) return;
+  clearTimeout(tapWalk);
   walkPointer = undefined;
   heldWalk.stop();
 }
 const hideWalk = () => { if (document.hidden) stopWalk(); };
 onMounted(() => { window.addEventListener('blur', stopWalk); window.addEventListener('pagehide', stopWalk); document.addEventListener('visibilitychange', hideWalk); });
-onUnmounted(() => { heldWalk.stop(); window.removeEventListener('blur', stopWalk); window.removeEventListener('pagehide', stopWalk); document.removeEventListener('visibilitychange', hideWalk); });
+onUnmounted(() => { stopWalk(); window.removeEventListener('blur', stopWalk); window.removeEventListener('pagehide', stopWalk); document.removeEventListener('visibilitychange', hideWalk); });
 watch(() => [props.mode, props.state.battle?.outcome, props.encounter, party.value], () => {
-  if (props.mode !== 'field' || props.state.battle?.outcome === 'active' || props.encounter || party.value) heldWalk.stop();
+  if (props.mode !== 'field' || props.state.battle?.outcome === 'active' || props.encounter || party.value) stopWalk();
 });
 function field(action: string, data: Record<string, unknown> = {}) { interact('field-hud', 'field', { action, ...data }); }
 function startRename(c: { id: string; nick?: string | null }) { renaming.value = c.id; newNick.value = c.nick ?? ''; }

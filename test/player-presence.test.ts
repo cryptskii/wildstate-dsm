@@ -37,10 +37,10 @@ it('replaces an overlapping live avatar for the same wallet without hiding anoth
  // A late disconnect for the old page must not hide the current character.
  player.onDisconnected!(old);expect(current.graphics.set).toHaveBeenCalledTimes(1);
 });
-it('uses the slower player walking speed',async()=>{const p=fixture();await player.onConnected!(p);expect(p.speed).toBe(1.5);});
+it('uses the responsive player walking speed',async()=>{const p=fixture();await player.onConnected!(p);expect(p.speed).toBe(1.8);});
 
 it('restores the player walking pace when rejoining with an old snapshot',()=>{
- const p=fixture();p.speed=4;player.onJoinMap!(p,p.getCurrentMap());expect(p.speed).toBe(1.5);
+ const p=fixture();p.speed=4;player.onJoinMap!(p,p.getCurrentMap());expect(p.speed).toBe(1.8);
 });
 
 it('clears a retained starting avatar after a lost connection without another join',()=>{
