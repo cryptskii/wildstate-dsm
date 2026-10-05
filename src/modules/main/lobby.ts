@@ -10,12 +10,12 @@
 import type { RpgPlayer } from '@rpgjs/server';
 import { session } from './journey';
 import { lobbyRecord, playerOfWallet, walletOf, web2 } from './dsm';
-import { isFighting, setFighting } from './field';
+import { commit, isFighting, setFighting } from './field';
 import { isSpeaking } from './dialogue';
-import { TEAM_SIZE, type Creature, type GameState } from '../../domain/game';
+import { SPECIES, GameError, displayName, fieldedTeam, level, maxCharges, maxHp, type Command, type Creature, type GameState } from '../../domain/game';
 import { claimUsername, freshProfile, resolvePlayer, shownName, HISTORY_MAX, RENAME_COOLDOWN_MS, type Directory, type MatchSummary } from '../../domain/username';
 import { pair, window, validStake, STAKE_TIERS, MAX_STAKE, type Ticket } from '../../domain/matchmaker';
-import { choose, expire, forfeit, other, startMatch, type Match, type Side } from '../../domain/match';
+import { choose, expire, forfeit, other, parseItem, startMatch, type Match, type Side } from '../../domain/match';
 import { rate } from '../../domain/rating';
 
 /** Wagers open once escrow locking is in the DSM wallet; until then only free matches. */
@@ -38,10 +38,21 @@ let serial = 0;
 
 const sideOf = (m: Match, wallet: string): Side => (m.a.wallet === wallet ? 'a' : 'b');
 
-/** A team for a match: the chosen team, else the lead and the rest; snapshots heal it, so fainted ones count. */
+/** A team for a match: the chosen team (else the lead and the rest), standing creatures only, as prepared. */
 function pvpTeam(s: GameState): Creature[] {
-  const ids = [...new Set([...s.team, s.creatures[s.lead].id, ...s.creatures.map(c => c.id)])].slice(0, TEAM_SIZE);
-  return ids.map(id => s.creatures.find(c => c.id === id)!).filter(Boolean);
+  return fieldedTeam(s).map(id => s.creatures.find(c => c.id === id)!);
+}
+/** The player's creatures for the lobby's team step: who is picked, how they stand, and what items can help. */
+function teamView(s: GameState) {
+  return {
+    picked: fieldedTeam(s),
+    chosen: s.team,
+    poultice: s.inventory.poultice, tonic: s.inventory.tonic,
+    creatures: s.creatures.map(c => ({
+      id: c.id, name: displayName(c), species: c.species, level: level(c), hp: c.hp, maxHp: maxHp(c),
+      charges: SPECIES[c.species].moves.filter(m => m.max).map(m => ({ name: m.name, left: c.charges[m.id] ?? 0, max: maxCharges(m, c) })),
+    })),
+  };
 }
 
 // ------------------------------------------------------------------ views
@@ -64,6 +75,7 @@ async function lobbyView(player: RpgPlayer) {
     live: liveOf.get(wallet) ?? null,
     liveMatch: (() => { const id = liveOf.get(wallet); const m = id ? matches[id] : undefined; return m ? { id: m.id, stake: m.stake, opponent: brief(m[other(sideOf(m, wallet))].wallet) } : null; })(),
     notice: notices.get(wallet) ?? '',
+    team: teamView(session(player).read()),
   };
 }
 
@@ -74,7 +86,7 @@ function battleView(m: Match, side: Side) {
   const state = {
     rules: 'creatures-v4', holder: me.wallet, revision: m.turn, nextEncounter: 0, nextCast: 0,
     creatures: me.team, lead: 0, team: me.team.map(c => c.id),
-    inventory: { capsules: 0, rod: false, poultice: 0, tonic: 0, map: 0 }, coins: 0,
+    inventory: { capsules: 0, rod: false, poultice: me.items.poultice, tonic: me.items.tonic, map: 0 }, coins: 0,
     campaign: { instance: '', branch: 'unselected' }, consumed: [], commandIds: [], victories: 0, captures: 0, trainersBeaten: [], scarecrowReadyAt: 0,
     battle: {
       id: m.id, creatureId: me.team[me.active].id, wild: foe.team[foe.active], turn: m.turn, source: 'trainer', outcome,
@@ -105,7 +117,7 @@ export async function openLobby(player: RpgPlayer): Promise<void> {
   const wallet = walletOf(player);
   if (!wallet || isFighting(player) || isSpeaking(player)) return;
   const gui = player.gui('lobby');
-  gui.on<{ action: string; name?: string; query?: string; to?: string; stake?: number; id?: string }>('lobby', async (d) => {
+  gui.on<{ action: string; name?: string; query?: string; to?: string; stake?: number; id?: string; creatureIds?: unknown[]; item?: string; creatureId?: string }>('lobby', async (d) => {
     const say = (text: string) => notices.set(wallet, text);
     notices.delete(wallet);
     const { dir, save } = await lobbyRecord();
@@ -129,6 +141,7 @@ export async function openLobby(player: RpgPlayer): Promise<void> {
         if (!validStake(stake)) say('Name a whole amount of WILD.');
         else if (!stakeOpen(stake)) say('Wagers open once escrow locking is in the DSM wallet.');
         else if (to === wallet || !playerOfWallet(to)) say('That player is not online.');
+        else if (pvpTeam(session(player).read()).length === 0) say('Heal a creature first: your team has none standing.');
         else if (liveOf.has(to) || liveOf.has(wallet)) say('One of you is already in a match.');
         else { const id = `ch/${Date.now().toString(36)}/${serial++}`; challenges.set(id, { id, from: wallet, to, stake, at: Date.now() }); say(`Challenge sent to @${shownName(dir, to)}.`); void refreshLobby(to); }
         break;
@@ -136,6 +149,7 @@ export async function openLobby(player: RpgPlayer): Promise<void> {
       case 'accept': {
         const c = challenges.get(String(d.id ?? ''));
         if (!c || c.to !== wallet) { say('That challenge is gone.'); break; }
+        if (pvpTeam(session(player).read()).length === 0) { say('Heal a creature first: your team has none standing.'); break; }
         challenges.delete(c.id);
         await begin(c.from, c.to, c.stake);
         return;
@@ -150,10 +164,21 @@ export async function openLobby(player: RpgPlayer): Promise<void> {
         const stake = Number(d.stake ?? 0);
         if (!(STAKE_TIERS as readonly number[]).includes(stake)) { say('Pick one of the matchmaker stakes.'); break; }
         if (!stakeOpen(stake)) { say('Wagers open once escrow locking is in the DSM wallet.'); break; }
+        if (pvpTeam(session(player).read()).length === 0) { say('Heal a creature first: your team has none standing.'); break; }
         queue.set(wallet, { wallet, rating: (dir.players[wallet] ?? freshProfile()).rating, stake, since: Date.now() });
         break;
       }
       case 'leave-queue': queue.delete(wallet); break;
+      // The team step: pick up to three, and heal or recharge them with bag items.
+      case 'set-team':
+      case 'use-item': {
+        const command: Command = d.action === 'set-team'
+          ? { type: 'set-team', creatureIds: Array.isArray(d.creatureIds) ? d.creatureIds.filter((x): x is string => typeof x === 'string') : [] }
+          : { type: 'use-item', item: d.item === 'tonic' ? 'tonic' : 'poultice', creatureId: String(d.creatureId ?? '') };
+        try { commit(player, command, session(player).read().revision); }
+        catch (e) { if (!(e instanceof GameError)) throw e; say(player.t(`game.error.${e.code}`)); }
+        break;
+      }
       default: return;
     }
     gui.update(await lobbyView(player));
@@ -201,13 +226,14 @@ export async function rejoin(player: RpgPlayer) {
 async function begin(aWallet: string, bWallet: string, stake: number) {
   const pa = playerOfWallet(aWallet), pb = playerOfWallet(bWallet);
   if (!pa || !pb || isFighting(pa) || isFighting(pb) || liveOf.has(aWallet) || liveOf.has(bWallet)) return;
+  if (pvpTeam(session(pa).read()).length === 0 || pvpTeam(session(pb).read()).length === 0) return;
   const { dir, matches, save } = await lobbyRecord();
   queue.delete(aWallet); queue.delete(bWallet);
   for (const c of challenges.values()) if ([c.from, c.to].some(w => w === aWallet || w === bWallet)) challenges.delete(c.id);
   const id = `pvp/${Date.now().toString(36)}/${serial++}`;
   const m = startMatch(id, stake,
-    { wallet: aWallet, name: shownName(dir, aWallet), team: pvpTeam(session(pa).read()) },
-    { wallet: bWallet, name: shownName(dir, bWallet), team: pvpTeam(session(pb).read()) }, Date.now());
+    { wallet: aWallet, name: shownName(dir, aWallet), team: pvpTeam(session(pa).read()), items: session(pa).read().inventory },
+    { wallet: bWallet, name: shownName(dir, bWallet), team: pvpTeam(session(pb).read()), items: session(pb).read().inventory }, Date.now());
   matches[id] = m; save();
   liveOf.set(aWallet, id); liveOf.set(bWallet, id);
   for (const [p, side] of [[pa, 'a'], [pb, 'b']] as const) {
@@ -228,7 +254,13 @@ function openMatch(player: RpgPlayer, m: Match, side: Side) {
     if (action === 'escape') forfeit(live, side);
     else {
       const error = choose(live, side, action, Date.now());
-      if (error) { gui.update({ ...battleView(live, side), error }); return; }
+      if (error) { gui.update({ ...battleView(live, side), error: player.t(`game.error.${error}`) }); return; }
+      // An item used in the match leaves the player's bag too.
+      const item = parseItem(action);
+      if (item) {
+        try { commit(player, { type: 'consume-item', item: item.item }, session(player).read().revision); }
+        catch (e) { if (!(e instanceof GameError)) throw e; }
+      }
       chosen.set(`${live.id}/${side}`, action);
     }
     save();

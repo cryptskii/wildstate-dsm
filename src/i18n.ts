@@ -20,6 +20,8 @@ export default {
     'game.error.no-battle': 'There is no active battle.', 'game.error.fainted': 'Your lead creature has fainted. Visit the healing station.',
     'game.error.no-charges': 'That move has no charges left. Rest with Mira to restore them.', 'game.error.no-capsules': 'You have no capture capsules.',
     'game.error.not-weakened': 'Weaken the creature to 14 HP or less first.',
+    'game.error.not-your-turn': 'Wait for the next turn.', 'game.error.unknown-move': 'That creature does not know that move.',
+    'game.error.match-over': 'The match is over.', 'game.error.already-chosen': 'You have already chosen this turn; waiting for your opponent.',
     'game.error.choice-consumed': 'You have already committed to a campaign path.',
     'game.error.invalid-command': 'That action is unavailable.',
     'game.error.no-rod': 'You need a fishing rod to cast.', 'game.error.unknown-creature': 'That creature is not in your party.',

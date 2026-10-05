@@ -7,6 +7,9 @@
 import { SPECIES, STATUSES, damageBonus, maxHp, multiplier, type Creature, type MoveDef, type StatusId } from './game';
 
 export type ExchangeEntry = { move: string; dmg: number; mult: number; status?: string; burn: number; skipped: boolean };
+/** A creature's action this turn: a move, or its trainer spent the turn on an item (already applied, `item:<id>`). */
+export type Action = MoveDef | { item: string };
+const isItem = (a: Action): a is { item: string } => 'item' in a;
 
 /** How the second actor plays: a wild creature is weakened and lands no status; a trainer or a player's does. */
 export type SecondRules = {
@@ -42,7 +45,10 @@ const held = (c: Creature) => c.statuses.some(x => x.id === 'root' || x.id === '
  * (known move, charge available). Returns the first actor's entry and, unless the second fainted
  * before acting, the second's.
  */
-export function exchange(first: Creature, firstMove: MoveDef, second: Creature, secondMove: MoveDef, rules: SecondRules): [ExchangeEntry, ExchangeEntry?] {
+export function exchange(first: Creature, firstAction: Action, second: Creature, secondAction: Action, rules: SecondRules): [ExchangeEntry, ExchangeEntry?] {
+  // An item spends the trainer's turn: the creature does nothing else (and a root or stun cannot stop it).
+  if (isItem(firstAction)) return finishExchange(first, { move: `item:${firstAction.item}`, dmg: 0, mult: 1, burn: 0, skipped: false }, second, secondAction, rules);
+  const firstMove = firstAction;
   // A root or stun landed last turn costs this action, and no charge.
   const skipFirst = held(first);
   if (firstMove.max && !skipFirst) first.charges[firstMove.id] -= 1;
@@ -56,11 +62,22 @@ export function exchange(first: Creature, firstMove: MoveDef, second: Creature, 
       if (firstMove.status && second.hp > 0) { applyStatus(second, firstMove.status); a.status = firstMove.status; }
     }
   }
+  return finishExchange(first, a, second, secondAction, rules);
+}
+
+/** The rest of an exchange once the first actor has acted: the second's statuses tick, it acts, the first's tick. */
+function finishExchange(first: Creature, a: ExchangeEntry, second: Creature, secondAction: Action, rules: SecondRules): [ExchangeEntry, ExchangeEntry?] {
   const skipSecond = held(second);
   const secondBurn = second.hp > 0 ? tick(second) : 0;
   if (secondBurn) { a.burn = secondBurn; second.hp = Math.max(0, second.hp - secondBurn); }
   if (second.hp === 0) return [a];
-
+  if (isItem(secondAction)) {
+    const b: ExchangeEntry = { move: `item:${secondAction.item}`, dmg: 0, mult: 1, burn: 0, skipped: false };
+    const firstBurn = first.hp > 0 ? tick(first) : 0;
+    if (firstBurn) { b.burn = firstBurn; first.hp = Math.max(0, first.hp - firstBurn); }
+    return [a, b];
+  }
+  const secondMove = secondAction;
   if (rules.spendsCharge && secondMove.max && !skipSecond) second.charges[secondMove.id] = Math.max(0, (second.charges[secondMove.id] ?? 0) - 1);
   const b: ExchangeEntry = { move: secondMove.id, dmg: 0, mult: 1, burn: 0, skipped: skipSecond };
   let landed: StatusId | undefined;

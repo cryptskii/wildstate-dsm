@@ -1,14 +1,15 @@
 /**
  * A player-vs-player match: two teams of up to three, one creature out at a time, first to knock
  * out two wins. Both players choose a move each turn without seeing the other's; the turn resolves
- * once both are in, through the same exchange every battle uses (src/domain/duel.ts). The teams are
- * snapshots at full strength, so a match never changes the players' own creatures.
+ * once both are in, through the same exchange every battle uses (src/domain/duel.ts). Each team is a
+ * snapshot of the creatures as the player prepared them (HP and charges, so healing and charging
+ * beforehand matters); the match never writes back to the players' own creatures.
  *
  * Pure and deterministic: the game server runs it and sends each player only move ids' results.
  * The battle and its result are the game server's (Web2), never DSM evidence.
  */
-import { exchange, type ExchangeEntry } from './duel';
-import { KO_TO_WIN, SPECIES, level, newCreature, type Creature } from './game';
+import { exchange, type Action, type ExchangeEntry } from './duel';
+import { ITEMS, KO_TO_WIN, SPECIES, applyItem, level, type Creature, type UsableItem } from './game';
 
 export type Side = 'a' | 'b';
 export const other = (s: Side): Side => (s === 'a' ? 'b' : 'a');
@@ -22,8 +23,11 @@ export interface MatchSide {
   team: Creature[];
   active: number;
   ko: number;
+  /** A move id, or `item:<poultice|tonic>:<creature id>`: the turn spent on a bag item. */
   choice: string | null;
   misses: number;
+  /** Bag items brought into the match; spending one here also spends it from the player's bag. */
+  items: Record<UsableItem, number>;
 }
 export type MatchEvent = { side: Side; kind: 'faint' | 'switch'; creature: string };
 export type MatchPhase = 'locking' | 'battle' | 'done' | 'void';
@@ -41,15 +45,17 @@ export interface Match {
   winner: Side | null;
   reason: 'knockouts' | 'forfeit' | 'timeout' | null;
 }
-export type MatchError = 'not-your-turn' | 'unknown-move' | 'no-charges' | 'match-over' | 'already-chosen';
+export type MatchError = 'not-your-turn' | 'unknown-move' | 'no-charges' | 'match-over' | 'already-chosen' | 'no-item' | 'unknown-creature';
 
-/** A team snapshot: each creature at its level, full HP and charges, nothing carried in. */
+/** A team snapshot: each creature as prepared (HP and charges), with battle-only effects cleared. */
 export function snapshot(team: Creature[]): Creature[] {
-  return team.map(c => { const s = newCreature(c.id, c.species, undefined, level(c)); s.nick = c.nick; s.anchor = c.anchor; return s; });
+  return team.map(c => ({ ...structuredClone(c), guard: false, statuses: [] }));
 }
 
-export function startMatch(id: string, stake: number, a: { wallet: string; name: string; team: Creature[] }, b: { wallet: string; name: string; team: Creature[] }, now: number): Match {
-  const side = (p: typeof a): MatchSide => ({ wallet: p.wallet, name: p.name, team: snapshot(p.team), active: 0, ko: 0, choice: null, misses: 0 });
+type Entrant = { wallet: string; name: string; team: Creature[]; items?: Partial<Record<UsableItem, number>> };
+export function startMatch(id: string, stake: number, a: Entrant, b: Entrant, now: number): Match {
+  const side = (p: Entrant): MatchSide => ({ wallet: p.wallet, name: p.name, team: snapshot(p.team), active: 0, ko: 0, choice: null, misses: 0,
+    items: { poultice: p.items?.poultice ?? 0, tonic: p.items?.tonic ?? 0 } });
   return { id, stake, phase: 'battle', turn: 0, deadline: now + TURN_MS, a: side(a), b: side(b), log: [], events: [], winner: null, reason: null };
 }
 
@@ -71,6 +77,16 @@ export function choose(m: Match, side: Side, move: string, now: number): MatchEr
   if (m.phase !== 'battle') return 'match-over';
   const me = m[side];
   if (me.choice !== null) return 'already-chosen';
+  const item = parseItem(move);
+  if (item) {
+    const target = me.team.find(x => x.id === item.creatureId);
+    if (!(item.item in ITEMS) || me.items[item.item] === 0) return 'no-item';
+    if (!target || target.hp === 0) return 'unknown-creature';
+    me.items[item.item] -= 1;
+    me.choice = move; me.misses = 0;
+    if (m[other(side)].choice !== null) resolve(m, now);
+    return null;
+  }
   const c = me.team[me.active];
   const def = SPECIES[c.species].moves.find(x => x.id === move);
   if (!def) return 'unknown-move';
@@ -96,6 +112,20 @@ export function forfeit(m: Match, side: Side): void {
   if (m.phase === 'battle') finish(m, other(side), 'forfeit');
 }
 
+/** `item:<poultice|tonic>:<creature id>` names a bag item spent on one of the side's creatures. */
+export function parseItem(choice: string): { item: UsableItem; creatureId: string } | null {
+  const [kind, item, ...rest] = choice.split(':');
+  if (kind !== 'item' || (item !== 'poultice' && item !== 'tonic') || !rest.length) return null;
+  return { item, creatureId: rest.join(':') };
+}
+/** A side's action: an item takes effect now and spends the turn; a move waits for the exchange. */
+function actionOf(side: MatchSide): Action {
+  const item = parseItem(side.choice!);
+  if (item) { applyItem(side.team.find(x => x.id === item.creatureId)!, item.item); return { item: item.item }; }
+  const c = side.team[side.active];
+  return SPECIES[c.species].moves.find(x => x.id === side.choice)!;
+}
+
 function finish(m: Match, winner: Side, reason: NonNullable<Match['reason']>) {
   m.phase = 'done'; m.winner = winner; m.reason = reason;
 }
@@ -104,9 +134,7 @@ function resolve(m: Match, now: number) {
   const firstSide = firstToAct(m), secondSide = other(firstSide);
   const first = m[firstSide], second = m[secondSide];
   const fc = first.team[first.active], sc = second.team[second.active];
-  const fm = SPECIES[fc.species].moves.find(x => x.id === first.choice)!;
-  const sm = SPECIES[sc.species].moves.find(x => x.id === second.choice)!;
-  const [fe, se] = exchange(fc, fm, sc, sm, { weaken: 0, landsStatus: true, spendsCharge: true });
+  const [fe, se] = exchange(fc, actionOf(first), sc, actionOf(second), { weaken: 0, landsStatus: true, spendsCharge: true });
   m.log = se ? [{ side: firstSide, ...fe }, { side: secondSide, ...se }] : [{ side: firstSide, ...fe }];
   m.events = [];
   m.turn += 1;
