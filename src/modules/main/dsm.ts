@@ -460,8 +460,8 @@ function enqueue(player: RpgPlayer, title: string, task: () => Promise<void>): v
     try {
       await task();
     } catch (e) {
+      // Shown in the DSM panel only; the field stays clear.
       pushEntries(seat, [entry('web2', `${title}: not done`, e instanceof Error ? e.message : String(e), 'fail', Date.now() - started)]);
-      player.getGui('field-hud')?.update({ ...hudData(player), notice: `${title}: ${e instanceof Error ? e.message : String(e)}` });
     }
   });
 }
