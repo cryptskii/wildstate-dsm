@@ -22,7 +22,7 @@ The public frontend is https://wildstate-dsm.vercel.app/ and the repository is h
 
 The account uses the committed DSM integration checkout revision `9723f2cca`, which contains `crates/dsm-app-host`. It is separate from the main DSM checkout. Source code in DSM has not been changed for this deployment.
 
-`deploy/account/Dockerfile` builds the real Rust SDK host from that checkout, using its lockfile and toolchain. `deploy/game/Dockerfile` builds the game and runs `scripts/server.mjs` under Node 24. Both run as uid/gid 10001. The combined `deploy/compose.yml` uses one replica each, persistent bind mounts, restart policies and bounded logs. Multiple independent game replicas are unsupported.
+`deploy/account/Dockerfile` builds the real Rust SDK host from that checkout, using its lockfile and toolchain. `deploy/game/Dockerfile` builds the game and bundles the server (`npm run build:server`: `scripts/server.mjs` with the server module and the few packages it uses) into one file; the runtime image is Node 24 Alpine with that file and `src/tiled` only, no `node_modules` or client code. Both run as uid/gid 10001. The combined `deploy/compose.yml` uses one replica each, persistent bind mounts, restart policies and bounded logs. Multiple independent game replicas are unsupported.
 
 ## Network boundaries
 
