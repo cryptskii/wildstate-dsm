@@ -17,7 +17,8 @@ export default {
     provideTiledMap({
       basePath: "map",
     }),
-    provideClientGlobalConfig(),
+    // Walking is the phone's: it moves at once and the server takes its reported position (walk.ts).
+    provideClientGlobalConfig({ movementAuthority: 'client' }),
     provideI18n(i18n),
     provideClientModules([
       {

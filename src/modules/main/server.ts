@@ -1,6 +1,7 @@
 import { defineModule } from "@rpgjs/common";
 import { RpgServer, type RpgMap } from "@rpgjs/server";
 import { reconcileAvatars } from './presence';
+import { followReportedPositions } from './walk';
 import { player } from './player'
 import { Npc, Ranger, Campfire, Trainer, Scarecrow, WayfindingSign } from "./event";
 import { MIRA, ROWAN, TRAINER_SPOTS, SCARECROW, WAY_SIGN } from './field';
@@ -11,9 +12,11 @@ const onTile = (p: { x: number; y: number }) => ({ x: p.x - 16, y: p.y - 16 });
 export default defineModule<RpgServer>({
   player,
   engine: {
-    onStep(engine) {
+    async onStep(engine) {
       const map = engine.getCurrentRoom<RpgMap>();
-      if (map && typeof map.getPlayers === 'function') reconcileAvatars(map.getPlayers());
+      if (!map || typeof map.getPlayers !== 'function') return;
+      await followReportedPositions(map);
+      reconcileAvatars(map.getPlayers());
     },
   },
   maps: [{
