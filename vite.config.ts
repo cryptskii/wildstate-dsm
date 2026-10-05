@@ -17,6 +17,7 @@ export default defineConfig(({ command }) => {
       tiledMapFolderPlugin({
         sourceFolder: './src/tiled',      // Folder containing your TMX files
         publicPath: '/map',               // Public URL path for maps
+        allowedExtensions: ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'],
         buildOutputPath: 'map'            // Match the runtime Tiled URL prefix
       }),
       ...rpgjs({

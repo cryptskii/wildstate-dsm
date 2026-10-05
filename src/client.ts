@@ -5,6 +5,9 @@ import { mergeConfig } from "@signe/di";
 
 startGame(
   mergeConfig(configClient, {
-    providers: [provideMmorpg({})],
+    providers: [provideMmorpg({
+      host: import.meta.env.VITE_GAME_HOST || undefined,
+      socketOptions: { maxRetries: 10 },
+    })],
   }) 
 );

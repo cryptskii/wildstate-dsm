@@ -1,0 +1,13 @@
+android/
+data/
+deploy/
+scripts/
+test/
+.agents/
+.env*
+outputs/
+node_modules/
+dist/
+.git/
+*.jks
+*.keystore

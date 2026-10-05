@@ -1,0 +1,35 @@
+# One persistent production account, independent of the storage-node service.
+# Create ./account owned by uid/gid 10001 with mode 700 before starting.
+# ./network holds the pinned dsm_env_config.toml and ca.crt, both public files.
+services:
+  account:
+    image: wildstate-account:production
+    restart: unless-stopped
+    network_mode: host
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 256
+    mem_limit: 1g
+    tmpfs: ['/tmp:size=64m,mode=1777']
+    volumes:
+      - ./account:/data
+      - ./network:/network:ro
+    command:
+      - --data-dir
+      - /data
+      - --env-config
+      - /network/dsm_env_config.toml
+      - --game-bind
+      - 127.0.0.1:8787
+      - --relay-bind
+      - 0.0.0.0:8443
+      - --relay-endpoint
+      - ${WILDSTATE_RELAY_ENDPOINT:?Public HTTPS relay endpoint required}
+      - --relay-name
+      - ${WILDSTATE_RELAY_NAME:?Public relay hostname or IP required}
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'

@@ -23,12 +23,8 @@ Local release builds use WILDSTATE_KEYSTORE_PATH (an absolute file path), plus t
 
 ## Vercel deployment status
 
-vercel.json prepares the **frontend** build at dist/client. Import this game repository into Vercel. This does not yet deploy the live RPGJS backend, and the APK is not ready for public play until that backend is adapted and tested.
+Vercel serves the frontend at https://wildstate-dsm.vercel.app/. The live RPGJS backend and the game's DSM account run separately on the existing cloud fleet with persistent room and profile storage. `VITE_GAME_HOST` selects the public backend address at frontend build time; no account keys belong in browser settings.
 
-Vercel now supports WebSockets (beta), but reconnects can move between instances. RPGJS currently runs room state in memory, and the game account adapter persists its game record synchronously to data/dsm-game.json. Those mechanisms need durable, coordinated hosting for the Vercel runtime before deploying a public backend. Do not point the game at ephemeral /tmp records or allow separate function instances to initialize duplicate economies.
-
-The DSM account host remains required: the backend calls DSM_APP_HOST and the host uses the existing DSM storage nodes. Nodes do not run the RPGJS world, replace the account host, or make the application's JSON record durable automatically. No DSM backend code or storage-node deployment has been changed by this packaging work.
-
-There is no Wildstate GitHub remote configured yet: origin still points to the RPGJS starter. Create the intended game repository and connect it before publishing. No repository or Vercel deployment has been created by this work.
+The game repository is https://github.com/cryptskii/wildstate-dsm. See [production hosting](../deploy/README.md) for the exact cloud layout, network boundaries, and activation status. Public play and a public APK remain pending until the backend's public connection and wallet workflow are verified.
 
 References: https://developer.android.com/develop/ui/views/layout/webapps/webview, https://developer.android.com/studio/publish/app-signing, https://vercel.com/docs/functions/websockets.

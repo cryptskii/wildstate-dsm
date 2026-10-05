@@ -1,0 +1,6 @@
+{$WILDSTATE_BACKEND_DOMAIN} {
+    # Maps are published internally, never through the public endpoint.
+    @admin path_regexp admin ^/parties/.*/(map|world/[^/]+)/update/?$
+    respond @admin 404
+    reverse_proxy 127.0.0.1:3000
+}
