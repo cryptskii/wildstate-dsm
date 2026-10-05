@@ -197,7 +197,7 @@ async function startBattle(player: RpgPlayer, kind: 'encounter' | 'cast' | 'chal
       taps.delete(player);
     }
     const gui = player.gui('creature-battle');
-    gui.on<{ action: string; revision: number; nick?: string }>('battle', ({ action, revision, nick }) => {
+    gui.on<{ action: string; revision: number; nick?: string; creatureId?: string }>('battle', ({ action, revision, nick, creatureId }) => {
       if (action === 'continue') {
         if (session(player).read().battle?.outcome !== 'active') gui.close();
         return;
@@ -206,7 +206,9 @@ async function startBattle(player: RpgPlayer, kind: 'encounter' | 'cast' | 'chal
       const combatant = current.creatures.find(c => c.id === current.battle?.creatureId) ?? current.creatures[current.lead];
       const isMove = SPECIES[combatant.species].moves.some(m => m.id === action);
       const command: Command | undefined = isMove ? { type: 'move', move: action }
-        : action === 'capture' ? { type: 'capture', nick } : action === 'escape' ? { type: 'escape' } : undefined;
+        : action === 'capture' ? { type: 'capture', nick } : action === 'escape' ? { type: 'escape' }
+        // A creature is named after it is caught, while the battle screen is still open.
+        : action === 'rename' && creatureId ? { type: 'rename', creatureId, nick: nick ?? '' } : undefined;
       if (!command) return;
       try { gui.update({ state: commit(player, command, revision), mode: 'battle', lastAction: action, error: '' }); }
       catch (error) {
