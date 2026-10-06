@@ -7,7 +7,7 @@
  * and are Web2 results, never DSM evidence. Stakes other than 0 stay closed until escrow wagers
  * are wired (the wallet locks each stake in a DSM escrow vault; the game only referees).
  */
-import type { RpgPlayer } from '@rpgjs/server';
+import { Components, type RpgPlayer } from '@rpgjs/server';
 import { session } from './journey';
 import { lobbyRecord, playerOfWallet, walletOf, web2 } from './dsm';
 import { commit, isFighting, setFighting } from './field';
@@ -125,7 +125,7 @@ export async function openLobby(player: RpgPlayer): Promise<void> {
       case 'close': gui.close(); return;
       case 'set-name': {
         const error = claimUsername(dir, wallet, String(d.name ?? ''), Date.now());
-        if (error) say(NAME_ERRORS[error]); else { save(); player.name = dir.players[wallet].username!; web2(player, 'Username', `Now known as @${player.name}; your rating and history stay with your DSM identity`); }
+        if (error) say(NAME_ERRORS[error]); else { save(); nameTag(player, dir.players[wallet].username!, wallet); web2(player, 'Username', `Now known as @${dir.players[wallet].username}; your rating and history stay with your DSM identity`); }
         break;
       }
       case 'find': {
@@ -209,13 +209,21 @@ export function leaveLobby(player: RpgPlayer) {
 }
 
 /** Called when a player's wallet is connected: rejoin a live match, and take the name it chose. */
+/**
+ * Every character on the map wears its player's name, so another phone's character standing about
+ * reads as someone else, not as a frozen copy of your own: the username, or the start of the DSM id.
+ */
+function nameTag(player: RpgPlayer, username: string | null, wallet: string) {
+  player.name = username ? `@${username}` : wallet.slice(0, 6);
+  player.setComponentsTop(Components.text('{name}', { fill: '#f6efd2', stroke: '#0b1a15', fontSize: 9, fontWeight: 'bold' }));
+}
+
 export async function rejoin(player: RpgPlayer) {
   await ensureStarted();
   const wallet = walletOf(player);
   if (!wallet) return;
   const { dir, matches } = await lobbyRecord();
-  const name = dir.players[wallet]?.username;
-  if (name) player.name = name;
+  nameTag(player, dir.players[wallet]?.username ?? null, wallet);
   const id = liveOf.get(wallet);
   const m = id ? matches[id] : undefined;
   if (m?.phase === 'battle') { absentSince.delete(wallet); openMatch(player, m, sideOf(m, wallet)); }

@@ -57,21 +57,23 @@ async function playAttack(f: MoveFx | undefined, el: Element, dir: 'own' | 'wild
   else await set('lunge', { melee: false, fxKind: 'melee' }, 300);
 }
 /**
- * Each new battle moves on to the next arena, in turn; the arena holds for the whole battle, every
- * creature of a team included. The place in the rotation is remembered on this device.
+ * A pond battle is fought on the water. Every other battle moves on to the next of the dry arenas,
+ * in turn, and keeps it for the whole battle, every creature of a team included. The place in the
+ * rotation is remembered on this device.
  */
-const ARENAS = ['forest', 'water', 'desert', 'ring'] as const;
+const DRY_ARENAS = ['forest', 'desert', 'ring'] as const;
 const ARENA_KEY = 'wildstate.arena';
-const arenaKind = ref<(typeof ARENAS)[number]>(ARENAS[0]);
-watch(() => props.state.battle?.id, id => {
+const arenaKind = ref<'water' | (typeof DRY_ARENAS)[number]>(DRY_ARENAS[0]);
+watch(() => [props.state.battle?.id, props.state.battle?.source] as const, ([id, source]) => {
   if (!id) return;
+  if (source === 'pond') { arenaKind.value = 'water'; return; }
   let seen = { id: '', i: -1 };
   try { seen = { ...seen, ...JSON.parse(localStorage.getItem(ARENA_KEY) ?? '{}') }; } catch { /* storage unavailable: start the rotation here */ }
   if (seen.id !== id) {
-    seen = { id, i: (seen.i + 1) % ARENAS.length };
+    seen = { id, i: (seen.i + 1) % DRY_ARENAS.length };
     try { localStorage.setItem(ARENA_KEY, JSON.stringify(seen)); } catch { /* storage unavailable */ }
   }
-  arenaKind.value = ARENAS[seen.i] ?? ARENAS[0];
+  arenaKind.value = DRY_ARENAS[seen.i] ?? DRY_ARENAS[0];
 }, { immediate: true });
 const flip = (sp: string, side: 'own' | 'wild') => (ART[sp]?.faces ?? 'right') === (side === 'own' ? 'right' : 'left') ? 'none' : 'scaleX(-1)';
 
