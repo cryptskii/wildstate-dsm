@@ -396,7 +396,8 @@ export function transition(parent: GameState, expected: number, commandId: strin
       if (s.inventory.capsules === 0) fail('no-capsules');
       if (battle!.wild.hp > 14) fail('not-weakened');
       s.inventory.capsules -= 1;
-      const caught = structuredClone(battle!.wild); clearBattleOnly(caught); caught.nick = cleanNick(command.nick);
+      // Whatever it was met at, a caught creature is born at level 1: whole HP and charges (owner ruling 2026-10-06).
+      const caught = newCreature(battle!.wild.id, battle!.wild.species); caught.nick = cleanNick(command.nick);
       s.creatures.push(caught);
       finish('captured'); battle!.growth = grantXp(combatant, xpGain(5, level(battle!.wild), level(combatant))); s.captures += 1;
       break;
