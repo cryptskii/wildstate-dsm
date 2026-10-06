@@ -15,7 +15,7 @@ const props = defineProps<{
   incoming: { id: string; from: Brief; stake: number; expiresAt: number }[];
   outgoing: { id: string; to: Brief; stake: number; expiresAt: number }[];
   history: { matchId: string; opponentName: string; stake: number; result: 'win' | 'loss' | 'void'; ratingDelta: number; at: number }[];
-  liveMatch: { id: string; stake: number; opponent: Brief } | null;
+  liveMatch: { id: string; stake: number; opponent: Brief; locking: { mine: boolean; theirs: boolean } | null } | null;
   found?: Brief | null;
   notice: string;
   team: {
@@ -83,7 +83,14 @@ async function copyId() { await navigator.clipboard.writeText(props.me.id); copi
 
       <p v-if="notice" class="notice">{{ notice }}</p>
 
-      <div v-if="liveMatch" class="card live">You're in a match vs @{{ liveMatch.opponent.name }}.</div>
+      <!-- A staked match waits for both stakes to lock on DSM before the battle opens. -->
+      <div v-if="liveMatch?.locking" class="card live locking">
+        <b>Locking stakes · {{ wild(liveMatch.stake) }} each vs @{{ liveMatch.opponent.name }}</b>
+        <small><i class="tick" :class="{ on: liveMatch.locking.mine }"></i>Your stake {{ liveMatch.locking.mine ? 'locked in escrow' : 'locking… if your DSM wallet asks, approve it there' }}</small>
+        <small><i class="tick" :class="{ on: liveMatch.locking.theirs }"></i>@{{ liveMatch.opponent.name }}'s stake {{ liveMatch.locking.theirs ? 'locked in escrow' : liveMatch.locking.mine ? 'locking…' : 'locks after yours' }}</small>
+        <small class="fineprint">The winner's wallet collects both. If a stake never locks, the match is void and a locked stake goes back.</small>
+      </div>
+      <div v-else-if="liveMatch" class="card live">You're in a match vs @{{ liveMatch.opponent.name }}.</div>
 
       <template v-else-if="tab === 'team'">
         <div class="card">
@@ -189,6 +196,9 @@ input,select{font:inherit;font-size:19px;color:#26443a;background:#f6efd2;border
 .big{font-size:22px}
 .stakes{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.stake{padding:8px 2px;font-size:9px}.stake.on{background:#e9d86b;color:#26443a}
 .hint{color:#b9cdb6;font-size:15px;margin:0}
+.locking small{display:flex;align-items:center;gap:8px}.locking .fineprint{opacity:.75;font-size:15px}
+.tick{width:12px;height:12px;flex:none;border-radius:50%;border:2px solid #9ccf6e;animation:pulse 1s ease-in-out infinite}.tick.on{background:#9ccf6e;animation:none}
+@keyframes pulse{50%{opacity:.3}}
 .go{background:#3f6e2a;padding:8px 12px;font-size:10px}.go.wide{padding:12px;font-size:11px}
 /* A found player reads as a player card, with the challenge as its button. */
 .friend{box-shadow:0 0 0 2px #0b1a15,0 0 0 4px #9ccf6e}.friend .who{display:flex;align-items:baseline;gap:8px}.friend .who b{font-size:30px;line-height:1}
