@@ -27,6 +27,15 @@ export default defineConfig(({ command }) => {
           });
         },
       },
+      // Characters glide over each short step instead of being drawn at once (src/gui/step-smoothing.ts).
+      {
+        name: 'wildstate:step-smoothing',
+        enforce: 'pre',
+        load(id) {
+          if (!id.replace(/\\/g, '/').endsWith('@rpgjs/client/dist/components/recoil-smoothing.js')) return null;
+          return `export { RecoilSmoothing } from ${JSON.stringify(new URL('./src/gui/step-smoothing.ts', import.meta.url).pathname)};`;
+        },
+      },
       tiledMapFolderPlugin({
         sourceFolder: './src/tiled',      // Folder containing your TMX files
         publicPath: '/map',               // Public URL path for maps

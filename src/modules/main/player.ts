@@ -5,8 +5,8 @@ import { activateAvatar, isCurrentAvatar, releaseAvatar } from './presence';
 import { connectWallet, leave, openPanel, resumeWallet } from './dsm';
 import { leaveLobby, rejoin } from './lobby';
 
-/** A walking pace: the camera zooms the map to fill a phone, so a brisker one reads as a scurry. */
-const PLAYER_SPEED = 1.3;
+/** The player's walking pace; NPCs patrol at 1. */
+const PLAYER_SPEED = 1.8;
 
 export const player: RpgPlayerHooks = {
   props: { creatureSave: String },

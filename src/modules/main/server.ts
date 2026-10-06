@@ -26,7 +26,7 @@ export default defineModule<RpgServer>({
       { id: 'wayfinding-sign', ...onTile(WAY_SIGN), event: WayfindingSign() },
       { id: 'scarecrow', ...onTile(SCARECROW), event: Scarecrow() },
       { id: 'rowan', ...onTile(ROWAN), event: Ranger() },
-      // The `campfire` object in simplemap.tmx's Animated layer.
+      // The `campfire` object in simplemap.tmx's Objects layer.
       { id: 'campfire', x: 256, y: 416, event: Campfire() },
       ...Object.entries(TRAINER_SPOTS).map(([id, p]) => ({ id: `trainer-${id}`, ...onTile(p), event: Trainer(id) })),
     ],

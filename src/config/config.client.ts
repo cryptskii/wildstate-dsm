@@ -18,8 +18,7 @@ import Lobby from '../gui/Lobby.vue';
  * the passing pose, so walking read as sliding.
  */
 const ROW: Record<string, number> = { [Direction.Down]: 0, [Direction.Left]: 1, [Direction.Right]: 2, [Direction.Up]: 3 };
-/** Ticks per frame of the gait: one stride of the unhurried walking pace (1.3 px a tick for players, 1 for the map's people). */
-const STEP_TICKS = 10;
+const STEP_TICKS = 8;
 const walker = () => ({
   framesWidth: 3, framesHeight: 4,
   textures: {
