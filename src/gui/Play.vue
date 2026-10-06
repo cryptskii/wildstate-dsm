@@ -285,7 +285,7 @@ watch(() => [props.state.revision, props.error], async () => {
       <div class="row between coins"><span>Wild Coin</span><span class="gold">✦ {{ wallet }} WILD</span></div>
       <button class="px tiny" @click="field('shop'); party = false">VISIT BRAMBLE’S TRADING POST</button>
       </template>
-      <template v-else>
+      <template v-else-if="tab === 'wallet'">
       <div class="walletOn">
         <section class="wallet-connection">
           <div class="wallet-status"><i class="dot" aria-hidden="true"></i><b class="px">CONNECTED · DSM</b></div>
@@ -308,7 +308,7 @@ watch(() => [props.state.revision, props.error], async () => {
         </section>
       </div>
       </template>
-      <template v-else-if="tab === 'trainer'">
+      <template v-if="tab === 'trainer'">
         <!-- How you look on the map, in battle and when you talk: everyone on the map sees it. -->
         <div class="looks">
           <button v-for="l in LOOKS" :key="l" class="look" :class="{ on: (state.look ?? 'classic') === l }" :aria-pressed="(state.look ?? 'classic') === l" @click="field('set-look', { look: l })">
