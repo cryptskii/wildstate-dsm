@@ -495,8 +495,9 @@ async function tickLobby() {
     await publish(m);
   }
   for (const t of queue.values()) void refreshLobby(t.wallet);
-  // Once a minute: stakes a void match still owes players who are here.
-  if (now - lastSweep > 60_000) {
+  // Every five minutes: stakes a void match still owes players who are here. Each look makes the
+  // game's account walk the match's verdict cell, and a late lock has a day to be found.
+  if (now - lastSweep > 5 * 60_000) {
     lastSweep = now;
     const owed = new Set(Object.values(matches).filter(m => m.escrow && m.phase === 'void' && now - startedAt(m) < DAY_MS).flatMap(m => [m.a.wallet, m.b.wallet]));
     for (const w of owed) if (playerOfWallet(w)) void collectWhatIsOwed(w);
