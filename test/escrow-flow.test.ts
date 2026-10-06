@@ -16,6 +16,8 @@ const dsm = vi.hoisted(() => ({
 }));
 const bytes32 = (text: string) => new Uint8Array(createHash('sha256').update(text).digest());
 const anchorOf = (c: Creature) => bytes32(`anchor|${c.id}`);
+/** Base32 Crockford of 32 bytes, as an issued creature's anchor is kept. */
+const b32of = (bytes: Uint8Array) => { const a = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'; let out = '', buf = 0, bits = 0; for (const x of bytes) { buf = (buf << 8) | x; bits += 8; while (bits >= 5) { out += a[(buf >>> (bits - 5)) & 31]; bits -= 5; } } return bits ? out + a[(buf << (5 - bits)) & 31] : out; };
 /** An entry's index and kind, from its bytes: class, schema, index u32, side, kind. */
 const indexOf = (entry: Uint8Array) => new DataView(entry.buffer, entry.byteOffset).getUint32(4);
 const kindOf = (entry: Uint8Array) => entry[9];
@@ -28,8 +30,9 @@ vi.mock('../src/modules/main/dsm', () => ({
   walletIdentity: async (w: string) => ({ genesis: bytes32(`genesis|${w}`), deviceId: bytes32(`device|${w}`), signingKey: bytes32(`signing|${w}`) }),
   sessionKey: vi.fn(async (p: { id: string }) => { dsm.calls.push(`key ${p.id}`); return bytes32(`session|${p.id}`); }),
   publishedState: vi.fn(async (c: Creature) => { dsm.calls.push(`state ${c.id}`); return creatureState(c, anchorOf(c)); }),
-  lockDuel: vi.fn(async (p: { id: string }, _setup: Uint8Array, side: string, stake: number, opponent: string, counterpart?: string) => {
-    dsm.calls.push(`lock ${side} ${p.id} ${stake} vs ${opponent}${counterpart ? ` on ${counterpart}` : ''}`);
+  holdingsProof: vi.fn(async (p: { id: string }, anchors: Uint8Array[]) => { dsm.calls.push(`prove ${p.id} ${anchors.length}`); return { proves: p.id }; }),
+  lockDuel: vi.fn(async (p: { id: string }, _setup: Uint8Array, side: string, stake: number, opponent: string, theirs: { proves: string }, counterpart?: string) => {
+    dsm.calls.push(`lock ${side} ${p.id} ${stake} vs ${opponent} proven by ${theirs.proves}${counterpart ? ` on ${counterpart}` : ''}`);
     if (dsm.failLockFor === p.id) throw new Error('the wallet holds too little WILD');
     return { vault: `vault-${side}`, cell: 'CELL' };
   }),
@@ -69,7 +72,9 @@ const events: StakedEvents = {
   decided: (m) => seen.push(`decided ${m.winner} by ${m.reason}`),
 };
 function staked(stake = 100): Match {
-  const team = (w: string) => [newCreature(`${w}/c0`, 'embercub', undefined, 5), newCreature(`${w}/c1`, 'tidefin', undefined, 3)];
+  // Issued creatures: each with the anchor of its supply-one token.
+  const issued = (c: Creature) => ({ ...c, anchor: b32of(anchorOf(c)) });
+  const team = (w: string) => [issued(newCreature(`${w}/c0`, 'embercub', undefined, 5)), issued(newCreature(`${w}/c1`, 'tidefin', undefined, 3))];
   const m = lockingMatch('m1', stake, { wallet: A, name: 'alice', team: team(A) }, { wallet: B, name: 'bob', team: team(B) });
   m.escrow = freshEscrow(matchNonce(m));
   dsm.matches[m.id] = m;
@@ -89,7 +94,7 @@ describe('a staked match decided by the program', () => {
     expect(dsm.calls).toEqual([
       `key ${A}`, `key ${B}`,
       `state ${A}/c0`, `state ${A}/c1`, `state ${B}/c0`, `state ${B}/c1`,
-      `lock a ${A} 100 vs ${B}`, `lock b ${B} 100 vs ${A} on vault-a`,
+      `prove ${B} 2`, `lock a ${A} 100 vs ${B} proven by ${B}`, `prove ${A} 2`, `lock b ${B} 100 vs ${A} proven by ${A} on vault-a`,
       `ready ${A} on CELL`, `ready ${B} on CELL with ready-${A}`,
     ]);
     expect(m).toMatchObject({ phase: 'battle', escrow: { a: 'vault-a', b: 'vault-b', cell: 'CELL', start: 'started', problem: '' } });
