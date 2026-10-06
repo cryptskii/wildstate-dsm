@@ -244,6 +244,8 @@ export async function rejoin(player: RpgPlayer) {
   const id = liveOf.get(wallet);
   const m = id ? matches[id] : undefined;
   if (m?.phase === 'battle') { absentSince.delete(wallet); openMatch(player, m, sideOf(m, wallet)); }
+  // Back while the stakes lock (from the wallet app, say): to the lobby's locking card, not the map.
+  else if (m?.phase === 'locking') { absentSince.delete(wallet); await openLobby(player); }
   void collectWhatIsOwed(wallet);
 }
 
@@ -319,6 +321,18 @@ export async function lockMatch(m: Match) {
     for (const side of ['a', 'b'] as const) { notices.set(m[side].wallet, `Match void. ${e.problem}${e.a ? ' A locked stake goes back to its owner.' : ''}`); void refreshLobby(m[side].wallet); }
     await payOut(m);
     return;
+  }
+  // Both stakes are in. The battle opens only with both players in the game: a player who is
+  // in the wallet app (approving their lock, say) is waited for, and time spent away while the
+  // stakes locked never counts against them.
+  for (let waited = 0; (['a', 'b'] as const).some(side => !playerOfWallet(m[side].wallet)); waited += 1000) {
+    if (waited >= GRACE_MS) break;
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  // A full grace from the battle's start: one still away then forfeits only after it.
+  for (const side of ['a', 'b'] as const) {
+    if (playerOfWallet(m[side].wallet)) absentSince.delete(m[side].wallet);
+    else absentSince.set(m[side].wallet, Date.now());
   }
   m.phase = 'battle';
   m.deadline = Date.now() + TURN_MS;
