@@ -55,6 +55,7 @@ const held = (action: 'quote' | 'swap') => (props.busy ?? pressed.value) === act
       </div>
       <p v-if="quote" class="quote">{{ quote.amountIn }} → {{ quote.amountOut }} ({{ quote.hops }} hop{{ quote.hops === 1 ? '' : 's' }})</p>
       <p class="status" aria-live="polite">{{ status }}</p>
+      <div v-if="waiting" class="waiting"><span>Waiting for you in your DSM wallet: {{ waiting }}</span><a href="dsm:wallet">OPEN WALLET ▶</a></div>
       <!-- Turning while the wallet works on a quote or a swap: it has not frozen. -->
       <i v-if="busy || pressed" class="spinner" role="progressbar" aria-label="Working"></i>
     </section>
@@ -83,6 +84,7 @@ input{display:block;width:100%;box-sizing:border-box;margin-top:4px;font:inherit
 .actions button.held{background:#5d6b62;color:#d8e2d3;transform:translateY(2px);box-shadow:inset 0 3px 0 #0b1a1599;cursor:progress;opacity:1}
 .quote{font-size:22px;color:#f3d77a;margin:8px 0 0}
 .status{font-family:'Silkscreen',monospace;font-size:10px;color:#e7f6c9;min-height:14px;margin-top:8px;padding-right:30px}
+.waiting{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-top:10px;padding:8px 10px;background:#e2c35a;color:#10261f;font-size:17px}.waiting a{flex:none;font-family:'Silkscreen',monospace;font-size:10px;color:#f6efd2;background:#3f6e2a;padding:8px 10px;text-decoration:none}
 .spinner{position:absolute;right:12px;bottom:12px;width:20px;height:20px;border-radius:50%;border:3px solid #24402f;border-top-color:#e2c35a;border-right-color:#e2c35a;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 </style>

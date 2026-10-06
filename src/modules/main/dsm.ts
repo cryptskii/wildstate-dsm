@@ -121,6 +121,8 @@ interface Seat {
   provenAt: bigint | null;
   lastWalk: number;
   resumeToken: string | null;
+  /** What the wallet is holding for the player's approval: every later request waits behind it. */
+  waiting: string | null;
 }
 
 const seats = new Map<string, Seat>();
@@ -131,7 +133,7 @@ function seatOf(player: RpgPlayer): Seat {
   if (!seat) {
     seat = {
       player, feed: [...setupLines], session: null, wallet: null, offerDigest: null,
-      coins: null, era: null, provenAt: null, lastWalk: 0, resumeToken: null,
+      coins: null, era: null, provenAt: null, lastWalk: 0, resumeToken: null, waiting: null,
     };
     seats.set(player.id, seat);
   }
@@ -153,6 +155,11 @@ function sessionOf(seat: Seat): Bytes {
   return seat.session;
 }
 
+/** What the player's wallet holds for their approval, if anything: nothing else moves until it is answered. */
+export function walletWaiting(player: RpgPlayer): string | null {
+  return seats.get(player.id)?.waiting ?? null;
+}
+
 /**
  * A page that comes back with its game already loaded (the phone switched to the wallet app and
  * back, or the network dropped) still has its wallet's session on the game's account: the
@@ -164,7 +171,7 @@ export async function resumeWallet(player: RpgPlayer, holder: string): Promise<b
   if (seat.session && seat.wallet === holder) return true;
   const w = await world();
   const live = (await w.host.sessions())
-    .filter((s) => b32(s.peerDeviceId) === holder && s.status !== pb.ConnectSessionStatus.DISCONNECTED)
+    .filter((s) => b32(s.peerDeviceId) === holder && s.status !== pb.ConnectSessionStatus.DISCONNECTED && grantIsCurrent(s, w))
     // The one in use most recently: the wallet answers on every session it approved.
     .sort((a, b) => (a.lastSeq < b.lastSeq ? 1 : a.lastSeq > b.lastSeq ? -1 : 0));
   if (!live.length || !seats.has(player.id)) return false;
@@ -312,16 +319,29 @@ function scopes(w: World): pb.ConnectScopeV1[] {
     new pb.ConnectCapV1({ policyCommit, perRequest, total });
   return [
     new pb.ConnectScopeV1({ kind: pb.ConnectScopeKind.ACCEPT_ISSUED }),
-    new pb.ConnectScopeV1({ kind: pb.ConnectScopeKind.PAY, caps: [cap(wild, 10n, 300n)] }),
+    // Limits high enough that ordinary play never stops for an approval: a request past
+    // one waits in the wallet, and the wallet holds every later request behind it.
+    new pb.ConnectScopeV1({ kind: pb.ConnectScopeKind.PAY, caps: [cap(wild, 1_000n, 100_000n)] }),
     new pb.ConnectScopeV1({
       kind: pb.ConnectScopeKind.SWAP,
       policyCommits: [wild, era],
-      caps: [cap(wild, 1_000n, 5_000n), cap(era, 2_000n, 10_000n)],
+      caps: [cap(wild, 100_000n, 1_000_000n), cap(era, 1_000_000n, 10_000_000n)],
     }),
     new pb.ConnectScopeV1({ kind: pb.ConnectScopeKind.HOLDINGS, policyCommits: [wild, era] }),
     // Match stakes (A12): locked without asking up to these; a bigger stake waits for the player.
-    new pb.ConnectScopeV1({ kind: pb.ConnectScopeKind.ESCROW, caps: [cap(wild, 2_000n, 20_000n)] }),
+    new pb.ConnectScopeV1({ kind: pb.ConnectScopeKind.ESCROW, caps: [cap(wild, 1_000_000n, 10_000_000n)] }),
   ];
+}
+
+/**
+ * Whether a session's grant covers everything the game's offer asks now: each scope, with at least
+ * its limits. A grant from an older offer (lower limits, no stakes) is connected afresh, once, so
+ * play never stops for an approval the current offer would not need.
+ */
+function grantIsCurrent(session: pb.ConnectSessionV1, w: World): boolean {
+  const same = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((x, i) => x === b[i]);
+  return scopes(w).every((offered) => session.granted.some((g) => g.kind === offered.kind
+    && offered.caps.every((c) => g.caps.some((gc) => same(gc.policyCommit, c.policyCommit) && gc.perRequest >= c.perRequest && gc.total >= c.total))));
 }
 
 /**
@@ -346,7 +366,9 @@ export async function connectWallet(player: RpgPlayer, bound: (state: GameState)
 
   let sessions = await whenReachable(player, gui, () => shown, () => w.host.sessions());
   const held = (login: Login) =>
-    sessions.find((s) => (login.session !== null && b32(s.sessionId) === login.session) || b32(s.offerDigest) === login.offer);
+    sessions.find((s) => ((login.session !== null && b32(s.sessionId) === login.session) || b32(s.offerDigest) === login.offer)
+      // An older grant does not resume: the page shows a fresh code for the current offer.
+      && (s.offerDigest.length === 0 || grantIsCurrent(s, w) || (login.session === null && b32(s.offerDigest) === login.offer)));
 
   /** The login this page goes on with: the one it brought, or a new offer and token. */
   const loginFor = async (token: string | null): Promise<[string, Login]> => {
@@ -540,28 +562,36 @@ async function settle(
   done: (s: pb.ConnectAppStatusV1) => boolean,
   what: string,
   onWaiting?: () => void,
+  rounds = 240,
 ): Promise<pb.ConnectAppStatusV1> {
   // The request's own session: a page that drops and comes back mid-wait gets a fresh seat.
   const session = sessionOf(seatOf(player));
   const w = await world();
+  const seat = seatOf(player);
   let saidWaiting = false;
-  for (let round = 0; round < 240; round++) {
-    const s = await w.host.status(session, seq);
-    if (done(s)) {
-      // Once more, into the record: what the account established.
-      return w.host.status(session, seq, true);
+  try {
+    for (let round = 0; round < rounds; round++) {
+      const s = await w.host.status(session, seq);
+      if (done(s)) {
+        // Once more, into the record: what the account established.
+        return w.host.status(session, seq, true);
+      }
+      if (s.answered && (s.outcome === pb.ConnectOutcome.FAILED || s.outcome === pb.ConnectOutcome.DECLINED)) {
+        throw new Error(`${what}: the wallet answered ${pb.ConnectOutcome[s.outcome]}${s.reason ? ` (${s.reason})` : ''}`);
+      }
+      if (!saidWaiting && s.outcome === pb.ConnectOutcome.AWAITING_APPROVAL) {
+        saidWaiting = true;
+        seat.waiting = `${what}${s.reason ? `: ${s.reason}` : ''}`;
+        web2(player, `${what}: waiting for you`, 'Past what you approved: approve or decline it in your DSM wallet (Apps → Waiting)', 'wait');
+        player.getGui('field-hud')?.update(hudData(player));
+        onWaiting?.();
+      }
+      await sleep(1500);
     }
-    if (s.answered && (s.outcome === pb.ConnectOutcome.FAILED || s.outcome === pb.ConnectOutcome.DECLINED)) {
-      throw new Error(`${what}: the wallet answered ${pb.ConnectOutcome[s.outcome]}${s.reason ? ` (${s.reason})` : ''}`);
-    }
-    if (!saidWaiting && s.outcome === pb.ConnectOutcome.AWAITING_APPROVAL) {
-      saidWaiting = true;
-      web2(player, `${what}: waiting for you`, 'Outside what you approved: approve it on the phone (Apps → Waiting)', 'wait');
-      onWaiting?.();
-    }
-    await sleep(1500);
+    throw new Error(`${what}: still not settled; it stays pending`);
+  } finally {
+    if (saidWaiting) { seat.waiting = null; player.getGui('field-hud')?.update(hudData(player)); }
   }
-  throw new Error(`${what}: still not settled; it stays pending`);
 }
 
 /** An online transfer from the game's account, retried while its relationship settles. */
@@ -762,16 +792,23 @@ async function refreshHoldings(player: RpgPlayer): Promise<void> {
   const w = await world();
   const seat = seatOf(player);
   const asked = holdingsAsked(w);
-  const seq = await w.host.request(sessionOf(seat), {
-    case: 'holdings',
-    value: new pb.ConnectHoldingsV1({ policyCommits: asked }),
-  });
-  const s = await settle(player, seq, (x) => x.fact === pb.ConnectFact.HOLDINGS || (x.answered && x.fact === pb.ConnectFact.NONE && x.factDetail.startsWith('the proof established nothing')), 'Proving holdings');
-  if (s.fact !== pb.ConnectFact.HOLDINGS) throw new Error(s.factDetail);
-  const amounts = new Map(s.holdings.map((h) => [b32(h.policyCommit), h.amount]));
+  // A proof the wallet's next position overtook before the account read it proves nothing:
+  // the wallet is asked again, at its new position.
+  let s: pb.ConnectAppStatusV1 | undefined;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const seq = await w.host.request(sessionOf(seat), {
+      case: 'holdings',
+      value: new pb.ConnectHoldingsV1({ policyCommits: asked }),
+    });
+    s = await settle(player, seq, (x) => x.fact === pb.ConnectFact.HOLDINGS || (x.answered && x.fact === pb.ConnectFact.NONE && x.factDetail.startsWith('the proof established nothing')), 'Proving holdings');
+    if (s.fact === pb.ConnectFact.HOLDINGS || !s.factDetail.includes('NotCurrent')) break;
+    await sleep(1500);
+  }
+  if (s!.fact !== pb.ConnectFact.HOLDINGS) throw new Error(s!.factDetail);
+  const amounts = new Map(s!.holdings.map((h) => [b32(h.policyCommit), h.amount]));
   seat.coins = amounts.get(b32(w.economy.wild)) ?? 0n;
   seat.era = amounts.get(b32(w.economy.eraCommit)) ?? 0n;
-  seat.provenAt = s.holdingsPosition;
+  seat.provenAt = s!.holdingsPosition;
   const held = Object.keys(w.economy.record.creatures).filter((a) => (amounts.get(a) ?? 0n) === 1n);
   const sent = (w.economy.record.inFlight[seat.wallet!] ?? []).filter((a) => !held.includes(a));
   w.economy.record.inFlight[seat.wallet!] = sent;
@@ -792,7 +829,7 @@ async function refreshHoldings(player: RpgPlayer): Promise<void> {
   }
   w.economy.save();
   const sentLine = inFlight.length > 0 ? `; ${inFlight.length} on the way, not in this proof yet` : '';
-  pushEntries(seat, [entry('dsm', 'Holdings proven', `${wildText(seat.coins)}, ${eraText(seat.era)}, ${held.length} creature object(s)${sentLine}, at wallet position ${s.holdingsPosition}: verified against the wallet's economic root`, 'ok')]);
+  pushEntries(seat, [entry('dsm', 'Holdings proven', `${wildText(seat.coins)}, ${eraText(seat.era)}, ${held.length} creature object(s)${sentLine}, at wallet position ${s!.holdingsPosition}: verified against the wallet's economic root`, 'ok')]);
   player.getGui('field-hud')?.update(hudData(player));
   await openMarkets.get(player.id)?.();
 }
@@ -872,6 +909,8 @@ export interface MarketData {
   status: string;
   /** What the market is waiting on the wallet for; its button stays held down until the answer. */
   busy: 'quote' | 'swap' | null;
+  /** What the wallet holds for the player's approval, if anything. */
+  waiting: string | null;
 }
 
 async function vaultReading(): Promise<MarketData['vault']> {
@@ -910,6 +949,7 @@ export async function openMarket(player: RpgPlayer): Promise<void> {
       quote,
       status: status + unread,
       busy,
+      waiting: seat.waiting,
     };
   };
   openMarkets.set(player.id, async () => gui.update(await data(shownStatus)));
@@ -934,7 +974,7 @@ export async function openMarket(player: RpgPlayer): Promise<void> {
       gui.update(await data('Asking your wallet for a SoFi quote…'));
       web2(player, 'Market', 'Quote: the game asks your wallet to price the swap through SoFi');
       const seq = await w.host.request(sessionOf(seat), { case: 'quote', value: new pb.ConnectQuoteV1({ tokenIn, tokenOut, amountIn }) });
-      const s = await settle(player, seq, (x) => x.answered && x.quote !== undefined, 'Quote');
+      const s = await settle(player, seq, (x) => x.answered && x.quote !== undefined, 'Quote', () => { void data('Your DSM wallet is waiting for you to approve this.').then((d) => gui.update(d)); });
       const q = s.quote!;
       quote = { side: buy ? 'buy' : 'sell', amountIn: buy ? eraText(q.amountIn) : wildText(q.amountIn), amountOut: buy ? wildText(q.amountOut) : eraText(q.amountOut), hops: q.hops };
       busy = null;
@@ -948,7 +988,7 @@ export async function openMarket(player: RpgPlayer): Promise<void> {
       web2(player, 'Market', 'Swap: the game asks your wallet to trade; the wallet runs an ordinary SoFi trade');
       const seq = await w.host.request(sessionOf(seat), { case: 'swap', value: new pb.ConnectSwapV1({ tokenIn, tokenOut, amountIn, minAmountOut: 1n }) });
       try {
-        const s = await settle(player, seq, (x) => x.answered && x.outcome === pb.ConnectOutcome.CARRIED_OUT, 'Swap');
+        const s = await settle(player, seq, (x) => x.answered && x.outcome === pb.ConnectOutcome.CARRIED_OUT, 'Swap', () => { void data('Your DSM wallet is waiting for you to approve this swap.').then((d) => gui.update(d)); });
         const position = s.swap?.position ?? 0n;
         pushEntries(seat, [entry('dsm', 'Swap realized', `SoFi trade through the WILD/ERA vault at wallet position ${position}; the vault's own record shows it`, 'ok', Date.now() - started)]);
         proveLater(player);
@@ -1038,4 +1078,26 @@ export async function collectStakes(player: RpgPlayer, vaults: string[], what: s
   await settle(player, seq, (x) => x.fact === pb.ConnectFact.ESCROW_RELEASED, what);
   pushEntries(seat, [entry('dsm', what, `Escrow vault${vaults.length > 1 ? 's' : ''} ${vaults.map(short).join(', ')} released to your wallet under the match's final verdict`, 'ok', Date.now() - started)]);
   proveLater(player);
+}
+
+/**
+ * A lock `wallet` carried out for the match whose bytes are `external`, found among every request the
+ * game's account made of that wallet, on any of its sessions: the vault, once the account saw it
+ * locked. A lock can land after its match gave up on it (it waited behind a request the player had
+ * not answered); this is how such a stake is found and given back.
+ */
+export async function lockedFor(wallet: string, external: Bytes): Promise<string | null> {
+  const w = await world();
+  const same = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((x, i) => x === b[i]);
+  for (const session of (await w.host.sessions()).filter((s) => b32(s.peerDeviceId) === wallet)) {
+    const payload = await w.host.query('connect.app.requests', new pb.ConnectAppRequestsQueryV1({ sessionId: session.sessionId, after: 0n }).toBinary());
+    if (payload.case !== 'connectReply' || payload.value.reply.case !== 'requests') continue;
+    for (const request of payload.value.reply.value.requests) {
+      const body = pb.AppRequestBodyV1.fromBinary(request.body);
+      if (body.kind.case !== 'escrowLock' || !same(body.kind.value.external, external)) continue;
+      const status = await w.host.status(session.sessionId, body.seq);
+      if (status.fact === pb.ConnectFact.ESCROW_LOCKED && status.escrowVaultIds.length) return b32(status.escrowVaultIds[0]);
+    }
+  }
+  return null;
 }

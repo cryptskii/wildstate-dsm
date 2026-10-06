@@ -9,7 +9,7 @@
  */
 import { Components, type RpgPlayer } from '@rpgjs/server';
 import { session } from './journey';
-import { collectStakes, decideMatch, lobbyRecord, lockStake, matchExternal, playerOfWallet, walletOf, web2 } from './dsm';
+import { collectStakes, decideMatch, lobbyRecord, lockedFor, lockStake, matchExternal, playerOfWallet, walletOf, walletWaiting, web2 } from './dsm';
 import { commit, isFighting, setFighting } from './field';
 import { isSpeaking } from './dialogue';
 import { SPECIES, GameError, displayName, fieldedTeam, level, maxCharges, maxHp, type Command, type Creature, type GameState } from '../../domain/game';
@@ -85,6 +85,7 @@ async function lobbyView(player: RpgPlayer) {
       return { id: m.id, stake: m.stake, opponent: brief(m[other(mine)].wallet), locking };
     })(),
     notice: notices.get(wallet) ?? '',
+    walletWaiting: walletWaiting(player),
     found: (() => { const f = founds.get(wallet); return f ? brief(f) : null; })(),
     team: teamView(session(player).read()),
   };
@@ -252,6 +253,14 @@ async function begin(aWallet: string, bWallet: string, stake: number) {
   const pa = playerOfWallet(aWallet), pb = playerOfWallet(bWallet);
   if (!pa || !pb || isFighting(pa) || isFighting(pb) || liveOf.has(aWallet) || liveOf.has(bWallet)) return;
   if (pvpTeam(session(pa).read()).length === 0 || pvpTeam(session(pb).read()).length === 0) return;
+  // A lock would only queue behind a request the wallet holds for its player's approval.
+  if (stake > 0) {
+    const held = ([[pa, aWallet], [pb, bWallet]] as const).find(([p]) => walletWaiting(p));
+    if (held) {
+      for (const w of [aWallet, bWallet]) { notices.set(w, held[1] === w ? 'Your DSM wallet is waiting for you to approve or decline a request; answer it there first.' : 'Your opponent\'s wallet is waiting on them; try again in a moment.'); void refreshLobby(w); }
+      return;
+    }
+  }
   const { dir, matches, save } = await lobbyRecord();
   queue.delete(aWallet); queue.delete(bWallet);
   for (const c of challenges.values()) if ([c.from, c.to].some(w => w === aWallet || w === bWallet)) challenges.delete(c.id);
@@ -324,13 +333,13 @@ export async function lockMatch(m: Match) {
 const SETTLING = 'Settling the stakes: ';
 export async function payOut(m: Match) {
   const e = m.escrow;
-  if (!e?.a) return;
+  if (!e?.a && !e?.b) return;
   const { save } = await lobbyRecord();
   try {
     if (!e.verdict) {
-      // A match B never joined, or one nobody won, is void: each stake back to its owner.
-      const verdict = !e.b || m.winner === null ? 'void' : m.winner === 'a' ? 'a-wins' : 'b-wins';
-      await decideMatch(e.a, verdict);
+      // A match with a stake missing, or one nobody won, is void: each stake back to its owner.
+      const verdict = !e.a || !e.b || m.winner === null ? 'void' : m.winner === 'a' ? 'a-wins' : 'b-wins';
+      await decideMatch((e.a ?? e.b)!, verdict);
       e.verdict = verdict;
       save();
     }
@@ -346,7 +355,7 @@ export async function payOut(m: Match) {
       const side: Side = e.verdict === 'a-wins' ? 'a' : 'b';
       const p = playerOfWallet(m[side].wallet);
       if (!p) return;
-      await collectStakes(p, [e.a, e.b!], 'Winnings collected');
+      await collectStakes(p, [e.a!, e.b!], 'Winnings collected');
       e.paid = true;
       save();
       notices.set(m[side].wallet, `You won ${m.stake * 2} WILD from @${m[other(side)].name}: collected into your wallet.`);
@@ -361,12 +370,26 @@ export async function payOut(m: Match) {
   }
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+/** When a match began, from its id (`pvp/<base-36 ms>/<n>`). */
+const startedAt = (m: Match) => parseInt(m.id.split('/')[1] ?? '0', 36) || 0;
+
 /** Whatever a staked match still owes this wallet (winnings, or a stake back), collected now that it is here. */
 export async function collectWhatIsOwed(wallet: string) {
-  const { matches } = await lobbyRecord();
+  const { matches, save } = await lobbyRecord();
   for (const m of Object.values(matches)) {
     const e = m.escrow;
-    if (!e?.a || (m.phase !== 'done' && m.phase !== 'void') || (m.a.wallet !== wallet && m.b.wallet !== wallet)) continue;
+    if (!e || (m.phase !== 'done' && m.phase !== 'void') || (m.a.wallet !== wallet && m.b.wallet !== wallet)) continue;
+    // A void match's lock may land after the match gave up on it (it waited behind a request
+    // the player had not answered): look for it for a day, so it goes back.
+    if (m.phase === 'void' && Date.now() - startedAt(m) < DAY_MS) {
+      for (const side of ['a', 'b'] as const) {
+        if (e[side] || m[side].wallet !== wallet) continue;
+        const vault = await lockedFor(wallet, matchExternal(m.id, m.a.wallet, m.b.wallet, m.stake));
+        if (vault) { e[side] = vault; save(); }
+      }
+    }
+    if (!e.a && !e.b) continue;
     const owed = !e.verdict || (e.verdict === 'void' ? (['a', 'b'] as const).some(s => m[s].wallet === wallet && e[s] && !e.refunded[s]) : !e.paid);
     if (owed) await payOut(m);
   }
@@ -458,7 +481,14 @@ async function tickLobby() {
     await publish(m);
   }
   for (const t of queue.values()) void refreshLobby(t.wallet);
+  // Once a minute: stakes a void match still owes players who are here.
+  if (now - lastSweep > 60_000) {
+    lastSweep = now;
+    const owed = new Set(Object.values(matches).filter(m => m.escrow && m.phase === 'void' && now - startedAt(m) < DAY_MS).flatMap(m => [m.a.wallet, m.b.wallet]));
+    for (const w of owed) if (playerOfWallet(w)) void collectWhatIsOwed(w);
+  }
 }
+let lastSweep = 0;
 
 /** Matches left mid-battle by a server restart are void: nobody's rating moves. */
 async function voidStaleMatches() {

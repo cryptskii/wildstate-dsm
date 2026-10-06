@@ -5,7 +5,7 @@ import { type RpgPlayer } from '@rpgjs/server';
 import { GameError, LOOKS, SCARECROW_CAPSULES, SPECIES, TRAINERS, displayName, type Command, type Look } from '../../domain/game';
 import { session } from './journey';
 import { portraitDialogue, talkToRowan, readWayfindingSign, isSpeaking } from './dialogue';
-import { claimScarecrowGift, onCommitted, openMarket, openShop, useCommit, useHudData, useReadState, walked, walletCoins, web2 } from './dsm';
+import { claimScarecrowGift, onCommitted, openMarket, openShop, useCommit, useHudData, useReadState, walked, walletCoins, walletWaiting, web2 } from './dsm';
 const inside = new WeakSet<RpgPlayer>();
 const proximity = new WeakMap<RpgPlayer, string>();
 const fighting = new WeakSet<RpgPlayer>();
@@ -52,6 +52,7 @@ export function hudData(player: RpgPlayer, extra: Record<string, unknown> = {}) 
   return {
     state, mode: 'field', nearPond: nearPond(player), nearNpc: who, atShop: atShopDoor(player),
     walletCoins: walletCoins(player),
+    walletWaiting: walletWaiting(player),
     trainerBeaten: trainer ? state.trainersBeaten.includes(trainer) : false,
     encounter: cards.get(player) ?? null,
     ...extra,
