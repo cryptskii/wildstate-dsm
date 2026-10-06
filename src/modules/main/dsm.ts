@@ -569,9 +569,13 @@ async function settle(
   const w = await world();
   const seat = seatOf(player);
   let saidWaiting = false;
+  const began = Date.now();
+  let lastSeen = '';
   try {
     for (let round = 0; round < rounds; round++) {
       const s = await w.host.status(session, seq);
+      const seen = `${s.answered ? 'answered' : 'unanswered'} ${pb.ConnectOutcome[s.outcome]}${s.reason ? ` (${s.reason.slice(0, 120)})` : ''}`;
+      if (seen !== lastSeen) { console.log(`[settle] ${what} #${seq} +${Date.now() - began} ms: ${seen}`); lastSeen = seen; }
       if (done(s)) {
         // Once more, into the record: what the account established.
         return w.host.status(session, seq, true);
@@ -1001,7 +1005,12 @@ export async function openMarket(player: RpgPlayer): Promise<void> {
       }
     }
   };
-  await gui.open(await data(`Swap WILD and ERA with the game's market: ${MARKET.wild} WILD / ${MARKET.era} ERA at the start, ${MARKET.feeBps} bps.`), { waitingAction: true, blockPlayerInput: true });
+  // Open at once; the vault's reading (a few seconds from the account) fills in when it lands.
+  const greeting = `Swap WILD and ERA with the game's market: ${MARKET.wild} WILD / ${MARKET.era} ERA at the start, ${MARKET.feeBps} bps.`;
+  shownStatus = greeting;
+  const opened = gui.open({ vault: null, coins: seat.coins === null ? null : wildText(seat.coins), era: seat.era === null ? null : eraText(seat.era), quote, status: greeting, busy, waiting: seat.waiting }, { waitingAction: true, blockPlayerInput: true });
+  void data(greeting).then((d) => { if (openMarkets.has(player.id) && shownStatus === greeting) gui.update(d); }).catch(() => {});
+  await opened;
 }
 
 // ------------------------------- match stakes (A12) -------------------------------
