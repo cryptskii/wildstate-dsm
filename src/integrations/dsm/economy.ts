@@ -19,7 +19,7 @@ import type { Match } from '../../domain/match';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { SPECIES, type Creature, type GameState } from '../../domain/game';
-import { creatureRecord, latestCreatureState } from '../../domain/program';
+import { SPECIES_IDS, birthCreatureState, creatureRecord, creatureRecordDigest, latestCreatureState } from '../../domain/program';
 import { DsmHost, b32, fromB32, type Bytes } from './host';
 import { COIN, MARKET } from './terms';
 
@@ -175,11 +175,21 @@ export class Economy {
   async publishState(anchor: string, state: Uint8Array): Promise<Uint8Array> {
     const read = await this.host.readAuthored(fromB32(this.record.account), fromB32(anchor));
     if (!read.complete) throw new Error(`not every state of creature ${anchor.slice(0, 8)} could be read back; try again`);
-    let parent: Uint8Array | null = null;
+    let parent: Uint8Array;
     if (read.objects.length) {
       const tip = latestCreatureState(fromB32(anchor), read.objects.map((o) => o.payload));
       if (Buffer.from(tip.state).equals(Buffer.from(state))) return state;
       parent = tip.digest;
+    } else {
+      // Whatever the game hands over is born at level 1 (owner ruling 2026-10-06): the record it is
+      // issued with is its birth state, and what it has played to since is a successor of it.
+      const species = this.record.creatures[anchor]?.species;
+      if (species === undefined) throw new Error(`creature ${anchor.slice(0, 8)} is not one this account issued`);
+      const birth = creatureRecord(null, birthCreatureState(fromB32(anchor), SPECIES_IDS.indexOf(species)));
+      const born = await this.host.publishAuthored(fromB32(anchor), birth);
+      if (!born.stored) throw new Error(`the birth state of creature ${anchor.slice(0, 8)} did not store at the storage nodes`);
+      parent = creatureRecordDigest(birth);
+      if (Buffer.from(birthCreatureState(fromB32(anchor), SPECIES_IDS.indexOf(species))).equals(Buffer.from(state))) return state;
     }
     const published = await this.host.publishAuthored(fromB32(anchor), creatureRecord(parent, state));
     if (!published.stored) throw new Error(`the state of creature ${anchor.slice(0, 8)} did not store at the storage nodes`);

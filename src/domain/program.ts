@@ -96,6 +96,8 @@ export const revealEntry = (index: number, side: Side, salt: Uint8Array, played:
 export const resignEntry = (index: number, side: Side): Bytes => own(wasm.resignEntry(index, side));
 
 /** A creature's published state record, naming the record before it (null for the one it was issued with). */
+/** The state every creature the game hands over is born in: level 1, whole HP and charges. */
+export const birthCreatureState = (anchor: Uint8Array, species: number): Bytes => own(wasm.birthCreatureState(anchor, species));
 export const creatureRecord = (parent: Uint8Array | null, state: Uint8Array): Bytes => own(wasm.creatureRecord(parent, state));
 export const creatureRecordDigest = (record: Uint8Array): Bytes => own(wasm.creatureRecordDigest(record));
 /** The latest state among a creature's published records: the tip of the one chain from issuance. */

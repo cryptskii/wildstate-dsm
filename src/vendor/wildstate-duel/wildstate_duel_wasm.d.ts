@@ -2,6 +2,13 @@
 /* eslint-disable */
 
 /**
+ * The canonical bytes of the state every creature is born in: level 1, no
+ * XP, whole HP and charges. What the game issues is published at this state
+ * first (owner ruling 2026-10-06).
+ */
+export function birthCreatureState(anchor: Uint8Array, species: number): Uint8Array;
+
+/**
  * Transcript entry `index` (DSM class 0x0068): `side` commits to `played`
  * under `salt`.
  */

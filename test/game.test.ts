@@ -49,12 +49,14 @@ describe('gameplay contract (v4 moves)', () => {
     expect(s.battle!.log[1].dmg).toBe(2);
     expect(s.creatures[0].guard).toBe(false);
   });
-  it('consumes capture item and opportunity together, retaining captured HP and charges', () => {
+  it('consumes capture item and opportunity together; the catch is born at level 1 with whole HP and charges', () => {
     const weakened = strike(strike(encounter())); // 28 → 20 → 12
     const caught = step(weakened, { type: 'capture' });
     expect(caught.inventory.capsules).toBe(2);
-    expect(caught.creatures[1]).toMatchObject({ hp: 12, species: 'mossling', statuses: [], guard: false, anchor: null });
-    expect(caught.creatures[1].charges).toEqual({ 'leaf-cut': 5, 'root-bind': 3, photosynth: 1 });
+    // Born at level 1 whatever it was met at (owner ruling 2026-10-06): no XP, whole HP, whole charges.
+    const born = newCreature(caught.creatures[1].id, 'mossling');
+    expect(caught.creatures[1]).toMatchObject({ xp: 0, hp: born.hp, species: 'mossling', statuses: [], guard: false, anchor: null });
+    expect(caught.creatures[1].charges).toEqual(born.charges);
     expect(caught.consumed).toEqual([`encounter/${caught.battle!.id}`]);
     expect(score(caught)).toBe(20);
     expect(() => step(caught, { type: 'capture' })).toThrow('no-battle');
@@ -132,7 +134,7 @@ describe('species', () => {
     expect(s.battle!.wild.species).toBe('leon');
     s = step(step(s, { type: 'move', move: 'strike' }), { type: 'move', move: 'strike' });
     s = step(s, { type: 'capture', nick: 'Leon' });
-    expect(s.creatures[1]).toMatchObject({ species: 'leon', hp: 12, nick: 'Leon' });
+    expect(s.creatures[1]).toMatchObject({ species: 'leon', xp: 0, hp: newCreature(s.creatures[1].id, 'leon').hp, nick: 'Leon' });
     s = step(step(s, { type: 'heal' }), { type: 'set-lead', creatureId: s.creatures[1].id });
     s = step(s, { type: 'encounter' }); // Embercub: Leon's grass is resisted, fire is not
     s = step(s, { type: 'move', move: 'sticky-snare' });
