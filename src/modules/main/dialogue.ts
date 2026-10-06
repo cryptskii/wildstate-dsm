@@ -1,8 +1,15 @@
 import { pauseNpc } from './patrol';
 import type { RpgPlayer } from '@rpgjs/server';
+import { LOOKS, lookPortrait } from '../../domain/game';
 export type DialogueLine = { speaker: string; portrait: 'player' | 'mira' | 'rowan' | 'kade' | 'nessa' | null; message: string };
 const speaking = new WeakSet<RpgPlayer>();
 export const isSpeaking = (player: RpgPlayer) => speaking.has(player);
+function ownPortrait(player: RpgPlayer): string {
+  try {
+    const look = JSON.parse((typeof player.creatureSave === 'function' && player.creatureSave()) || '{}').look;
+    return lookPortrait(LOOKS.includes(look) ? look : 'classic');
+  } catch { return lookPortrait('classic'); }
+}
 export async function portraitDialogue(player: RpgPlayer, lines: DialogueLine[]) {
   if (!lines.length || speaking.has(player)) return;
   const releases = [...new Set(lines.flatMap(line => line.portrait && line.portrait !== 'player' ? [line.portrait] : []))].map(name => pauseNpc(player, name));
@@ -10,7 +17,9 @@ export async function portraitDialogue(player: RpgPlayer, lines: DialogueLine[])
   player.breakRoutes(true);
   const gui = player.gui('portrait-dialogue');
   let page = 0;
-  const projection = () => ({ ...lines[page], page, last: page === lines.length - 1 });
+  // The player's own lines show the look they chose.
+  const own = ownPortrait(player);
+  const projection = () => ({ ...lines[page], portrait: lines[page].portrait === 'player' ? own : lines[page].portrait, page, last: page === lines.length - 1 });
   gui.on<{ page: number }>('next', data => {
     if (data?.page !== page) return;
     if (page === lines.length - 1) gui.close();

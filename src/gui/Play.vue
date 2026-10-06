@@ -3,7 +3,7 @@ import { computed, inject, ref, watch, onUnmounted, onMounted } from 'vue';
 import { Direction } from '@rpgjs/common';
 import { heldDirection, type MovementControls } from './held-direction';
 import Joystick from './Joystick.vue';
-import { SPECIES, TRAINERS, ITEMS as ITEM_EFFECTS, TEAM_SIZE, NICK_MAX, XP_PER_LEVEL, LEVEL_CAP, multiplier, displayName, level, maxHp, maxCharges, damageBonus, type GameState, type Element, type MoveFx } from '../domain/game';
+import { SPECIES, TRAINERS, LOOKS, lookPortrait, ITEMS as ITEM_EFFECTS, TEAM_SIZE, NICK_MAX, XP_PER_LEVEL, LEVEL_CAP, multiplier, displayName, level, maxHp, maxCharges, damageBonus, type GameState, type Element, type MoveFx } from '../domain/game';
 const xpLabel = (c: { xp: number }) => level(c) >= LEVEL_CAP ? 'MAX' : `${c.xp % XP_PER_LEVEL}/${XP_PER_LEVEL} XP`;
 const xpPct = (c: { xp: number }) => (level(c) >= LEVEL_CAP ? 1 : (c.xp % XP_PER_LEVEL) / XP_PER_LEVEL) * 100 + '%';
 const growth = computed(() => { const g = props.state.battle?.growth; return g && g.to > g.from ? g : null; });
@@ -79,7 +79,7 @@ const flip = (sp: string, side: 'own' | 'wild') => (ART[sp]?.faces ?? 'right') =
 
 const view = ref<GameState>(JSON.parse(JSON.stringify(props.state)));
 const inBattle = () => props.mode === 'battle' || props.mode === 'pvp';
-const busy = ref(inBattle()), message = ref(props.pvp && props.state.battle ? `@${props.pvp.opponent} sends out ${displayName(props.state.battle.wild)}!` : trainer.value && props.state.battle ? `${trainer.value.name} sends out ${displayName(props.state.battle.wild)}!` : 'A wild creature appeared!'), party = ref(false), tab = ref<'creatures' | 'items' | 'wallet'>('creatures');
+const busy = ref(inBattle()), message = ref(props.pvp && props.state.battle ? `@${props.pvp.opponent} sends out ${displayName(props.state.battle.wild)}!` : trainer.value && props.state.battle ? `${trainer.value.name} sends out ${displayName(props.state.battle.wild)}!` : 'A wild creature appeared!'), party = ref(false), tab = ref<'creatures' | 'items' | 'trainer' | 'wallet'>('creatures');
 /** The creature just caught, waiting for the player to name it (or not). */
 const naming = ref<string | null>(null), nick = ref('');
 const renaming = ref<string | null>(null), newNick = ref('');
@@ -93,7 +93,7 @@ let clockTimer: ReturnType<typeof setInterval> | undefined;
 onMounted(() => { clockTimer = setInterval(() => { clock.value = Date.now(); }, 500); });
 onUnmounted(() => clearInterval(clockTimer));
 const secondsLeft = computed(() => props.pvp ? Math.max(0, Math.ceil((props.pvp.deadline - clock.value) / 1000)) : 0);
-const speaker = computed(() => props.state.battle?.trainer && fx.value.dir === 'wild' ? props.state.battle.trainer : 'player');
+const speaker = computed(() => props.state.battle?.trainer && fx.value.dir === 'wild' ? props.state.battle.trainer : lookPortrait(props.state.look ?? 'classic'));
 const own = computed(() => view.value.creatures.find(c => c.id === view.value.battle?.creatureId) ?? view.value.creatures[0]);
 const wild = computed(() => view.value.battle?.wild);
 const active = computed(() => view.value.battle?.outcome === 'active');
@@ -269,8 +269,8 @@ watch(() => [props.state.revision, props.error], async () => {
   <!-- FIELD HUD (over the engine canvas) -->
   <div v-if="mode === 'field'" class="field">
     <header class="win dark"><div><!-- Static during play: its animation cost the phone half its frame rate. --><img class="hudLogo" src="/brand/logo.png" alt="Wildstate"/><small>{{ `Meadow camp · wallet ${state.holder.slice(0, 8)}… on DSM` }}</small></div><div class="res"><span title="Capture capsules"><span aria-hidden="true">◉</span> {{ state.inventory.capsules }} <small class="px">Capsules</small></span><span class="gold">✦ {{ wallet }} <small class="px">WILD</small></span><button class="px small" :disabled="state.battle?.outcome === 'active'" @click="field('shop')" title="Bramble’s trading post: buy with WILD from your wallet, or sell a creature">SHOP</button><button class="px small" :disabled="state.battle?.outcome === 'active'" @click="field('market')" title="Swap WILD and ERA through SoFi">MARKET</button><button class="px small" :disabled="state.battle?.outcome === 'active'" @click="party = !party">BAG</button><button class="px small arenaBtn" :disabled="state.battle?.outcome === 'active'" @click="field('lobby')" title="Battle other players">ARENA</button></div></header>
-    <aside v-if="party" class="win cream party"><div class="row between"><span class="h">{{ tab === 'creatures' ? 'Your creatures' : tab === 'items' ? 'Your bag' : 'Wallet' }}</span><button class="px tiny" @click="party = false">CLOSE</button></div>
-      <div class="tabs"><button v-for="t in (['creatures','items','wallet'] as const)" :key="t" class="px tab" :class="{ on: tab === t }" @click="tab = t">{{ t.toUpperCase() }}</button></div>
+    <aside v-if="party" class="win cream party"><div class="row between"><span class="h">{{ tab === 'creatures' ? 'Your creatures' : tab === 'items' ? 'Your bag' : tab === 'trainer' ? 'Your trainer' : 'Wallet' }}</span><button class="px tiny" @click="party = false">CLOSE</button></div>
+      <div class="tabs"><button v-for="t in (['creatures','items','trainer','wallet'] as const)" :key="t" class="px tab" :class="{ on: tab === t }" @click="tab = t">{{ t.toUpperCase() }}</button></div>
       <template v-if="tab === 'creatures'">
       <div v-for="(c, i) in state.creatures" :key="c.id" class="prow" :class="{ lead: i === state.lead }"><div class="thumb" :style="{ backgroundImage: `url(creatures/${c.species}.png)` }"></div><div class="grow"><div class="row between"><span class="row"><b>{{ displayName(c) }}</b><small v-if="c.nick" class="muted">{{ SPECIES[c.species].name }}</small></span><span class="row"><span class="chip px" :style="{ background: EL[SPECIES[c.species].el].color }">{{ EL[SPECIES[c.species].el].label }}</span><span v-if="i === state.lead" class="chip px lead">LEAD</span><button v-else class="px tiny swap" @click="field('set-lead', { creatureId: c.id })">SWAP IN</button><button class="px tiny swap teamBtn" :class="{ on: teamSlot(c.id) >= 0 }" :disabled="teamSlot(c.id) < 0 && state.team.length >= TEAM_SIZE" @click="toggleTeam(c.id)" :title="'Trainer battles field up to ' + TEAM_SIZE">{{ teamSlot(c.id) >= 0 ? 'TEAM ' + (teamSlot(c.id) + 1) : 'TEAM +' }}</button></span></div>
         <div class="row hp"><span class="px lbl">HP</span><div class="bar"><i :style="{ width: c.hp / maxHp(c) * 100 + '%', background: hpColor(c.hp) }"></i></div><small>{{ c.hp }}/{{ maxHp(c) }}</small></div>
@@ -307,6 +307,14 @@ watch(() => [props.state.revision, props.error], async () => {
           <span v-else class="wallet-note">No opportunities consumed yet.</span>
         </section>
       </div>
+      </template>
+      <template v-else-if="tab === 'trainer'">
+        <!-- How you look on the map, in battle and when you talk: everyone on the map sees it. -->
+        <div class="looks">
+          <button v-for="l in LOOKS" :key="l" class="look" :class="{ on: (state.look ?? 'classic') === l }" :aria-pressed="(state.look ?? 'classic') === l" @click="field('set-look', { look: l })">
+            <img :src="`portraits/${lookPortrait(l)}.png`" :alt="`Trainer look ${l}`"/>
+          </button>
+        </div>
       </template>
     </aside>
     <button v-if="encounter" class="tapCard" @click="field('fight')"><span class="tapBox"><span class="px t">{{ encounter.title }}</span><span class="l">{{ encounter.line }}</span><span class="px tap">TAP TO FIGHT ▶</span></span></button>
@@ -387,7 +395,7 @@ button{font:inherit;cursor:pointer;border:0;color:#f3f3df;background:#1f4434;box
 /* field */
 .field{position:fixed;inset:0;pointer-events:none;font-size:16px}.field header,.field aside,.field nav .side{pointer-events:auto}
 header{position:absolute;top:16px;left:16px;right:16px;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px}header b{font-size:11px}.hudLogo{display:block;width:132px;height:auto;margin-bottom:3px}header small{display:block;font-size:14px;color:#b9cdb6;line-height:1}.res{display:flex;align-items:center;gap:10px;font-size:17px;white-space:nowrap}
-.party{position:absolute;left:16px;right:16px;top:90px;max-width:420px;padding:12px;display:grid;gap:10px}.party .h{font-size:22px}.prow{display:flex;align-items:center;gap:10px;padding:8px;background:#ece4c3;box-shadow:0 0 0 2px #26443a}.thumb{width:52px;height:52px;flex:none;background:center/contain no-repeat;image-rendering:pixelated}.prow b{font-size:20px}.prow small.muted{font-size:14px}
+.party{position:absolute;left:16px;right:16px;top:90px;max-width:420px;padding:12px;display:grid;gap:10px}.looks{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.look{padding:0;border:0;background:#ece4c3;box-shadow:0 0 0 2px #26443a;cursor:pointer;aspect-ratio:1145/1374;overflow:hidden}.look img{display:block;width:100%;height:100%;object-fit:cover}.look.on{box-shadow:0 0 0 2px #26443a,0 0 0 5px #e2c35a}.party .h{font-size:22px}.prow{display:flex;align-items:center;gap:10px;padding:8px;background:#ece4c3;box-shadow:0 0 0 2px #26443a}.thumb{width:52px;height:52px;flex:none;background:center/contain no-repeat;image-rendering:pixelated}.prow b{font-size:20px}.prow small.muted{font-size:14px}
 .tabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}.tab{padding:7px 4px;color:#26443a;background:#ece4c3;box-shadow:0 0 0 2px #26443a;font-size:9px}.tab.on{background:#26443a;color:#f6efd2}.prow.lead{background:#f3ecc9}.prow.dim{opacity:.45}.prow.col{display:grid;gap:2px}.chip.lead{background:#e9d86b;color:#26443a}.swap{background:#26503c;padding:2px 6px;font-size:8px}.owner{font-size:7px;color:#6c8a7c;display:block;margin-top:3px}.thumb.icon{width:40px;height:40px}.coins{padding:6px 8px;font-size:16px}.walletOn{display:grid;gap:8px}.dot{width:10px;height:10px;background:#4da96c;box-shadow:0 0 0 2px #26443a;flex:none}
 .rename input{font:inherit;font-size:18px;color:#26443a;background:#ece4c3;border:0;box-shadow:0 0 0 2px #26443a;padding:3px 8px;outline:none;flex:1;min-width:0}
 .naming{padding:10px 12px;margin:0 6px;display:grid;gap:10px}.naming input{font:inherit;font-size:24px;color:#26443a;background:#ece4c3;border:0;box-shadow:0 0 0 2px #26443a;padding:6px 10px;outline:none;width:100%}

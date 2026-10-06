@@ -1,9 +1,11 @@
 import { PNG } from 'pngjs';
 import { readFileSync, writeFileSync } from 'node:fs';
-const names=['player','mira','rowan','kade','nessa'];
+// Each character's source sheet (3 poses x 4 directions, drawn large), packed to 32x40 frames.
+const sources={player:'player-walk-v2.png',mira:'mira-walk-v2.png',rowan:'rowan-walk-v2.png',kade:'kade-walk-v2.png',nessa:'nessa-walk-v2.png',
+ 'player-auburn':'player-auburn-walk.png','player-bearded':'player-bearded-walk.png','player-curly':'player-curly-walk.png'};
 const records=[];
-for(const name of names){
- const image=PNG.sync.read(readFileSync('public/spritesheets/'+name+'-walk-v2.png'));
+for(const [name,source] of Object.entries(sources)){
+ const image=PNG.sync.read(readFileSync('public/spritesheets/'+source));
  const bands=[];let start=null;
  for(let y=0;y<=image.height;y++){
   let count=0;
@@ -79,5 +81,5 @@ for(const name of names){
  records.push({name,rows:bands,frame:[32,40],frames:12});
 }
 writeFileSync('public/spritesheets/character-walk-v4.json',JSON.stringify(records,null,2));
-console.log('Packed and verified 60 isolated frames, with shared baselines and clear borders.');
+console.log(`Packed and verified ${records.length*12} isolated frames, with shared baselines and clear borders.`);
 
