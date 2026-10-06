@@ -1,0 +1,3 @@
+DSM commit 1e4654a35
+crates/wildstate-duel-wasm, wasm-pack build --target nodejs --release --no-opt
+wildstate_duel_wasm_bg.wasm sha256 80df434465ee2ff2ee86cc5aad70847b8b55e543a64e37f63d653026d76fe89f
