@@ -76,6 +76,11 @@ public final class MainActivity extends Activity {
                 if (!request.isForMainFrame()) return true;
                 String scheme = destination.getScheme();
                 if (!"dsm".equals(scheme) && !"https".equals(scheme) && !"http".equals(scheme)) return true;
+                // "dsm:wallet": the wallet itself, where a request waits for the player's approval.
+                if ("dsm".equals(scheme) && "wallet".equals(destination.getSchemeSpecificPart())) {
+                    Intent wallet = getPackageManager().getLaunchIntentForPackage(WALLET);
+                    if (wallet != null) { startActivity(wallet); return true; }
+                }
                 try { startActivity(new Intent(Intent.ACTION_VIEW, destination)); }
                 catch (ActivityNotFoundException error) {
                     new AlertDialog.Builder(MainActivity.this).setTitle("DSM wallet needed")

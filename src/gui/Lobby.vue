@@ -18,6 +18,7 @@ const props = defineProps<{
   liveMatch: { id: string; stake: number; opponent: Brief; locking: { mine: boolean; theirs: boolean } | null } | null;
   found?: Brief | null;
   notice: string;
+  walletWaiting?: string | null;
   team: {
     picked: string[]; chosen: string[]; poultice: number; tonic: number;
     creatures: { id: string; name: string; species: string; level: number; hp: number; maxHp: number; charges: { name: string; left: number; max: number }[] }[];
@@ -82,6 +83,7 @@ async function copyId() { await navigator.clipboard.writeText(props.me.id); copi
       </nav>
 
       <p v-if="notice" class="notice">{{ notice }}</p>
+      <div v-if="walletWaiting" class="card walletWait"><b>Your DSM wallet is waiting for you</b><small>{{ walletWaiting }}</small><a class="px go wide" href="dsm:wallet">OPEN WALLET ▶</a></div>
 
       <!-- A staked match waits for both stakes to lock on DSM before the battle opens. -->
       <div v-if="liveMatch?.locking" class="card live locking">
@@ -199,7 +201,8 @@ input,select{font:inherit;font-size:19px;color:#26443a;background:#f6efd2;border
 .locking small{display:flex;align-items:center;gap:8px}.locking .fineprint{opacity:.75;font-size:15px}
 .tick{width:12px;height:12px;flex:none;border-radius:50%;border:2px solid #9ccf6e;animation:pulse 1s ease-in-out infinite}.tick.on{background:#9ccf6e;animation:none}
 @keyframes pulse{50%{opacity:.3}}
-.go{background:#3f6e2a;padding:8px 12px;font-size:10px}.go.wide{padding:12px;font-size:11px}
+.go{background:#3f6e2a;padding:8px 12px;font-size:10px}
+.walletWait{box-shadow:0 0 0 2px #0b1a15,0 0 0 4px #e2c35a}.walletWait a{text-align:center;text-decoration:none;color:#f6efd2}.go.wide{padding:12px;font-size:11px}
 /* A found player reads as a player card, with the challenge as its button. */
 .friend{box-shadow:0 0 0 2px #0b1a15,0 0 0 4px #9ccf6e}.friend .who{display:flex;align-items:baseline;gap:8px}.friend .who b{font-size:30px;line-height:1}
 .dot{width:10px;height:10px;border-radius:50%;background:#6b6b5e;align-self:center;flex:none}.dot.on{background:#9ccf6e;box-shadow:0 0 6px #9ccf6e}

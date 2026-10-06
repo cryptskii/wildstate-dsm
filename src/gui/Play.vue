@@ -10,7 +10,7 @@ const xpPct = (c: { xp: number }) => (level(c) >= LEVEL_CAP ? 1 : (c.xp % XP_PER
 const growth = computed(() => { const g = props.state.battle?.growth; return g && g.to > g.from ? g : null; });
 const growthSeen = ref('');
 import { TRAINER_REWARD, VICTORY_REWARD } from '../integrations/dsm/terms';
-const props = defineProps<{ state: GameState; mode: string; lastAction?: string; error?: string; notice?: string; nearPond?: boolean; nearNpc?: string; atShop?: boolean; door?: boolean; encounter?: { title: string; line: string } | null; fishing?: { phase: 'cast' | 'bite'; dx: number; dy: number } | null; walletCoins?: number | null; trainerBeaten?: boolean;
+const props = defineProps<{ state: GameState; mode: string; lastAction?: string; error?: string; notice?: string; nearPond?: boolean; nearNpc?: string; atShop?: boolean; door?: boolean; encounter?: { title: string; line: string } | null; fishing?: { phase: 'cast' | 'bite'; dx: number; dy: number } | null; walletCoins?: number | null; walletWaiting?: string | null; trainerBeaten?: boolean;
   /** Player-vs-player: the opponent, the stake, this turn's deadline, and whether we wait on them. */
   pvp?: { opponent: string; stake: number; deadline: number; waiting: boolean; chosen?: boolean; foeReady?: boolean; reason: string | null } }>();
 const useItem = ref<'poultice' | 'tonic' | null>(null);
@@ -374,6 +374,8 @@ watch(() => [props.state.revision, props.error], async () => {
       <g class="rod"><rect v-for="(p, i) in rodArt.rod" :key="i" :x="rod.hx + p.x * rod.s" :y="rod.hy + p.y * rod.s" :width="rod.s + 0.5" :height="rod.s + 0.5" :fill="p.c"/></g>
       <g class="bob"><rect v-for="(p, i) in rodArt.bobber" :key="i" :x="rod.hx + p.x * rod.s" :y="rod.hy + p.y * rod.s" :width="rod.s + 0.5" :height="rod.s + 0.5" :fill="p.c"/></g>
     </svg>
+    <!-- The wallet holds a request for the player's approval: nothing else moves until it is answered. -->
+    <div v-if="walletWaiting" class="walletWait win cream"><span><b class="px">YOUR DSM WALLET IS WAITING FOR YOU</b><small>{{ walletWaiting }}</small></span><a class="px go" href="dsm:wallet">OPEN WALLET ▶</a></div>
     <!-- The first time the game opens: who you are on the map, in battle and when you talk. Picked once. -->
     <div v-if="state.lookPicked !== true" class="lookPick">
       <div class="lookBox win cream">
@@ -477,6 +479,10 @@ header{position:absolute;top:16px;left:16px;right:16px;display:flex;justify-cont
 .fishing .bob{animation:bobble 1.1s steps(1) infinite}
 .fishing.bite .bob{animation:dunk .3s steps(1) infinite}
 @keyframes castOut{from{opacity:0}}@keyframes bobble{50%{transform:translateY(var(--px))}}@keyframes dunk{0%{transform:translateY(var(--px))}50%{transform:translateY(calc(var(--px) * 3));opacity:.6}}
+/* The wallet waits on the player: a banner under the header, with the way there. */
+.walletWait{position:absolute;left:12px;right:12px;top:150px;z-index:25;display:flex;gap:10px;align-items:center;justify-content:space-between;padding:10px 12px;pointer-events:auto;box-shadow:0 0 0 2px #26443a,0 0 0 5px #e2c35a}
+.walletWait span{display:grid;gap:3px;min-width:0}.walletWait b{font-size:10px;color:#7a3b1e}.walletWait small{font-size:15px;color:#26443a;overflow:hidden;text-overflow:ellipsis}
+.walletWait .go{flex:none;padding:9px 10px;font-size:10px;color:#f6efd2;background:#3f6e2a;text-decoration:none;box-shadow:0 0 0 2px #0b1a15}
 /* Whose move it is in a match: gold while it is yours, grey while the opponent's. */
 .turnBar{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;margin:0 6px;font-size:11px;box-shadow:0 0 0 2px #0b1a15}
 .turnBar.mine{background:#e2c35a;color:#10261f;animation:blink 1.2s steps(2) 3}.turnBar.theirs{background:#24402f;color:#cfe3cb}.turnBar b{font-size:13px}
