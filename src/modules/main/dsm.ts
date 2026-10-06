@@ -19,6 +19,7 @@
 import type { RpgPlayer } from '@rpgjs/server';
 import { stateSchema, SCARECROW_CAPSULES, SPECIES, SHOP_QTY_MAX, TRAINERS, displayName, newCreature, initialState, salePrice, type Command, type Creature, type GameState } from '../../domain/game';
 import { DsmHost, HostError, b32, fromB32, own, short, type Bytes } from '../../integrations/dsm/host';
+import { PROGRAM, creatureState } from '../../domain/program';
 import type { Economy, Login, Species } from '../../integrations/dsm/economy';
 import { COIN, ITEM_PRICES, MARKET, TRAINER_REWARD, VICTORY_REWARD, WELCOME_COINS, type ShopItem } from '../../integrations/dsm/terms';
 import * as pb from '../../integrations/dsm/proto/dsm_app_pb';
@@ -328,8 +329,10 @@ function scopes(w: World): pb.ConnectScopeV1[] {
       caps: [cap(wild, 100_000n, 1_000_000n), cap(era, 1_000_000n, 10_000_000n)],
     }),
     new pb.ConnectScopeV1({ kind: pb.ConnectScopeKind.HOLDINGS, policyCommits: [wild, era] }),
-    // Match stakes (A12): locked without asking up to these; a bigger stake waits for the player.
-    new pb.ConnectScopeV1({ kind: pb.ConnectScopeKind.ESCROW, caps: [cap(wild, 1_000_000n, 10_000_000n)] }),
+    // Staked matches the pinned program decides (SoFi S22): up to 1,000 WILD a match and 10,000 in
+    // all without asking, only in matches of this program; a bigger stake waits for the player.
+    // Moves, readies, settling and collecting spend nothing and run under the grant.
+    new pb.ConnectScopeV1({ kind: pb.ConnectScopeKind.DUEL, caps: [cap(wild, 1_000n, 10_000n)], programs: [own(PROGRAM)] }),
   ];
 }
 
@@ -341,7 +344,8 @@ function scopes(w: World): pb.ConnectScopeV1[] {
 function grantIsCurrent(session: pb.ConnectSessionV1, w: World): boolean {
   const same = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((x, i) => x === b[i]);
   return scopes(w).every((offered) => session.granted.some((g) => g.kind === offered.kind
-    && offered.caps.every((c) => g.caps.some((gc) => same(gc.policyCommit, c.policyCommit) && gc.perRequest >= c.perRequest && gc.total >= c.total))));
+    && offered.caps.every((c) => g.caps.some((gc) => same(gc.policyCommit, c.policyCommit) && gc.perRequest >= c.perRequest && gc.total >= c.total))
+    && offered.programs.every((p) => g.programs.some((gp) => same(gp, p)))));
 }
 
 /**
@@ -647,6 +651,9 @@ async function deliverCreature(player: RpgPlayer, creatureId: string, species: S
   const anchor = await w.economy.issueCreature(species, (line) => web2(player, 'Game account', line, 'wait'));
   commit(player, { type: 'bind-creature', creatureId, anchor });
   await handOver(player, anchor, started);
+  // The state it was issued in, published as its first record: what wallets read it against before a staked match.
+  const issued = readState(player).creatures.find((c) => c.id === creatureId);
+  if (issued) await publishedState(issued);
 }
 
 /**
@@ -1068,19 +1075,17 @@ export async function openMarket(player: RpgPlayer): Promise<void> {
   await opened;
 }
 
-// ------------------------------- match stakes (A12) -------------------------------
+// ------------------------- computed matches (SoFi S22) -------------------------
 //
-// A staked match is escrowed on DSM, never held by the game: each player's wallet locks its stake
-// in a vault whose terms the wallet builds itself from a fixed table (a-wins, b-wins, void, cancel),
-// both vaults share one verdict cell, the game decides the verdict as the referee, and the winner's
-// wallet collects both. The game names the match, the stake and the two players, nothing else.
+// A staked match is decided by the pinned program, not by the game: each player's wallet locks its
+// stake in a computed escrow vault whose terms its wallet builds from the setup, both wallets ready
+// once they verified both vaults (the second writes the Start), every move is an entry the
+// player's own wallet signs under its session key, and the winner's wallet settles the transcript
+// at the match cell and collects both stakes. Nobody signs a verdict. The game relays the setup
+// and the signed entries between the wallets; whatever it relays, each wallet checks itself, and
+// every fact the game acts on is one its own account read from DSM.
 
-/** The bytes both wallets build the wager from (A12's X): the match, its two players and the stake. */
-export function matchExternal(matchId: string, a: string, b: string, stake: number): Bytes {
-  return new Uint8Array(new TextEncoder().encode(`wildstate/match/v1|${matchId}|${a}|${b}|${stake}`));
-}
-
-/** A wallet as the game's account knows it from the card its accept carried: what a lock names an opponent by. */
+/** A wallet as the game's account knows it from the card its accept carried. */
 async function partyOf(wallet: string): Promise<pb.ConnectSessionV1> {
   const w = await world();
   const known = (await w.host.sessions()).filter(
@@ -1090,78 +1095,168 @@ async function partyOf(wallet: string): Promise<pb.ConnectSessionV1> {
   return known[known.length - 1];
 }
 
+/** A connected wallet's identity: its genesis, device id and signing key, from its card. */
+export async function walletIdentity(wallet: string): Promise<{ genesis: Bytes; deviceId: Bytes; signingKey: Bytes }> {
+  const s = await partyOf(wallet);
+  return { genesis: own(s.peerGenesis), deviceId: own(s.peerDeviceId), signingKey: own(s.peerSigningKey) };
+}
+
+/** The result a wallet answered with, from its signed answer as the game's account verified it. */
+function answered(s: pb.ConnectAppStatusV1): pb.AppResponseBodyV1['result'] {
+  if (!s.answerBody.length) throw new Error('the wallet answered nothing to relay');
+  return pb.AppResponseBodyV1.fromBinary(s.answerBody).result;
+}
+const carried = (s: pb.ConnectAppStatusV1) => s.answered && s.outcome === pb.ConnectOutcome.CARRIED_OUT;
+
+/** `player`'s wallet's session public key for the match whose setup carries `nonce`. */
+export async function sessionKey(player: RpgPlayer, nonce: Bytes): Promise<Bytes> {
+  const w = await world();
+  const seq = await w.host.request(sessionOf(seatOf(player)), {
+    case: 'duelSessionKey', value: new pb.ConnectDuelSessionKeyV1({ matchNonce: nonce }),
+  });
+  const s = await settle(player, seq, carried, 'Naming your battle key');
+  const r = answered(s);
+  if (r.case !== 'duelSessionKey') throw new Error(`the wallet answered ${r.case} for its battle key`);
+  return own(r.value.sessionPublicKey);
+}
+
 /**
- * Ask `player`'s wallet to lock `stake` WILD for the match, playing `side` against `opponent`; side B
- * names side A's vault. Resolves with the vault the game's own account found Active under exactly the
- * match's terms on their verdict cell, never on the wallet's word.
+ * Ask `player`'s wallet to lock `stake` WILD in the match `setup` describes, playing `side`; side B
+ * names side A's vault. Resolves with the vault and the match cell once the game's own account found
+ * the vault Active under exactly the setup's terms.
  */
-export async function lockStake(
-  player: RpgPlayer, external: Bytes, stake: number, side: 'a' | 'b', opponent: string, counterpartVault?: string,
+export async function lockDuel(
+  player: RpgPlayer, setup: Bytes, side: 'a' | 'b', stake: number, opponent: string, counterpartVault?: string,
 ): Promise<{ vault: string; cell: string }> {
   const seat = seatOf(player);
   const w = await world();
   const them = await partyOf(opponent);
   const started = Date.now();
-  web2(player, 'Stake', `The game asks your wallet to lock ${stake} WILD for the match; your wallet builds the wager's terms itself`);
+  web2(player, 'Stake', `The game asks your wallet to lock ${stake} WILD in a match the program decides; your wallet checks the setup and both teams itself`);
   const seq = await w.host.request(sessionOf(seat), {
-    case: 'escrowLock',
-    value: new pb.ConnectEscrowLockV1({
-      external, policyCommit: w.economy.wild, amount: BigInt(stake), side: side === 'a' ? 1 : 2,
-      opponentGenesis: them.peerGenesis, opponentDeviceId: them.peerDeviceId, opponentSigningKey: them.peerSigningKey,
+    case: 'duelLock',
+    value: new pb.ConnectDuelLockV1({
+      setup, side: side === 'a' ? 1 : 2, policyCommit: w.economy.wild, amount: BigInt(stake),
+      opponentGenesis: them.peerGenesis, opponentDeviceId: them.peerDeviceId,
       counterpartVaultId: counterpartVault ? fromB32(counterpartVault) : new Uint8Array(),
       memo: `Wildstate match: ${stake} WILD`,
     }),
   });
-  const s = await settle(player, seq, (x) => x.fact === pb.ConnectFact.ESCROW_LOCKED, 'Locking your stake', undefined, 'walk');
+  const s = await settle(player, seq, (x) => x.fact === pb.ConnectFact.DUEL_LOCKED, 'Locking your stake', undefined, 'walk');
   const vault = b32(s.escrowVaultIds[0]);
-  pushEntries(seat, [entry('dsm', 'Stake locked', `${stake} WILD in escrow vault ${short(vault)}, on the match's verdict cell; the game's account walked it`, 'ok', Date.now() - started)]);
+  pushEntries(seat, [entry('dsm', 'Stake locked', `${stake} WILD in computed escrow vault ${short(vault)}, on the match's cell; the game's account walked it`, 'ok', Date.now() - started)]);
   proveLater(player);
   return { vault, cell: b32(s.escrowVerdictCell) };
 }
 
-/** The referee's verdict on the match's cell, decided with the game's account key; resolves once final. */
-export async function decideMatch(vault: string, outcome: 'a-wins' | 'b-wins' | 'void'): Promise<void> {
+/**
+ * Ask `player`'s wallet to ready for the match on `cell`: it verifies both vaults and signs its ready.
+ * With the other side's ready, it writes the Start: `started` once the account read the Start there.
+ */
+export async function readyDuel(player: RpgPlayer, cell: string, opponentReady?: Bytes): Promise<{ readySignature: Bytes; started: boolean }> {
   const w = await world();
-  for (let round = 0; ; round++) {
-    const v = await w.host.adjudicate(fromB32(vault), outcome);
-    if (v.state === pb.EscrowVerdictState.FINAL) return;
-    if (round >= 60) throw new Error(`the match's verdict is still ${pb.EscrowVerdictState[v.state]}`);
-    await sleep(1000);
-  }
+  const seq = await w.host.request(sessionOf(seatOf(player)), {
+    case: 'duelReady', value: new pb.ConnectDuelReadyV1({ matchCell: fromB32(cell), opponentReady: opponentReady ?? new Uint8Array() }),
+  });
+  const second = opponentReady !== undefined;
+  const s = await settle(player, seq, (x) => (second ? x.fact === pb.ConnectFact.DUEL_STARTED : carried(x)), 'Readying for the match', undefined, second ? 'walk' : 'answer');
+  const r = answered(s);
+  if (r.case !== 'duelReady') throw new Error(`the wallet answered ${r.case} to its ready`);
+  return { readySignature: own(r.value.readySignature), started: s.fact === pb.ConnectFact.DUEL_STARTED };
 }
 
-/** Ask `player`'s wallet to collect `vaults`: it releases each only to itself, under the cell's final verdict. */
-export async function collectStakes(player: RpgPlayer, vaults: string[], what: string): Promise<void> {
+/**
+ * Ask `player`'s wallet to withdraw from the match on `cell` before any Start: void, both refunded.
+ * What holds the start cell, as the game's account read it: a Withdraw, or a Start that came first.
+ */
+export async function withdrawDuel(player: RpgPlayer, cell: string): Promise<'withdrawn' | 'started'> {
+  const w = await world();
+  const seq = await w.host.request(sessionOf(seatOf(player)), {
+    case: 'duelWithdraw', value: new pb.ConnectDuelWithdrawV1({ matchCell: fromB32(cell) }),
+  });
+  // A Withdraw that comes after a Start holds nothing: the account reads the start cell either way.
+  const s = await settle(player, seq, (x) => x.fact === pb.ConnectFact.DUEL_WITHDRAWN || x.fact === pb.ConnectFact.DUEL_STARTED, 'Withdrawing from the match', undefined, 'walk');
+  return s.fact === pb.ConnectFact.DUEL_STARTED ? 'started' : 'withdrawn';
+}
+
+/** One signed entry of a transcript, as the game relays it. */
+export interface Relayed { entry: Bytes; signature: Bytes }
+const signedEntries = (entries: Relayed[]) => entries.map((e) => new pb.ConnectDuelSignedEntryV1({ entry: e.entry, signature: e.signature }));
+
+/**
+ * Ask `player`'s wallet to sign `entry`, its next entry of the match on `cell`, after the other
+ * side's signed entries it has not seen (`preceding`). Nothing is written to storage.
+ */
+export async function signEntry(player: RpgPlayer, cell: string, preceding: Relayed[], entry: Bytes): Promise<{ index: number; signature: Bytes }> {
+  const w = await world();
+  const seq = await w.host.request(sessionOf(seatOf(player)), {
+    case: 'duelSign', value: new pb.ConnectDuelSignV1({ matchCell: fromB32(cell), preceding: signedEntries(preceding), entry }),
+  });
+  const s = await settle(player, seq, carried, 'Signing your move');
+  const r = answered(s);
+  if (r.case !== 'duelSign') throw new Error(`the wallet answered ${r.case} to a move`);
+  return { index: r.value.index, signature: own(r.value.signature) };
+}
+
+/**
+ * Ask `player`'s wallet to settle the match on `cell` with the other side's entries it has not
+ * seen: it writes the transcript to the match cell. Resolves with the outcome the account read there.
+ */
+export async function settleDuel(player: RpgPlayer, cell: string, entries: Relayed[]): Promise<string> {
+  const w = await world();
+  const seq = await w.host.request(sessionOf(seatOf(player)), {
+    case: 'duelSettle', value: new pb.ConnectDuelSettleV1({ matchCell: fromB32(cell), entries: signedEntries(entries) }),
+  });
+  const s = await settle(player, seq, (x) => x.fact === pb.ConnectFact.DUEL_SETTLED, 'Settling the match', undefined, 'walk');
+  pushEntries(seatOf(player), [entry('dsm', 'Match settled by the program', `The transcript holds the match cell; the program computes ${new TextDecoder().decode(s.duelCells?.outcome ?? new Uint8Array())}. No referee signed anything`, 'ok')]);
+  return new TextDecoder().decode(s.duelCells?.outcome ?? new Uint8Array());
+}
+
+/** Ask `player`'s wallet to collect `vaults`: it releases each only to itself, under the match's final outcome. */
+export async function collectDuel(player: RpgPlayer, vaults: string[], what: string): Promise<void> {
   const seat = seatOf(player);
   const w = await world();
   const started = Date.now();
   const seq = await w.host.request(sessionOf(seat), {
-    case: 'escrowRelease',
-    value: new pb.ConnectEscrowReleaseV1({ vaultIds: vaults.map(fromB32) }),
+    case: 'duelCollect', value: new pb.ConnectDuelCollectV1({ vaultIds: vaults.map(fromB32) }),
   });
   await settle(player, seq, (x) => x.fact === pb.ConnectFact.ESCROW_RELEASED, what, undefined, 'walk');
-  pushEntries(seat, [entry('dsm', what, `Escrow vault${vaults.length > 1 ? 's' : ''} ${vaults.map(short).join(', ')} released to your wallet under the match's final verdict`, 'ok', Date.now() - started)]);
+  pushEntries(seat, [entry('dsm', what, `Escrow vault${vaults.length > 1 ? 's' : ''} ${vaults.map(short).join(', ')} released to your wallet under the outcome the program computed`, 'ok', Date.now() - started)]);
   proveLater(player);
 }
 
 /**
- * A lock `wallet` carried out for the match whose bytes are `external`, found among every request the
- * game's account made of that wallet, on any of its sessions: the vault, once the account saw it
- * locked. A lock can land after its match gave up on it (it waited behind a request the player had
- * not answered); this is how such a stake is found and given back.
+ * The vault `wallet` locked for the match `setup` describes, found among every request the game's
+ * account made of that wallet: a lock can land after its match gave up on it (it waited behind a
+ * request the player had not answered), and this is how such a stake is found and given back.
  */
-export async function lockedFor(wallet: string, external: Bytes): Promise<string | null> {
+export async function lockedFor(wallet: string, setup: Bytes): Promise<{ vault: string; cell: string } | null> {
   const w = await world();
   const same = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((x, i) => x === b[i]);
-  // Every session of the wallet's, and every lock asked in them, looked at together.
   const found = await Promise.all((await w.host.sessions()).filter((s) => b32(s.peerDeviceId) === wallet).map(async (session) => {
     const payload = await w.host.query('connect.app.requests', new pb.ConnectAppRequestsQueryV1({ sessionId: session.sessionId, after: 0n }).toBinary());
     if (payload.case !== 'connectReply' || payload.value.reply.case !== 'requests') return [];
     const locks = payload.value.reply.value.requests
       .map((request) => pb.AppRequestBodyV1.fromBinary(request.body))
-      .filter((body) => body.kind.case === 'escrowLock' && same(body.kind.value.external, external));
+      .filter((body) => body.kind.case === 'duelLock' && same(body.kind.value.setup, setup));
     const statuses = await Promise.all(locks.map((body) => w.host.status(session.sessionId, body.seq)));
-    return statuses.filter((status) => status.fact === pb.ConnectFact.ESCROW_LOCKED && status.escrowVaultIds.length).map((status) => b32(status.escrowVaultIds[0]));
+    return statuses.filter((status) => status.fact === pb.ConnectFact.DUEL_LOCKED && status.escrowVaultIds.length)
+      .map((status) => ({ vault: b32(status.escrowVaultIds[0]), cell: b32(status.escrowVerdictCell) }));
   }));
   return found.flat()[0] ?? null;
+}
+
+// ------------------------- creature states (anti-mod) -------------------------
+//
+// Each creature's state is published by the game's account as it is when it matters: the state it
+// was issued in, then a successor naming the record before it whenever a creature that changed is
+// fielded in a staked match. They are generic DSM objects (authored, signed by the account, under
+// a locator the creature's anchor names); both wallets read the chain from issuance before they
+// lock, and a setup whose creature differs by one byte from its latest record is refused.
+
+/** The creature's latest published state, publishing it first when its game state moved on. */
+export async function publishedState(c: Creature): Promise<Bytes> {
+  if (c.anchor === null) throw new Error(`${displayName(c)} is still on its way to its wallet`);
+  const w = await world();
+  return own(await w.economy.publishState(c.anchor, creatureState(c, fromB32(c.anchor))));
 }

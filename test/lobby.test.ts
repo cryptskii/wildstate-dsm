@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { claimUsername, resolvePlayer, validateUsername, freshProfile, RENAME_COOLDOWN_MS, type Directory } from '../src/domain/username';
 import { rate, expected, START_RATING } from '../src/domain/rating';
 import { pair, window } from '../src/domain/matchmaker';
-import { choose, expire, forfeit, firstToAct, startMatch, MISSES_TO_FORFEIT, TURN_MS, type Match } from '../src/domain/match';
-import { newCreature } from '../src/domain/game';
+import { createHash } from 'node:crypto';
+import { choose, expire, forfeit, startMatch, MISSES_TO_FORFEIT, TURN_MS, type Entrant, type Match } from '../src/domain/match';
+import { creatureState, encodeSetup } from '../src/domain/program';
+import { newCreature, type Creature } from '../src/domain/game';
 
 const A = 'MJPG8P38E3AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', B = '4BKF028R0BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
 const dir = (): Directory => ({ players: {}, usernames: {} });
@@ -75,17 +77,32 @@ describe('matchmaker', () => {
   });
 });
 
-describe('player-vs-player match', () => {
+/** A setup for two entrants: fixed identities and keys, each creature under an anchor its id names. */
+const bytes32 = (text: string) => new Uint8Array(createHash('sha256').update(text).digest());
+const anchorOf = (c: Creature) => bytes32(`anchor|${c.id}`);
+function setupOf(a: Entrant, b: Entrant): Uint8Array {
+  const side = (p: Entrant) => ({
+    genesis: bytes32(`genesis|${p.wallet}`), deviceId: bytes32(`device|${p.wallet}`), sessionKey: bytes32(`key|${p.wallet}`),
+    poultice: p.items?.poultice ?? 0, tonic: p.items?.tonic ?? 0, team: p.team.map((c) => creatureState(c, anchorOf(c))),
+  });
+  return encodeSetup(bytes32(`nonce|${a.wallet}|${b.wallet}`), side(a), side(b));
+}
+const match = (id: string, a: Entrant, b: Entrant, now = 0, stake = 0) => startMatch(id, stake, setupOf(a, b), a, b, now);
+
+describe('player-vs-player match, resolved by the program', () => {
   const team = (w: string, species: Parameters<typeof newCreature>[1][], lvl = 5) => species.map((s, i) => newCreature(`${w}/c${i}`, s, undefined, lvl));
-  const fresh = (now = 0): Match => startMatch('m1', 0, { wallet: A, name: 'kai', team: team(A, ['embercub', 'mossling', 'tidefin']) }, { wallet: B, name: 'ren', team: team(B, ['voltusk', 'leon', 'brineback']) }, now);
-  it('waits for both choices, then resolves the turn in a fixed order', () => {
+  const entrants = () => [{ wallet: A, name: 'kai', team: team(A, ['embercub', 'mossling', 'tidefin']) }, { wallet: B, name: 'ren', team: team(B, ['voltusk', 'leon', 'brineback']) }] as const;
+  const fresh = (now = 0): Match => match('m1', ...entrants(), now);
+  it('waits for both choices, then resolves the turn, both creatures acting', () => {
     const m = fresh();
     expect(choose(m, 'a', 'strike', 1)).toBeNull();
     expect(m.turn).toBe(0);
     expect(choose(m, 'a', 'flare', 1)).toBe('already-chosen');
     expect(choose(m, 'b', 'strike', 2)).toBeNull();
     expect(m.turn).toBe(1);
-    expect(m.log.map(e => e.side)).toEqual([firstToAct({ ...fresh(), turn: 0 }), firstToAct({ ...fresh(), turn: 0 }) === 'a' ? 'b' : 'a']);
+    expect(m.log.map(e => e.side).sort()).toEqual(['a', 'b']);
+    expect(m.log.every(e => e.move === 'strike' && e.dmg > 0)).toBe(true);
+    expect(m.program.turns).toHaveLength(1);
     expect(m.deadline).toBe(2 + TURN_MS);
   });
   it('is deterministic: the same choices give the same match', () => {
@@ -108,7 +125,7 @@ describe('player-vs-player match', () => {
     expect(loser.team.every(c => c.hp === 0)).toBe(true);
     expect(seen).toContain(`${m.winner === 'a' ? 'b' : 'a'}:switch`);
   });
-  it('passes a missed turn, doing nothing, and forfeits after three misses', () => {
+  it('passes a missed turn in a free match, doing nothing, and resigns the player after three misses', () => {
     const m = fresh();
     const hpA = m.a.team[0].hp;
     choose(m, 'a', 'strike', 0);
@@ -120,19 +137,19 @@ describe('player-vs-player match', () => {
     expect(m.a.team[0].hp).toBe(hpA);
     expect(choose(m, 'a', 'pass', m.deadline)).toBe('unknown-move');
     for (let i = 1; i < MISSES_TO_FORFEIT; i++) { choose(m, 'a', 'strike', m.deadline); expire(m, m.deadline); }
-    expect(m).toMatchObject({ phase: 'done', winner: 'a', reason: 'timeout' });
+    expect(m).toMatchObject({ phase: 'done', winner: 'a', reason: 'resign' });
   });
-  it('lets a player forfeit, and leaves the players\' own creatures untouched', () => {
+  it('lets a player resign, and leaves the players\' own creatures untouched', () => {
     const own = team(A, ['embercub', 'mossling', 'tidefin']);
     own[0].hp = 3;
-    const m = startMatch('m2', 0, { wallet: A, name: 'kai', team: own }, { wallet: B, name: 'ren', team: team(B, ['voltusk']) }, 0);
+    const m = match('m2', { wallet: A, name: 'kai', team: own }, { wallet: B, name: 'ren', team: team(B, ['voltusk']) });
     // The team fights as the player prepared it, and the match never writes back.
     expect(m.a.team[0].hp).toBe(3);
-    choose(m, 'a', 'strike', 0); choose(m, 'b', 'strike', 0);
+    choose(m, 'a', 'mist-veil', 0); choose(m, 'b', 'bristle', 0);
     expect(own[0].hp).toBe(3);
     expect(own[0].statuses).toEqual([]);
     forfeit(m, 'b');
-    expect(m).toMatchObject({ phase: 'done', winner: 'a', reason: 'forfeit' });
+    expect(m).toMatchObject({ phase: 'done', winner: 'a', reason: 'resign' });
     expect(choose(m, 'a', 'strike', 1)).toBe('match-over');
   });
   it('refuses unknown moves and spent charges', () => {
@@ -140,6 +157,28 @@ describe('player-vs-player match', () => {
     expect(choose(m, 'a', 'tide-lash', 0)).toBe('unknown-move');
     m.a.team[0].charges.flare = 0;
     expect(choose(m, 'a', 'flare', 0)).toBe('no-charges');
+  });
+  it('never resolves a staked match\'s turn on choices alone: the wallets seal and reveal them first', () => {
+    const m = match('m3', ...entrants(), 0, 100);
+    expect(choose(m, 'a', 'strike', 0)).toBeNull();
+    expect(choose(m, 'b', 'strike', 0)).toBeNull();
+    expect(m.turn).toBe(0);
+    expect(m.program.turns).toHaveLength(0);
+  });
+});
+
+describe('items in a match', () => {
+  it('spend the turn and the match\'s item; the opponent still acts', () => {
+    const own = [newCreature(`${A}/c0`, 'embercub', undefined, 5)];
+    own[0].hp = 10;
+    const m = match('mi', { wallet: A, name: 'kai', team: own, items: { poultice: 1 } }, { wallet: B, name: 'ren', team: [newCreature(`${B}/c0`, 'voltusk', undefined, 5)] });
+    expect(choose(m, 'a', `item:poultice:${A}/c0`, 0)).toBeNull();
+    choose(m, 'b', 'strike', 0);
+    expect(m.a.items.poultice).toBe(0);
+    expect(m.log.map(e => e.move)).toEqual(expect.arrayContaining(['item:poultice', 'strike']));
+    expect(m.a.team[0].hp).toBe(10 + 15 - m.log.find(e => e.side === 'b')!.dmg);
+    expect(choose(m, 'a', `item:poultice:${A}/c0`, 1)).toBe('no-item');
+    expect(choose(m, 'a', `item:tonic:nobody`, 1)).toBe('no-item');
   });
 });
 
@@ -151,20 +190,5 @@ describe('stakes', () => {
     expect(validStake(MAX_STAKE + 1)).toBe(false);
     expect(validStake(2.5)).toBe(false);
     expect(validStake(-1)).toBe(false);
-  });
-});
-
-describe('items in a match', () => {
-  it('spend the turn and the match\'s item; the opponent still acts', () => {
-    const own = [newCreature(`${A}/c0`, 'embercub', undefined, 5)];
-    own[0].hp = 10;
-    const m = startMatch('mi', 0, { wallet: A, name: 'kai', team: own, items: { poultice: 1 } }, { wallet: B, name: 'ren', team: [newCreature(`${B}/c0`, 'voltusk', undefined, 5)] }, 0);
-    expect(choose(m, 'a', `item:poultice:${A}/c0`, 0)).toBeNull();
-    expect(m.a.items.poultice).toBe(0);
-    choose(m, 'b', 'strike', 0);
-    expect(m.log.map(e => e.move)).toEqual(expect.arrayContaining(['item:poultice', 'strike']));
-    expect(m.a.team[0].hp).toBe(10 + 15 - m.log.find(e => e.side === 'b')!.dmg);
-    expect(choose(m, 'a', `item:poultice:${A}/c0`, 1)).toBe('no-item');
-    expect(choose(m, 'a', `item:tonic:nobody`, 1)).toBe('no-item');
   });
 });

@@ -15,7 +15,7 @@ const props = defineProps<{
   incoming: { id: string; from: Brief; stake: number; expiresAt: number }[];
   outgoing: { id: string; to: Brief; stake: number; expiresAt: number }[];
   history: { matchId: string; opponentName: string; stake: number; result: 'win' | 'loss' | 'void'; ratingDelta: number; at: number }[];
-  liveMatch: { id: string; stake: number; opponent: Brief; locking: { mine: boolean; theirs: boolean } | null } | null;
+  liveMatch: { id: string; stake: number; opponent: Brief; locking: { keys: boolean; mine: boolean; theirs: boolean; ready: { mine: boolean; theirs: boolean }; started: boolean } | null } | null;
   found?: Brief | null;
   notice: string;
   walletWaiting?: string | null;
@@ -85,12 +85,15 @@ async function copyId() { await navigator.clipboard.writeText(props.me.id); copi
       <p v-if="notice" class="notice">{{ notice }}</p>
       <div v-if="walletWaiting" class="card walletWait"><b>Your DSM wallet is waiting for you</b><small>{{ walletWaiting }}</small><a class="px go wide" href="dsm:wallet">OPEN WALLET ▶</a></div>
 
-      <!-- A staked match waits for both stakes to lock on DSM before the battle opens. -->
+      <!-- A staked match waits for both stakes to lock on DSM and both wallets to ready before the battle opens. -->
       <div v-if="liveMatch?.locking" class="card live locking">
         <b>Locking stakes · {{ wild(liveMatch.stake) }} each vs @{{ liveMatch.opponent.name }}</b>
-        <small><i class="tick" :class="{ on: liveMatch.locking.mine }"></i>Your stake {{ liveMatch.locking.mine ? 'locked in escrow' : 'locking… if your DSM wallet asks, approve it there' }}</small>
+        <small><i class="tick" :class="{ on: liveMatch.locking.keys }"></i>{{ liveMatch.locking.keys ? 'Both wallets named their battle keys' : 'Your wallets are naming their battle keys…' }}</small>
+        <small><i class="tick" :class="{ on: liveMatch.locking.mine }"></i>Your stake {{ liveMatch.locking.mine ? 'locked in escrow' : 'locking… your wallet checks both teams first; if it asks, approve it there' }}</small>
         <small><i class="tick" :class="{ on: liveMatch.locking.theirs }"></i>@{{ liveMatch.opponent.name }}'s stake {{ liveMatch.locking.theirs ? 'locked in escrow' : liveMatch.locking.mine ? 'locking…' : 'locks after yours' }}</small>
-        <small class="fineprint">The winner's wallet collects both. If a stake never locks, the match is void and a locked stake goes back.</small>
+        <small><i class="tick" :class="{ on: liveMatch.locking.ready.mine }"></i>{{ liveMatch.locking.ready.mine ? 'Your wallet is ready: it checked both stakes' : 'Your wallet readies once both stakes are in' }}</small>
+        <small><i class="tick" :class="{ on: liveMatch.locking.started }"></i>{{ liveMatch.locking.started ? 'Both ready: the match has started' : `Waiting for @${liveMatch.opponent.name}'s wallet to ready` }}</small>
+        <small class="fineprint">No referee: the program decides the match from both wallets' signed moves, and the winner's wallet collects both. If a wallet never readies, the other withdraws: the match is void and each stake goes back.</small>
       </div>
       <div v-else-if="liveMatch" class="card live">You're in a match vs @{{ liveMatch.opponent.name }}.</div>
 

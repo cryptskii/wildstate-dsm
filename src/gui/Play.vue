@@ -12,7 +12,11 @@ const growthSeen = ref('');
 import { TRAINER_REWARD, VICTORY_REWARD } from '../integrations/dsm/terms';
 const props = defineProps<{ state: GameState; mode: string; lastAction?: string; error?: string; notice?: string; nearPond?: boolean; nearNpc?: string; atShop?: boolean; door?: boolean; encounter?: { title: string; line: string } | null; fishing?: { phase: 'cast' | 'bite'; dx: number; dy: number } | null; walletCoins?: number | null; walletWaiting?: string | null; trainerBeaten?: boolean;
   /** Player-vs-player: the opponent, the stake, this turn's deadline, and whether we wait on them. */
-  pvp?: { opponent: string; stake: number; deadline: number; waiting: boolean; chosen?: boolean; foeReady?: boolean; reason: string | null } }>();
+  pvp?: {
+    opponent: string; stake: number; deadline: number; waiting: boolean; chosen?: boolean; foeReady?: boolean; reason: string | null;
+    /** A staked match: each move sealed, then revealed, by its own player's wallet; settled by the program. */
+    staked?: { sealed: { mine: boolean; theirs: boolean }; revealed: { mine: boolean; theirs: boolean }; entries: number; outcome: string | null; paid: boolean; problem: string } | null;
+  } }>();
 const useItem = ref<'poultice' | 'tonic' | null>(null);
 const wallet = computed(() => props.walletCoins ?? props.state.coins);
 const usable = (id: string): id is 'poultice' | 'tonic' => id === 'poultice' || id === 'tonic';
@@ -316,7 +320,7 @@ watch(() => [props.state.revision, props.error], async () => {
   // Named only once it is caught: the capsule is thrown first.
   if (props.lastAction === 'capture' && outcome === 'captured') { naming.value = next.creatures.at(-1)?.id ?? null; nick.value = ''; }
   if (props.pvp && (outcome === 'victory' || outcome === 'defeat')) {
-    const why = props.pvp.reason === 'forfeit' ? ' by forfeit' : props.pvp.reason === 'timeout' ? ' on time' : '';
+    const why = props.pvp.reason === 'resign' || props.pvp.reason === 'forfeit' ? ' by resignation' : props.pvp.reason === 'hp' ? ' on HP at the turn cap' : props.pvp.reason === 'tiebreak' ? ' on the tiebreak at the turn cap' : '';
     message.value = outcome === 'victory' ? `You beat @${props.pvp.opponent}${why}!` : `@${props.pvp.opponent} wins${why}.`;
     busy.value = false; return;
   }
@@ -429,10 +433,20 @@ watch(() => [props.state.revision, props.error], async () => {
       </div>
       <div class="bottom">
         <div class="msg win dark"><img class="portrait" :src="`portraits/${speaker}.png`" alt=""/><p role="status">{{ message }}</p><small v-if="active" class="px hint">{{ matchup }}</small><span class="cursor">▼</span></div>
+        <div v-if="pvp?.staked && !active" class="settleNote win cream">
+          <b class="px">SETTLED BY PROGRAM — NO REFEREE</b>
+          <small>{{ pvp.staked.outcome ? (pvp.staked.paid ? `The program's result holds the match cell; the winner's wallet collected both stakes.` : `The program's result holds the match cell; the winner's wallet collects both stakes.`) : `The winner's wallet writes both players' signed moves to DSM; the program computes the result from them.` }} {{ pvp.staked.entries }} signed moves.</small>
+          <small v-if="pvp.staked.problem" class="muted">{{ pvp.staked.problem }}</small>
+        </div>
         <template v-if="active">
           <!-- A match: both players choose at once each turn; this says who the turn is waiting on. -->
           <div v-if="pvp" class="turnBar px" :class="{ mine: !pvp.chosen, theirs: pvp.chosen }">
             <span>{{ pvp.chosen ? `WAITING FOR @${pvp.opponent.toUpperCase()}` : pvp.foeReady ? `@${pvp.opponent.toUpperCase()} IS READY · YOUR MOVE` : 'YOUR MOVE' }}</span><b>{{ secondsLeft }}s</b>
+          </div>
+          <!-- A staked match: each move is sealed by its player's own wallet, and revealed once both are sealed. -->
+          <div v-if="pvp?.staked" class="sealBar px">
+            <span :class="{ on: pvp.staked.sealed.mine }"><i class="seal"></i>{{ pvp.staked.revealed.mine ? 'YOURS REVEALED' : pvp.staked.sealed.mine ? 'YOURS SEALED' : pvp.chosen ? 'SEALING…' : 'YOURS OPEN' }}</span>
+            <span :class="{ on: pvp.staked.sealed.theirs }"><i class="seal"></i>{{ pvp.staked.revealed.theirs ? 'THEIRS REVEALED' : pvp.staked.sealed.theirs ? 'THEIRS SEALED' : 'THEIRS OPEN' }}</span>
           </div>
           <div class="moves"><button v-for="m in moves" :key="m.id" class="move" :disabled="m.disabled" :style="{ background: EL[m.el].bg, borderLeftColor: EL[m.el].color }" @click="action(m.id)">
             <div class="row between"><b>{{ m.name }}</b><span class="chip px dim">{{ EL[m.el].label }}</span></div><small>{{ m.desc }}</small>
@@ -603,4 +617,8 @@ header{position:absolute;top:16px;left:16px;right:16px;display:flex;justify-cont
 .pips.team{display:flex;gap:4px;margin-bottom:3px}.pips.team i{width:9px;height:9px;border-radius:50%;background:#4da96c;box-shadow:0 0 0 2px #26443a;display:block}.pips.team i.down{background:#7a3b1e;opacity:.6}.pips.team i.on{background:#e9d86b}
 .koCount{color:#e9d86b}.teamBtn.on{background:#e9d86b;color:#26443a}
 .itemPick{display:grid;gap:8px;padding:10px 12px;margin:0 6px;color:#26443a}.itemPick .cmd{color:#f3f3df}.itemPick .cmd.sel{background:#3f6e2a}.row.wrap{flex-wrap:wrap}
+.sealBar{display:flex;gap:10px;justify-content:space-between;font-size:10px;padding:4px 8px;opacity:.85}
+.sealBar span{display:flex;align-items:center;gap:6px;opacity:.6}.sealBar span.on{opacity:1}
+.sealBar .seal{width:8px;height:8px;border-radius:2px;border:2px solid currentColor;display:inline-block}.sealBar span.on .seal{background:currentColor}
+.settleNote{display:flex;flex-direction:column;gap:4px;padding:8px 10px;margin:6px 0}.settleNote b{font-size:11px}
 </style>
