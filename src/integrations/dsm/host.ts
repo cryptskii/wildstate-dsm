@@ -77,13 +77,20 @@ export class DsmHost {
 
   private async ingress(request: pb.IngressRequest, quiet: boolean): Promise<pb.IngressResponse> {
     const path = quiet ? '/ingress/quiet' : '/ingress';
-    const res = await fetch(`${this.base}${path}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-protobuf' },
-      body: own(request.toBinary()),
-    });
-    if (!res.ok) throw new HostError(`${path}: the host answered ${res.status}: ${await res.text()}`);
-    return pb.IngressResponse.fromBinary(new Uint8Array(await res.arrayBuffer()));
+    const op = request.operation.value as { method?: string } | undefined;
+    const started = Date.now();
+    try {
+      const res = await fetch(`${this.base}${path}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-protobuf' },
+        body: own(request.toBinary()),
+      });
+      if (!res.ok) throw new HostError(`${path}: the host answered ${res.status}: ${await res.text()}`);
+      return pb.IngressResponse.fromBinary(new Uint8Array(await res.arrayBuffer()));
+    } finally {
+      const ms = Date.now() - started;
+      if (ms >= 250) console.log(`[host] ${op?.method ?? request.operation.case} took ${ms} ms`);
+    }
   }
 
   async invoke(method: string, body: Uint8Array, quiet = false): Promise<Payload> {
