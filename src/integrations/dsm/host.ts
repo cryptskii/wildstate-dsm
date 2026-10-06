@@ -244,20 +244,24 @@ export class DsmHost {
     return reply.value.seq;
   }
 
-  /** What the account established about request `seq`. `recorded` puts the check in the record. */
   /**
-   * Decide a match on its escrow cell, as the referee the wager names (A12): `a-wins`, `b-wins`
-   * or `void`. Any vault of the match names the cell; the account signs with its own key.
+   * Publish `payload` as an object of this account's on `topic` (`authored.publish`): content
+   * addressed, signed by the account's key, found by anyone under the account's locator for the topic.
    */
-  async adjudicate(vaultId: Bytes, outcome: 'a-wins' | 'b-wins' | 'void'): Promise<pb.EscrowVerdictResponse> {
-    const payload = await this.invoke(
-      'escrow.adjudicate',
-      new pb.EscrowOutcomeRequest({ vaultId, outcome: new TextEncoder().encode(outcome) }).toBinary(),
-    );
-    if (payload.case !== 'escrowVerdictResponse') throw new HostError(`escrow.adjudicate answered ${payload.case}`);
-    return payload.value;
+  async publishAuthored(topic: Bytes, payload: Bytes): Promise<pb.AuthoredPublishedResponse> {
+    const payloadOf = await this.invoke('authored.publish', new pb.AuthoredPublishRequestV1({ topic, payload }).toBinary());
+    if (payloadOf.case !== 'authoredPublishedResponse') throw new HostError(`authored.publish answered ${payloadOf.case}`);
+    return payloadOf.value;
   }
 
+  /** Every object `author` published on `topic`, each checked from its own bytes (`authored.read`). */
+  async readAuthored(author: Bytes, topic: Bytes): Promise<pb.AuthoredObjectsResponse> {
+    const payloadOf = await this.query('authored.read', new pb.AuthoredReadRequestV1({ authorDeviceId: author, topic }).toBinary());
+    if (payloadOf.case !== 'authoredObjectsResponse') throw new HostError(`authored.read answered ${payloadOf.case}`);
+    return payloadOf.value;
+  }
+
+  /** What the account established about request `seq`. `recorded` puts the check in the record. */
   async status(sessionId: Bytes, seq: bigint, recorded = false): Promise<pb.ConnectAppStatusV1> {
     const reply = this.connectReply(
       'connect.app.status',

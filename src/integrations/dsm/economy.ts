@@ -19,6 +19,7 @@ import type { Match } from '../../domain/match';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { SPECIES, type Creature, type GameState } from '../../domain/game';
+import { creatureRecord, creatureRecordDigest } from '../../domain/program';
 import { DsmHost, b32, fromB32, type Bytes } from './host';
 import { COIN, MARKET } from './terms';
 
@@ -66,6 +67,12 @@ export interface EconomyRecord {
   usernames: Directory['usernames'];
   /** Player-vs-player matches by id: run by the game server (Web2), kept across restarts. */
   matches: Record<string, Match>;
+  /**
+   * The last state the account published for each creature (by anchor): the record's digest
+   * (Base32) and the state's bytes (Base64). The published objects are what wallets read; this
+   * only saves the account publishing a state again.
+   */
+  published: Record<string, { digest: string; state: string }>;
 }
 
 /** The fee a token's creation burns, in ERA base units (`TOKEN_CREATION_FEE_ERA`). */
@@ -84,7 +91,7 @@ export class Economy {
   constructor(readonly host: DsmHost, readonly path: string, account: string) {
     this.record = existsSync(path)
       ? (JSON.parse(readFileSync(path, 'utf8')) as EconomyRecord)
-      : { account, wild: null, vault: null, creatures: {}, nextSerial: 1, profiles: {}, stats: {}, inFlight: {}, resume: {}, welcomed: [], players: {}, usernames: {}, matches: {} };
+      : { account, wild: null, vault: null, creatures: {}, nextSerial: 1, profiles: {}, stats: {}, inFlight: {}, resume: {}, welcomed: [], players: {}, usernames: {}, matches: {}, published: {} };
     this.record.inFlight ??= {};
     this.record.resume ??= {};
     // Logins kept before they named their offer named only a session.
@@ -95,6 +102,7 @@ export class Economy {
     this.record.players ??= {};
     this.record.usernames ??= {};
     this.record.matches ??= {};
+    this.record.published ??= {};
     if (this.record.account !== account) {
       throw new Error(`${path} is the record of account ${this.record.account}, not of ${account}`);
     }
@@ -163,6 +171,23 @@ export class Economy {
       this.record.vault = b32(created.vaultId);
       this.save();
     }
+  }
+
+  /**
+   * The creature `anchor`'s state `state` (canonical bytes), published as its latest: the record it
+   * was issued with when the account has published none, else a successor naming the last record.
+   * Publishing the state already latest publishes nothing. Resolves with the state published.
+   */
+  async publishState(anchor: string, state: Uint8Array): Promise<Uint8Array> {
+    const last = this.record.published[anchor];
+    const stateText = Buffer.from(state).toString('base64');
+    if (last && last.state === stateText) return state;
+    const record = creatureRecord(last ? fromB32(last.digest) : null, state);
+    const published = await this.host.publishAuthored(fromB32(anchor), new Uint8Array(record));
+    if (!published.stored) throw new Error(`the state of creature ${anchor.slice(0, 8)} did not store at the storage nodes`);
+    this.record.published[anchor] = { digest: b32(creatureRecordDigest(record)), state: stateText };
+    this.save();
+    return state;
   }
 
   /** A new creature object: a token of supply one whose policy says what it is. */
