@@ -94,6 +94,8 @@ let clockTimer: ReturnType<typeof setInterval> | undefined;
 onMounted(() => { clockTimer = setInterval(() => { clock.value = Date.now(); }, 500); });
 onUnmounted(() => clearInterval(clockTimer));
 const secondsLeft = computed(() => props.pvp ? Math.max(0, Math.ceil((props.pvp.deadline - clock.value) / 1000)) : 0);
+/** The player ran or forfeited: their creature went back into its capsule and stays there. */
+const recalled = computed(() => props.lastAction === 'escape' && fx.value.kind !== 'recall' && (view.value.battle?.outcome === 'escaped' || (!!props.pvp && view.value.battle?.outcome === 'defeat')));
 /** The look tapped in the picker, before it is confirmed. */
 const picked = ref<(typeof LOOKS)[number] | null>(null);
 const speaker = computed(() => props.state.battle?.trainer && fx.value.dir === 'wild' ? props.state.battle.trainer : lookPortrait(props.state.look ?? 'classic'));
@@ -297,7 +299,11 @@ watch(() => [props.state.revision, props.error], async () => {
   } else if (props.lastAction === 'capture') {
     message.value = 'Capsule away!'; await set('cap-throw', { dir: 'own' }, 600); await set('cap-open', {}, 650);
     message.value = '…'; await set('cap-shake', {}, 1400); message.value = 'Gotcha!'; await set('cap-catch', {}, 500);
-  } else if (props.lastAction === 'escape') { message.value = 'You slipped away safely.'; await set('escape', {}, 650); }
+  } else if (props.lastAction === 'escape') {
+    // Run or forfeit: the creature is called back into its capsule, and stays there.
+    message.value = props.pvp || trainer.value ? `${displayName(own.value)}, come back!` : 'You slipped away safely.';
+    await set('recall', {}, 900);
+  }
   // Team battles: say who fainted and who was sent in before the new creature appears.
   for (const e of next.battle?.events ?? []) {
     const who = e.side === 'own' ? next.creatures.find(c => c.id === e.creature) : (e.creature === next.battle!.wild.id ? next.battle!.wild : undefined);
@@ -396,7 +402,7 @@ watch(() => [props.state.revision, props.error], async () => {
       <div class="arena" :class="[arenaKind, { shake: fx.kind === 'impact' }]">
         <div class="flash" v-if="fx.kind === 'impact' && fx.crit"></div>
         <img class="sprite wild" :class="{ flinch: fx.kind === 'impact' && fx.dir === 'own', windupR: fx.kind === 'windup' && fx.dir === 'wild', suck: fx.kind === 'cap-open', gone: ['cap-shake','cap-catch'].includes(fx.kind) || view.battle?.outcome === 'victory' || view.battle?.outcome === 'captured', counter: fx.kind === 'counter' }" :style="pose(wild?.species || 'mossling', 'wild')" :src="`creatures/${wild?.species || 'mossling'}.png`" :alt="wildSp.name"/>
-        <img class="sprite own" :class="{ flinchL: fx.kind === 'impact' && fx.dir === 'wild', windup: fx.kind === 'windup' && fx.dir === 'own', lunge: fx.kind === 'lunge', run: fx.kind === 'escape', camo: fx.kind === 'camo' }" :style="pose(own.species, 'own')" :src="`creatures/${own.species}.png`" :alt="ownSp.name"/>
+        <img class="sprite own" :class="{ flinchL: fx.kind === 'impact' && fx.dir === 'wild', windup: fx.kind === 'windup' && fx.dir === 'own', lunge: fx.kind === 'lunge', recall: fx.kind === 'recall', gone: recalled, camo: fx.kind === 'camo' }" :style="pose(own.species, 'own')" :src="`creatures/${own.species}.png`" :alt="ownSp.name"/>
         <!-- effects -->
         <template v-if="fx.kind === 'proj' && PROJ[fx.el]"><i v-for="n in 6" :key="n" class="fx proj" :class="[fx.el, fx.dir, { fire: fx.el === 'fire' }]" :style="{ backgroundImage: `url(/fx/${PROJ[fx.el]}.png)`, animationDelay: `${(n-1)*.045}s, 0s`, opacity: n === 1 ? 1 : .6 - n * .08, scale: n === 1 ? 1 : 1 - n * .12 }"></i></template>
         <template v-if="fx.kind === 'impact'"><i class="fx burst" :class="[fx.dir, fx.el]" :style="{ backgroundImage: fx.el === 'fire' ? 'url(/fx/fireburst.png)' : 'url(/fx/burst.png)' }"></i><i v-for="n in 3" :key="'b'+n" class="fx burst small" :class="[fx.dir, fx.el, 's'+n]" :style="{ backgroundImage: fx.el === 'fire' ? 'url(/fx/fireburst.png)' : 'url(/fx/burst.png)', animationDelay: `${n*.06}s` }"></i><i v-if="fx.melee && fx.el === 'fire'" class="fx bite" :class="fx.dir"></i><b class="dmg px" :class="[fx.dir, { crit: fx.crit }]">{{ fx.crit ? '!' : '' }}-{{ fx.dmg }}</b></template>
@@ -411,6 +417,7 @@ watch(() => [props.state.revision, props.error], async () => {
         <i v-if="fx.kind === 'guard'" class="fx shield"></i>
         <template v-if="fx.kind === 'heal'"><i v-for="n in 5" :key="'h'+n" class="fx heal" :style="{ left: `${22 + n * 4}%`, animationDelay: `0s, ${n*.08}s` }"></i></template>
         <i v-if="fx.kind === 'cap-throw'" class="fx capsule throw"></i>
+        <i v-if="fx.kind === 'recall' || recalled" class="fx capsule home" :class="{ pop: fx.kind === 'recall' }"></i>
         <template v-if="fx.kind === 'cap-open'"><i class="fx capsule open"></i><i class="fx beam"></i></template>
         <i v-if="fx.kind === 'cap-shake'" class="fx capsule wobble"></i>
         <template v-if="fx.kind === 'cap-catch'"><i class="fx capsule glow"></i><i class="fx burst own catch" style="background-image:url(/fx/burst.png)"></i></template>
@@ -517,7 +524,12 @@ header{position:absolute;top:16px;left:16px;right:16px;display:flex;justify-cont
 .shield{left:var(--x0);top:var(--y0);scale:5.7;background-image:url(/fx/shield.png);animation:frames4 .5s steps(4) forwards,shieldUp .9s ease-out forwards}
 .heal{top:var(--y0);scale:2.3;background-image:url(/fx/heal.png);animation:frames4 .5s steps(4) infinite,healRise 1s ease-out forwards}
 /* Whole-number scales keep the 32px pixel art crisp. */
-.capsule{background-image:url(/fx/capsule.png);scale:2;z-index:8;left:var(--x1);top:var(--capY);filter:drop-shadow(0 3px 0 #0b1a1566)}.capsule.throw{animation:capThrow .6s cubic-bezier(.4,0,.6,1) forwards}.capsule.open{background-position:-64px 0}.capsule.wobble{animation:capWobble .45s ease-in-out 3}.capsule.glow{background-position:-96px 0;animation:capGlow .5s ease-out}
+.capsule{background-image:url(/fx/capsule.png);scale:2;z-index:8;left:var(--x1);top:var(--capY);filter:drop-shadow(0 3px 0 #0b1a1566)}.capsule.throw{animation:capThrow .6s cubic-bezier(.4,0,.6,1) forwards}
+/* Called back: the capsule waits on the creature's own pad, and the creature goes into it. */
+.capsule.home{left:var(--x0);top:calc(var(--padOY) - 34px)}.capsule.home.pop{animation:capPop .9s ease-out}
+.sprite.own.recall{animation:recall .85s ease-in forwards}
+@keyframes recall{0%{filter:none}30%{filter:brightness(2.2) drop-shadow(0 0 10px #ff6a50);scale:1.05}100%{filter:brightness(3) drop-shadow(0 0 10px #ff6a50);scale:0;opacity:0;translate:0 30%}}
+@keyframes capPop{0%{scale:0;opacity:0}25%{scale:1.3;opacity:1}40%{scale:1}85%{background-position:-64px 0}100%{background-position:0 0}}.capsule.open{background-position:-64px 0}.capsule.wobble{animation:capWobble .45s ease-in-out 3}.capsule.glow{background-position:-96px 0;animation:capGlow .5s ease-out}
 .beam{left:var(--x1);top:var(--y1);scale:6.2;background-image:url(/fx/beam.png);animation:frames4 .5s steps(4) infinite,beamSpin 1.2s linear infinite;filter:drop-shadow(0 0 6px #fff)}
 .bottom{padding:18px 20px 16px;display:grid;gap:16px}
 .msg{display:flex;align-items:center;gap:12px;background:#10261f;padding:10px 14px;min-height:56px;margin:4px 6px 2px}.portrait{width:52px;height:52px;flex:none;object-fit:cover;object-position:50% 8%;image-rendering:pixelated;background:#f6efd2;box-shadow:0 0 0 2px #26443a,0 0 0 4px #9ccf6e}.msg p{font-size:24px;margin:0;flex:1;line-height:1.3}.msg .hint{color:#c4ec79;white-space:nowrap;background:none;box-shadow:none;padding:0;max-width:none}.cursor{color:#c4ec79;font-size:16px;animation:blink 1s steps(1) infinite}
