@@ -1,4 +1,5 @@
 import type { RpgPlayer } from '@rpgjs/server';
+import { LOOKS, lookGraphic } from '../../domain/game';
 
 const owners = new Map<string, RpgPlayer>();
 const inactive = new WeakSet<RpgPlayer>();
@@ -24,7 +25,7 @@ export function activateAvatar(player: RpgPlayer, holder: string) {
   owners.set(holder, player);
   inactive.delete(player);
   player._graphicScale.set(1);
-  player.setGraphic('hero');
+  player.setGraphic(graphicOf(player));
   player.through = false;
   player.canMove = true;
 }
@@ -32,6 +33,14 @@ export function activateAvatar(player: RpgPlayer, holder: string) {
 export function releaseAvatar(player: RpgPlayer) {
   inactive.add(player);
   for (const [holder, owner] of owners) if (owner === player) owners.delete(holder);
+}
+
+/** The map sprite of the player's chosen look. */
+export function graphicOf(player: RpgPlayer): string {
+  try {
+    const look = JSON.parse(saveOf(player) || '{}').look;
+    return lookGraphic(LOOKS.includes(look) ? look : 'classic');
+  } catch { return lookGraphic('classic'); }
 }
 
 /** A player's game save, or '' for one that has none (a connection still setting up). */

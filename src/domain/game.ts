@@ -120,6 +120,12 @@ const battleSchema = z.object({
   /** What else happened in the last turn, for the UI: a creature fainted, or one was sent in. */
   events: z.array(z.object({ side: z.enum(['own', 'foe']), kind: z.enum(['faint', 'switch']), creature: z.string() })).max(4).default([]),
 });
+/** How the player's trainer looks on the map, in battle and in dialogue: a game choice, no DSM. */
+export const LOOKS = ['classic', 'auburn', 'bearded', 'curly'] as const;
+export type Look = (typeof LOOKS)[number];
+/** The map sprite and the portrait of a look. */
+export const lookGraphic = (look: Look) => (look === 'classic' ? 'hero' : `hero-${look}`);
+export const lookPortrait = (look: Look) => (look === 'classic' ? 'player' : `player-${look}`);
 export const stateSchema = z.object({
   scarecrowReadyAt: natural.default(0),
   rules: z.literal('creatures-v4'), holder: z.string().min(1), revision: natural,
@@ -134,6 +140,8 @@ export const stateSchema = z.object({
   trainersBeaten: z.array(z.string()).default([]),
   /** The player's chosen team for team battles, in order (creature ids); empty means lead first. */
   team: z.array(z.string()).max(TEAM_SIZE).default([]),
+  /** The trainer's look; saves from before the choice keep the classic one. */
+  look: z.enum(LOOKS).default('classic'),
 }).superRefine((s, ctx) => {
   const ids = s.creatures.map(c => c.id);
   if (new Set(ids).size !== ids.length || new Set(s.consumed).size !== s.consumed.length ||
@@ -150,6 +158,8 @@ export type Command =
   | { type: 'set-lead'; creatureId: string } | { type: 'rename'; creatureId: string; nick: string }
   /** Choose up to three creatures, in order, for team battles. */
   | { type: 'set-team'; creatureIds: string[] }
+  /** Choose how the trainer looks. */
+  | { type: 'set-look'; look: Look }
   /** Spend this battle turn on a bag item for one of the fielded creatures; the opponent still acts. */
   | { type: 'battle-item'; item: UsableItem; creatureId: string }
   /** A bag item spent in a player-vs-player match (the match applies its effect to its own snapshot). */
@@ -306,6 +316,10 @@ export function transition(parent: GameState, expected: number, commandId: strin
       const ids = command.creatureIds;
       if (!Array.isArray(ids) || ids.length > TEAM_SIZE || new Set(ids).size !== ids.length || ids.some(id => !s.creatures.some(c => c.id === id))) fail('invalid-command');
       s.team = [...ids]; break;
+    }
+    case 'set-look': {
+      if (!LOOKS.includes(command.look)) fail('invalid-command');
+      s.look = command.look; break;
     }
     case 'set-lead': {
       const i = s.creatures.findIndex(c => c.id === command.creatureId);

@@ -381,3 +381,17 @@ describe('items in battle cost the turn', () => {
     expect(() => step(healed, { type: 'battle-item', item: 'poultice', creatureId: 'nobody' })).toThrow('unknown-creature');
   });
 });
+
+describe('trainer look', () => {
+  it('starts classic, keeps old saves classic, and changes on request, even mid-battle', async () => {
+    const { stateSchema, lookGraphic, lookPortrait } = await import('../src/domain/game');
+    const s = initialState('alice');
+    expect(s.look).toBe('classic');
+    const { look: _, ...old } = s;
+    expect(stateSchema.parse(old).look).toBe('classic');
+    const next = step(encounter(), { type: 'set-look', look: 'curly' });
+    expect(next.look).toBe('curly');
+    expect([lookGraphic('classic'), lookGraphic('curly'), lookPortrait('classic'), lookPortrait('bearded')]).toEqual(['hero', 'hero-curly', 'player', 'player-bearded']);
+    expect(() => step(s, { type: 'set-look', look: 'wizard' as never })).toThrow();
+  });
+});

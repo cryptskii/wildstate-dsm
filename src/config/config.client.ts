@@ -58,6 +58,10 @@ export default {
             ]] } },
           },
           { id: 'hero', image: 'spritesheets/player-walk-v4.png', ...walker() },
+          // The trainer looks a player can pick (game.ts LOOKS): same frames, same gait.
+          { id: 'hero-auburn', image: 'spritesheets/player-auburn-walk-v4.png', ...walker() },
+          { id: 'hero-bearded', image: 'spritesheets/player-bearded-walk-v4.png', ...walker() },
+          { id: 'hero-curly', image: 'spritesheets/player-curly-walk-v4.png', ...walker() },
           { id: 'female', image: 'spritesheets/mira-walk-v4.png', ...walker() }
         ]
       }

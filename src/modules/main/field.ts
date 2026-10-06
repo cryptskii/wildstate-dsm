@@ -1,8 +1,8 @@
 import { openLobby } from './lobby';
-import { isCurrentAvatar } from './presence';
+import { graphicOf, isCurrentAvatar } from './presence';
 import { npcPosition, pauseNpc } from './patrol';
 import { type RpgPlayer } from '@rpgjs/server';
-import { GameError, SCARECROW_CAPSULES, SPECIES, TRAINERS, displayName, type Command } from '../../domain/game';
+import { GameError, LOOKS, SCARECROW_CAPSULES, SPECIES, TRAINERS, displayName, type Command, type Look } from '../../domain/game';
 import { session } from './journey';
 import { portraitDialogue, talkToRowan, readWayfindingSign, isSpeaking } from './dialogue';
 import { claimScarecrowGift, onCommitted, openMarket, openShop, useCommit, useHudData, useReadState, walked, walletCoins, web2 } from './dsm';
@@ -75,7 +75,7 @@ useReadState((player) => session(player).read());
 useHudData((player) => hudData(player));
 export function fieldHud(player: RpgPlayer) {
   const hud = player.gui('field-hud');
-  hud.on<{ action: string; creatureId?: string; creatureIds?: unknown[]; nick?: string; item?: string }>('field', async ({ action, creatureId, creatureIds, nick, item }) => {
+  hud.on<{ action: string; creatureId?: string; creatureIds?: unknown[]; nick?: string; item?: string; look?: string }>('field', async ({ action, creatureId, creatureIds, nick, item, look }) => {
     // The tap a card is waiting for: the battle (or the shop) opens behind it.
     if (!isCurrentAvatar(player)) return;
     if (action === 'fight') { taps.get(player)?.(); return; }
@@ -97,6 +97,11 @@ export function fieldHud(player: RpgPlayer) {
     if (action === 'set-lead' && creatureId) { tryCommit(player, { type: 'set-lead', creatureId }); return; }
     if (action === 'set-team' && Array.isArray(creatureIds)) { tryCommit(player, { type: 'set-team', creatureIds: creatureIds.filter((x): x is string => typeof x === 'string') }); return; }
     if (action === 'rename' && creatureId) { tryCommit(player, { type: 'rename', creatureId, nick: nick ?? '' }); return; }
+    if (action === 'set-look' && (LOOKS as readonly string[]).includes(look ?? '')) {
+      tryCommit(player, { type: 'set-look', look: look as Look });
+      player.setGraphic(graphicOf(player));
+      return;
+    }
     if (action === 'lobby') { await openLobby(player); return; }
     if (action === 'shop' || action === 'enter-shop') {
       hud.update(hudData(player));
