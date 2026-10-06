@@ -383,14 +383,15 @@ describe('items in battle cost the turn', () => {
 });
 
 describe('trainer look', () => {
-  it('starts classic, keeps old saves classic, and changes on request, even mid-battle', async () => {
+  it('is picked once, the first time; saves from before the picker get to pick too', async () => {
     const { stateSchema, lookGraphic, lookPortrait } = await import('../src/domain/game');
     const s = initialState('alice');
-    expect(s.look).toBe('classic');
-    const { look: _, ...old } = s;
-    expect(stateSchema.parse(old).look).toBe('classic');
-    const next = step(encounter(), { type: 'set-look', look: 'curly' });
-    expect(next.look).toBe('curly');
+    expect(s).toMatchObject({ look: 'classic', lookPicked: false });
+    const { look: _, lookPicked: __, ...old } = s;
+    expect(stateSchema.parse(old)).toMatchObject({ look: 'classic', lookPicked: false });
+    const next = step(s, { type: 'set-look', look: 'curly' });
+    expect(next).toMatchObject({ look: 'curly', lookPicked: true });
+    expect(() => step(next, { type: 'set-look', look: 'bearded' })).toThrow('look-picked');
     expect([lookGraphic('classic'), lookGraphic('curly'), lookPortrait('classic'), lookPortrait('bearded')]).toEqual(['hero', 'hero-curly', 'player', 'player-bearded']);
     expect(() => step(s, { type: 'set-look', look: 'wizard' as never })).toThrow();
   });
