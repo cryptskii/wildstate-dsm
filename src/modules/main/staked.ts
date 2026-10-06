@@ -18,10 +18,11 @@
  */
 import { createHash, randomBytes } from 'node:crypto';
 import {
-  collectDuel, lockDuel, lockedFor, playerOfWallet, publishedState, readyDuel, sessionKey, settleDuel, signEntry, walletIdentity,
+  collectDuel, holdingsProof, lockDuel, lockedFor, playerOfWallet, publishedState, readyDuel, sessionKey, settleDuel, signEntry, walletIdentity,
   withdrawDuel, lobbyRecord, type Relayed,
 } from './dsm';
 import { b32, fromB32 } from '../../integrations/dsm/host';
+import { anchorBytes } from '../../domain/program';
 import {
   loadSetup, moveOf, openingOf, other, resign, resolveTurn, TURN_MS, type Match, type MatchEscrow, type Side,
 } from '../../domain/match';
@@ -97,10 +98,12 @@ export async function lockMatch(m: Match, events: StakedEvents): Promise<void> {
     const setup = encodeSetup(nonce, await side('a', keyA), await side('b', keyB));
     loadSetup(m, setup);
     save();
-    const a = await lockDuel(online(m, 'a'), setup, 'a', m.stake, m.b.wallet);
+    // Each wallet checks the other holds its team: B proves its own for A's lock, then A (after its lock) for B's.
+    const team = (s: Side) => m[s].team.map((c) => anchorBytes(c));
+    const a = await lockDuel(online(m, 'a'), setup, 'a', m.stake, m.b.wallet, await holdingsProof(online(m, 'b'), team('b')));
     e.a = a.vault; e.cell = a.cell;
     save(); events.changed(m);
-    const b = await lockDuel(online(m, 'b'), setup, 'b', m.stake, m.a.wallet, a.vault);
+    const b = await lockDuel(online(m, 'b'), setup, 'b', m.stake, m.a.wallet, await holdingsProof(online(m, 'a'), team('a')), a.vault);
     if (b.cell !== a.cell) throw new Error('the two stakes are on two match cells');
     e.b = b.vault;
     save(); events.changed(m);

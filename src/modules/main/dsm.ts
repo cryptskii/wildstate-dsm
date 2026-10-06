@@ -19,7 +19,7 @@
 import type { RpgPlayer } from '@rpgjs/server';
 import { stateSchema, SCARECROW_CAPSULES, SPECIES, SHOP_QTY_MAX, TRAINERS, displayName, newCreature, initialState, salePrice, type Command, type Creature, type GameState } from '../../domain/game';
 import { DsmHost, HostError, b32, fromB32, own, short, type Bytes } from '../../integrations/dsm/host';
-import { PROGRAM, creatureState } from '../../domain/program';
+import { PROGRAM, anchorBytes, creatureState } from '../../domain/program';
 import type { Economy, Login, Species } from '../../integrations/dsm/economy';
 import { COIN, ITEM_PRICES, MARKET, TRAINER_REWARD, VICTORY_REWARD, WELCOME_COINS, type ShopItem } from '../../integrations/dsm/terms';
 import * as pb from '../../integrations/dsm/proto/dsm_app_pb';
@@ -1121,12 +1121,35 @@ export async function sessionKey(player: RpgPlayer, nonce: Bytes): Promise<Bytes
 }
 
 /**
+ * `player`'s wallet's proof that it holds exactly `anchors` (its fielded creatures), as its wallet
+ * signed it: relayed to the opponent's wallet, which verifies it itself before it locks. Asked
+ * again while the wallet's latest position is still being admitted.
+ */
+export async function holdingsProof(player: RpgPlayer, anchors: Bytes[]): Promise<pb.HoldingsProofV1> {
+  const w = await world();
+  for (let attempt = 0; ; attempt++) {
+    const seq = await w.host.request(sessionOf(seatOf(player)), { case: 'holdings', value: new pb.ConnectHoldingsV1({ policyCommits: anchors }) });
+    try {
+      const s = await settle(player, seq, carried, 'Proving your team');
+      const r = answered(s);
+      if (r.case !== 'holdings') throw new Error(`the wallet answered ${r.case} for its team`);
+      return r.value;
+    } catch (err) {
+      // A proof waits for a position still being admitted (a lock just made, say): ask again.
+      if (attempt >= 20 || !(err instanceof Error) || !err.message.includes('still being admitted')) throw err;
+      await sleep(500);
+    }
+  }
+}
+
+/**
  * Ask `player`'s wallet to lock `stake` WILD in the match `setup` describes, playing `side`; side B
- * names side A's vault. Resolves with the vault and the match cell once the game's own account found
- * the vault Active under exactly the setup's terms.
+ * names side A's vault. `opponentHoldings` is the opponent's proof of its team, relayed. Resolves with
+ * the vault and the match cell once the game's own account found the vault Active under exactly the
+ * setup's terms.
  */
 export async function lockDuel(
-  player: RpgPlayer, setup: Bytes, side: 'a' | 'b', stake: number, opponent: string, counterpartVault?: string,
+  player: RpgPlayer, setup: Bytes, side: 'a' | 'b', stake: number, opponent: string, opponentHoldings: pb.HoldingsProofV1, counterpartVault?: string,
 ): Promise<{ vault: string; cell: string }> {
   const seat = seatOf(player);
   const w = await world();
@@ -1140,6 +1163,7 @@ export async function lockDuel(
       opponentGenesis: them.peerGenesis, opponentDeviceId: them.peerDeviceId,
       counterpartVaultId: counterpartVault ? fromB32(counterpartVault) : new Uint8Array(),
       memo: `Wildstate match: ${stake} WILD`,
+      opponentHoldings,
     }),
   });
   const s = await settle(player, seq, (x) => x.fact === pb.ConnectFact.DUEL_LOCKED, 'Locking your stake', undefined, 'walk');
@@ -1258,5 +1282,5 @@ export async function lockedFor(wallet: string, setup: Bytes): Promise<{ vault: 
 export async function publishedState(c: Creature): Promise<Bytes> {
   if (c.anchor === null) throw new Error(`${displayName(c)} is still on its way to its wallet`);
   const w = await world();
-  return own(await w.economy.publishState(c.anchor, creatureState(c, fromB32(c.anchor))));
+  return own(await w.economy.publishState(c.anchor, creatureState(c, anchorBytes(c))));
 }

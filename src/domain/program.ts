@@ -9,6 +9,7 @@
  */
 import * as wasm from '../vendor/wildstate-duel/wildstate_duel_wasm.js';
 import { ITEMS, SPECIES, type Creature, type UsableItem } from './game';
+import { fromB32 } from '../integrations/dsm/host';
 
 export type Side = 'a' | 'b';
 
@@ -37,6 +38,12 @@ export type StateView = { turn: number; winner: WinnerView | null; a: SideView; 
 export type ActionView = { side: Side; played: MoveView; dmg: number; multX4: number; status: string | null; burn: number; acted: 'acted' | 'held' };
 export type EventView = { side: Side; kind: 'faint' | 'switch'; teamIndex: number };
 export type LogView = { turn: number; first: Side | null; actions: ActionView[]; events: EventView[]; end: WinnerView | null };
+
+/** An issued creature's anchor: its DSM identity, the policy commitment of its supply-one token. */
+export function anchorBytes(c: Creature): Bytes {
+  if (c.anchor === null) throw new Error(`creature ${c.id} has not been issued`);
+  return fromB32(c.anchor);
+}
 
 /** A creature's state as the program reads it: one charge count per move of its species, in table order. */
 export function creatureState(c: Creature, anchor: Uint8Array): Bytes {
