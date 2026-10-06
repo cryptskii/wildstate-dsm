@@ -3,6 +3,7 @@ import { computed, inject, ref, watch, onUnmounted, onMounted } from 'vue';
 import { Direction } from '@rpgjs/common';
 import { heldDirection, type MovementControls } from './held-direction';
 import Joystick from './Joystick.vue';
+import { rodPixels } from './fishing-rod';
 import { SPECIES, TRAINERS, LOOKS, lookPortrait, ITEMS as ITEM_EFFECTS, TEAM_SIZE, NICK_MAX, XP_PER_LEVEL, LEVEL_CAP, multiplier, displayName, level, maxHp, maxCharges, damageBonus, type GameState, type Element, type MoveFx } from '../domain/game';
 const xpLabel = (c: { xp: number }) => level(c) >= LEVEL_CAP ? 'MAX' : `${c.xp % XP_PER_LEVEL}/${XP_PER_LEVEL} XP`;
 const xpPct = (c: { xp: number }) => (level(c) >= LEVEL_CAP ? 1 : (c.xp % XP_PER_LEVEL) / XP_PER_LEVEL) * 100 + '%';
@@ -145,7 +146,7 @@ onUnmounted(stopWalk);
  * Drawn over the map at the character's place on screen, followed every frame while it lasts;
  * on the bite the line pulls taut and the bobber goes under.
  */
-const rod = ref<{ hx: number; hy: number; tx: number; ty: number; bx: number; by: number; s: number } | null>(null);
+const rod = ref<{ hx: number; hy: number; s: number } | null>(null);
 let rodFrame = 0;
 type Camera = { toScreen(x: number, y: number): { x: number; y: number }; scale: { x: number } };
 function camera(): Camera | undefined {
@@ -157,26 +158,32 @@ function camera(): Camera | undefined {
   };
   return find((engine as unknown as { canvasApp?: { stage?: unknown } })?.canvasApp?.stage);
 }
+/**
+ * Where the rod sits, in map pixels from the character's footprint (16 x 16 at x, y). The sprite
+ * is drawn from (-8, -24) to (24, 16): head about -20, hands about +3, feet +14. The hand holds the
+ * rod beside the body on the side it faces; the tip leans out ahead of the body, never over the
+ * face; the bobber floats in the water. Facing down or up, the rod angles off to the side.
+ */
+const ROD: Record<string, { hand: [number, number]; tip: [number, number]; bob: [number, number] }> = {
+  right: { hand: [13, 3], tip: [20, -14], bob: [44, 14] },
+  left: { hand: [3, 3], tip: [-20, -14], bob: [-44, 14] },
+  down: { hand: [15, 3], tip: [17, -12], bob: [10, 40] },
+  up: { hand: [14, 1], tip: [13, -20], bob: [4, -38] },
+};
 function placeRod() {
   const f = props.fishing, me = engine?.getCurrentPlayer?.() as { x(): number; y(): number } | undefined, cam = camera();
   if (!f || !me || !cam) { rod.value = null; return; }
-  const s = cam.scale.x, hand = cam.toScreen(me.x() + 8, me.y() + 2);
-  const bite = f.phase === 'bite';
-  // The rod leans out over the water and up; on a bite its tip is pulled down toward the bobber.
-  const tip = { x: hand.x + f.dx * 20 * s, y: hand.y + f.dy * 14 * s - (bite ? 10 : 24) * s };
-  const bob = { x: hand.x + f.dx * 46 * s, y: hand.y + f.dy * 40 * s + (f.dy === 0 ? 10 * s : 0) };
-  rod.value = { hx: hand.x, hy: hand.y, tx: tip.x, ty: tip.y, bx: bob.x, by: bob.y, s };
+  const way = ROD[rodWay.value];
+  // The hand on a whole map pixel, so the rod's pixels line up with the sprite's.
+  const hand = cam.toScreen(Math.round(me.x()) + way.hand[0], Math.round(me.y()) + way.hand[1]);
+  rod.value = { hx: hand.x, hy: hand.y, s: cam.scale.x };
   rodFrame = requestAnimationFrame(placeRod);
 }
+const rodWay = computed(() => { const f = props.fishing; return !f ? 'down' : f.dx > 0 ? 'right' : f.dx < 0 ? 'left' : f.dy < 0 ? 'up' : 'down'; });
+/** The rod, line and bobber in map pixels from the hand, for this cast's direction and phase. */
+const rodArt = computed(() => rodPixels(ROD[rodWay.value], props.fishing?.phase === 'bite'));
 watch(() => props.fishing?.phase, (phase) => { cancelAnimationFrame(rodFrame); if (phase) placeRod(); else rod.value = null; }, { immediate: true });
 onUnmounted(() => cancelAnimationFrame(rodFrame));
-/** The line: sagging toward the water while it waits, straight and taut once a creature bites. */
-const linePath = computed(() => {
-  const r = rod.value; if (!r) return '';
-  if (props.fishing?.phase === 'bite') return `M${r.tx},${r.ty} L${r.bx},${r.by}`;
-  const mx = (r.tx + r.bx) / 2, my = Math.max(r.ty, r.by) + 14 * r.s;
-  return `M${r.tx},${r.ty} Q${mx},${my} ${r.bx},${r.by}`;
-});
 watch(() => [props.mode, props.state.battle?.outcome, props.encounter, party.value], () => {
   if (props.mode !== 'field' || props.state.battle?.outcome === 'active' || props.encounter || party.value) stopWalk();
 });
@@ -357,11 +364,9 @@ watch(() => [props.state.revision, props.error], async () => {
       </div>
       </template>
     </aside>
-    <svg v-if="rod" class="fishing" :class="fishing?.phase" aria-hidden="true">
-      <line class="pole" :x1="rod.hx" :y1="rod.hy" :x2="rod.tx" :y2="rod.ty" :stroke-width="3 * rod.s"/>
-      <path class="fline" :d="linePath"/>
-      <g class="bobber" :transform="`translate(${rod.bx} ${rod.by})`"><g class="bob"><circle :r="3 * rod.s" fill="#f6efd2"/><path :d="`M${-3 * rod.s},0 A${3 * rod.s},${3 * rod.s} 0 0 1 ${3 * rod.s},0 Z`" fill="#d4402b"/></g></g>
-      <circle v-if="fishing?.phase === 'bite'" class="ripple" :cx="rod.bx" :cy="rod.by" :r="10 * rod.s"/>
+    <svg v-if="rod" class="fishing" :class="fishing?.phase" :style="{ '--px': rod.s + 'px' }" shape-rendering="crispEdges" aria-hidden="true">
+      <g class="rod"><rect v-for="(p, i) in rodArt.rod" :key="i" :x="rod.hx + p.x * rod.s" :y="rod.hy + p.y * rod.s" :width="rod.s + 0.5" :height="rod.s + 0.5" :fill="p.c"/></g>
+      <g class="bob"><rect v-for="(p, i) in rodArt.bobber" :key="i" :x="rod.hx + p.x * rod.s" :y="rod.hy + p.y * rod.s" :width="rod.s + 0.5" :height="rod.s + 0.5" :fill="p.c"/></g>
     </svg>
     <!-- The first time the game opens: who you are on the map, in battle and when you talk. Picked once. -->
     <div v-if="state.lookPicked !== true" class="lookPick">
@@ -460,12 +465,11 @@ button{font:inherit;cursor:pointer;border:0;color:#f3f3df;background:#1f4434;box
 header{position:absolute;top:16px;left:16px;right:16px;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px}header b{font-size:11px}.hudLogo{display:block;width:132px;height:auto;margin-bottom:3px}header small{display:block;font-size:14px;color:#b9cdb6;line-height:1}.res{display:flex;align-items:center;gap:10px;font-size:17px;white-space:nowrap}
 .party{position:absolute;left:16px;right:16px;top:90px;max-width:420px;padding:12px;display:grid;gap:10px}/* The fishing rod: drawn over the map, under the controls. */
 .fishing{position:absolute;inset:0;width:100%;height:100%;z-index:4;pointer-events:none;overflow:visible}
-.fishing .pole{stroke:#6b4423;stroke-linecap:round;animation:castOut .35s ease-out}
-.fishing .fline{fill:none;stroke:#f3f3e8;stroke-width:1.2;opacity:.9}
-.fishing .bob{animation:bobble 1.1s ease-in-out infinite}
-.fishing.bite .bob{animation:dunk .25s ease-in-out infinite alternate}
-.fishing .ripple{fill:none;stroke:#e9f6ff;stroke-width:1.5;animation:ripple .5s ease-out infinite}
-@keyframes castOut{from{opacity:0}}@keyframes bobble{50%{transform:translateY(2px)}}@keyframes dunk{from{transform:translateY(1px)}to{transform:translateY(5px) scale(.8)}}@keyframes ripple{from{opacity:.9;transform-box:fill-box;transform-origin:center;transform:scale(.4)}to{opacity:0;transform-box:fill-box;transform-origin:center;transform:scale(1.4)}}
+.fishing .rod{animation:castOut .3s steps(3)}
+/* The bobber bobs a pixel at a time; on a bite it is pulled under. */
+.fishing .bob{animation:bobble 1.1s steps(1) infinite}
+.fishing.bite .bob{animation:dunk .3s steps(1) infinite}
+@keyframes castOut{from{opacity:0}}@keyframes bobble{50%{transform:translateY(var(--px))}}@keyframes dunk{0%{transform:translateY(var(--px))}50%{transform:translateY(calc(var(--px) * 3));opacity:.6}}
 /* Whose move it is in a match: gold while it is yours, grey while the opponent's. */
 .turnBar{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;margin:0 6px;font-size:11px;box-shadow:0 0 0 2px #0b1a15}
 .turnBar.mine{background:#e2c35a;color:#10261f;animation:blink 1.2s steps(2) 3}.turnBar.theirs{background:#24402f;color:#cfe3cb}.turnBar b{font-size:13px}
