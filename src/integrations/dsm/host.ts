@@ -72,6 +72,9 @@ export const fromB32 = (text: string): Bytes => {
 export const short = (bytes: Uint8Array | string): string =>
   (typeof bytes === 'string' ? bytes : b32(bytes)).slice(0, 8);
 
+/** The longest one call to the game's account may take: a lineage walk on a cold account can take a minute. */
+const HOST_CALL_TIMEOUT_MS = 120_000;
+
 export class DsmHost {
   constructor(readonly base: string) {}
 
@@ -84,6 +87,8 @@ export class DsmHost {
         method: 'POST',
         headers: { 'content-type': 'application/x-protobuf' },
         body: own(request.toBinary()),
+        // A call the account never answers fails, instead of holding its player forever.
+        signal: AbortSignal.timeout(HOST_CALL_TIMEOUT_MS),
       });
       if (!res.ok) throw new HostError(`${path}: the host answered ${res.status}: ${await res.text()}`);
       return pb.IngressResponse.fromBinary(new Uint8Array(await res.arrayBuffer()));

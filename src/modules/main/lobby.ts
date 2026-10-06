@@ -358,13 +358,14 @@ export async function payOut(m: Match) {
       save();
     }
     if (e.verdict === 'void') {
-      for (const side of ['a', 'b'] as const) {
+      // Each stake goes back on its own wallet's answer: neither player waits on the other.
+      await Promise.all((['a', 'b'] as const).map(async (side) => {
         const vault = e[side], p = playerOfWallet(m[side].wallet);
-        if (!vault || e.refunded[side] || !p) continue;
+        if (!vault || e.refunded[side] || !p) return;
         await collectStakes(p, [vault], 'Stake returned');
         e.refunded[side] = true;
         save();
-      }
+      }));
     } else if (!e.paid) {
       const side: Side = e.verdict === 'a-wins' ? 'a' : 'b';
       const p = playerOfWallet(m[side].wallet);
