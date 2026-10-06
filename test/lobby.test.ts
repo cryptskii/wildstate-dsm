@@ -108,12 +108,17 @@ describe('player-vs-player match', () => {
     expect(loser.team.every(c => c.hp === 0)).toBe(true);
     expect(seen).toContain(`${m.winner === 'a' ? 'b' : 'a'}:switch`);
   });
-  it('plays Strike for a missed turn and forfeits after three misses', () => {
+  it('passes a missed turn, doing nothing, and forfeits after three misses', () => {
     const m = fresh();
+    const hpA = m.a.team[0].hp;
     choose(m, 'a', 'strike', 0);
     expire(m, TURN_MS);
     expect(m.turn).toBe(1);
     expect(m.b.misses).toBe(1);
+    // The player who let the time run out does not attack on their own.
+    expect(m.log.find(e => e.side === 'b')).toMatchObject({ move: 'pass', dmg: 0 });
+    expect(m.a.team[0].hp).toBe(hpA);
+    expect(choose(m, 'a', 'pass', m.deadline)).toBe('unknown-move');
     for (let i = 1; i < MISSES_TO_FORFEIT; i++) { choose(m, 'a', 'strike', m.deadline); expire(m, m.deadline); }
     expect(m).toMatchObject({ phase: 'done', winner: 'a', reason: 'timeout' });
   });

@@ -11,7 +11,7 @@ const growthSeen = ref('');
 import { TRAINER_REWARD, VICTORY_REWARD } from '../integrations/dsm/terms';
 const props = defineProps<{ state: GameState; mode: string; lastAction?: string; error?: string; notice?: string; nearPond?: boolean; nearNpc?: string; atShop?: boolean; door?: boolean; encounter?: { title: string; line: string } | null; walletCoins?: number | null; trainerBeaten?: boolean;
   /** Player-vs-player: the opponent, the stake, this turn's deadline, and whether we wait on them. */
-  pvp?: { opponent: string; stake: number; deadline: number; waiting: boolean; reason: string | null } }>();
+  pvp?: { opponent: string; stake: number; deadline: number; waiting: boolean; chosen?: boolean; foeReady?: boolean; reason: string | null } }>();
 const useItem = ref<'poultice' | 'tonic' | null>(null);
 const wallet = computed(() => props.walletCoins ?? props.state.coins);
 const usable = (id: string): id is 'poultice' | 'tonic' => id === 'poultice' || id === 'tonic';
@@ -189,7 +189,7 @@ watch(() => [props.state.revision, props.error], async () => {
   busy.value = true;
   const next: GameState = JSON.parse(JSON.stringify(props.state));
   const b = next.battle!, ownName = displayName(own.value), wildName = wild.value ? displayName(wild.value) : wildSp.value.name;
-  if (props.lastAction && b.log.length && (props.lastAction.startsWith('item:') || SPECIES[own.value.species].moves.some(m => m.id === props.lastAction))) {
+  if (props.lastAction && b.log.length && (props.lastAction === 'pass' || props.lastAction.startsWith('item:') || SPECIES[own.value.species].moves.some(m => m.id === props.lastAction))) {
     const mine = b.log.find(e => e.actor === 'own'), theirs = b.log.find(e => e.actor === 'wild');
     /** A turn spent on an item: show it, and take the healed or recharged creature from the new state. */
     const itemTurn = async (entry: NonNullable<typeof b.log[number]>, mine: boolean) => {
@@ -204,7 +204,15 @@ watch(() => [props.state.revision, props.error], async () => {
       if (entry.burn) { await set('', {}, 300); const t = mine ? wild.value! : own.value; t.hp = Math.max(0, t.hp - entry.burn); message.value = `${mine ? wildName : ownName} takes ${entry.burn} burn damage.`; await set('impact', { el: 'fire', dir: mine ? 'own' : 'wild', dmg: entry.burn, crit: false }, 550); }
       await set('');
     };
+    /** A turn its player let run out: the creature does nothing. */
+    const passTurn = async (entry: NonNullable<typeof b.log[number]>, mine: boolean) => {
+      message.value = mine ? `Time ran out: ${ownName} did nothing this turn.` : `${foeTrainer.value} ran out of time: ${wildName} did nothing.`;
+      await wait(900);
+      if (entry.burn) { const t = mine ? wild.value! : own.value; t.hp = Math.max(0, t.hp - entry.burn); message.value = `${mine ? wildName : ownName} takes ${entry.burn} burn damage.`; await set('impact', { el: 'fire', dir: mine ? 'own' : 'wild', dmg: entry.burn, crit: false }, 550); }
+      await set('');
+    };
     const ownTurn = async (mine: NonNullable<typeof b.log[number]>) => {
+      if (mine.move === 'pass') return passTurn(mine, true);
       if (mine.move.startsWith('item:')) return itemTurn(mine, true);
       const m = ownSp.value.moves.find(x => x.id === mine.move)!;
       message.value = `${ownName} used ${m.name}!`;
@@ -225,6 +233,7 @@ watch(() => [props.state.revision, props.error], async () => {
     };
     const foeTurn = async (theirs: NonNullable<typeof b.log[number]>) => {
       await wait(350);
+      if (theirs.move === 'pass') return passTurn(theirs, false);
       if (theirs.move.startsWith('item:')) return itemTurn(theirs, false);
       if (theirs.skipped) { message.value = `${wildName} ${wild.value!.statuses.some(x => x.id === 'stun') ? 'is stunned' : 'is rooted'} and cannot move.`; await wait(600); }
       else {
@@ -364,6 +373,10 @@ watch(() => [props.state.revision, props.error], async () => {
       <div class="bottom">
         <div class="msg win dark"><img class="portrait" :src="`portraits/${speaker}.png`" alt=""/><p role="status">{{ message }}</p><small v-if="active" class="px hint">{{ matchup }}</small><span class="cursor">▼</span></div>
         <template v-if="active">
+          <!-- A match: both players choose at once each turn; this says who the turn is waiting on. -->
+          <div v-if="pvp" class="turnBar px" :class="{ mine: !pvp.chosen, theirs: pvp.chosen }">
+            <span>{{ pvp.chosen ? `WAITING FOR @${pvp.opponent.toUpperCase()}` : pvp.foeReady ? `@${pvp.opponent.toUpperCase()} IS READY · YOUR MOVE` : 'YOUR MOVE' }}</span><b>{{ secondsLeft }}s</b>
+          </div>
           <div class="moves"><button v-for="m in moves" :key="m.id" class="move" :disabled="m.disabled" :style="{ background: EL[m.el].bg, borderLeftColor: EL[m.el].color }" @click="action(m.id)">
             <div class="row between"><b>{{ m.name }}</b><span class="chip px dim">{{ EL[m.el].label }}</span></div><small>{{ m.desc }}</small>
             <div class="row between"><span class="pips"><i v-for="(f, i) in m.pips" :key="i" :class="{ on: f }"></i></span><small class="px tiny">{{ m.max ? `${m.left}/${m.max}` : '∞' }}</small></div></button></div>
@@ -402,7 +415,10 @@ button{font:inherit;cursor:pointer;border:0;color:#f3f3df;background:#1f4434;box
 /* field */
 .field{position:fixed;inset:0;pointer-events:none;font-size:16px}.field header,.field aside,.field nav .side{pointer-events:auto}
 header{position:absolute;top:16px;left:16px;right:16px;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px}header b{font-size:11px}.hudLogo{display:block;width:132px;height:auto;margin-bottom:3px}header small{display:block;font-size:14px;color:#b9cdb6;line-height:1}.res{display:flex;align-items:center;gap:10px;font-size:17px;white-space:nowrap}
-.party{position:absolute;left:16px;right:16px;top:90px;max-width:420px;padding:12px;display:grid;gap:10px}/* The trainer picker: over the whole field, before the game starts. */
+.party{position:absolute;left:16px;right:16px;top:90px;max-width:420px;padding:12px;display:grid;gap:10px}/* Whose move it is in a match: gold while it is yours, grey while the opponent's. */
+.turnBar{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 12px;margin:0 6px;font-size:11px;box-shadow:0 0 0 2px #0b1a15}
+.turnBar.mine{background:#e2c35a;color:#10261f;animation:blink 1.2s steps(2) 3}.turnBar.theirs{background:#24402f;color:#cfe3cb}.turnBar b{font-size:13px}
+/* The trainer picker: over the whole field, before the game starts. */
 .lookPick{position:absolute;inset:0;z-index:30;display:grid;place-items:center;padding:16px;background:#081c1ad9;pointer-events:auto}
 .lookBox{width:min(440px,100%);padding:14px;display:grid;gap:10px;text-align:center}.lookBox .t{font-size:14px;color:#26443a}.lookBox p{margin:0;font-size:18px;line-height:1.15;color:#26443a}
 .lookBox .cmd{justify-self:stretch}.lookBox .cmd:disabled{opacity:.5}

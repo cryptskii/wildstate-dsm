@@ -27,6 +27,8 @@ const interact = inject<(id: string, event: string, data: unknown) => void>('rpg
 const send = (action: string, data: Record<string, unknown> = {}) => interact('lobby', 'lobby', { action, ...data });
 
 const tab = ref<'team' | 'play' | 'friends' | 'history'>('team');
+/** Search, and put the keyboard away so the player card below it is in view. */
+function find() { (document.activeElement as HTMLElement | null)?.blur(); send('find', { query: query.value }); }
 const TEAM_SIZE = 3;
 const slot = (id: string) => props.team.chosen.indexOf(id);
 const pickedCreatures = computed(() => props.team.picked.map(id => props.team.creatures.find(c => c.id === id)!).filter(Boolean));
@@ -136,17 +138,18 @@ async function copyId() { await navigator.clipboard.writeText(props.me.id); copi
           <small>{{ shortId(c.from.id) }} · rating {{ c.from.rating }} · {{ c.stake === 0 ? 'free match' : `for ${wild(c.stake)}` }}</small>
           <div class="row"><button class="px go" @click="send('accept', { id: c.id })">ACCEPT</button><button class="px cancel" @click="send('decline', { id: c.id })">DECLINE</button></div>
         </div>
-        <form class="card" @submit.prevent="send('find', { query })">
+        <form class="card" @submit.prevent="find">
           <small class="px lbl">FIND A FRIEND</small>
           <div class="row"><input v-model="query" placeholder="username or DSM ID" autocapitalize="off" autocomplete="off" /><button class="px go">FIND</button></div>
         </form>
-        <div v-if="found" class="card">
-          <b>@{{ found.name }}</b>
-          <small>{{ shortId(found.id) }} · rating {{ found.rating }} · {{ found.online ? 'online' : 'offline' }}</small>
+        <div v-if="found" class="card friend">
+          <small class="px lbl">PLAYER FOUND</small>
+          <div class="who"><i class="dot" :class="{ on: found.online }"></i><b>@{{ found.name }}</b><small>rating {{ found.rating }}</small></div>
+          <small>{{ shortId(found.id) }} · {{ found.online ? 'online now' : 'offline: they need the game open to accept' }}</small>
           <small class="px lbl">STAKE · ANY AMOUNT</small>
           <div class="row"><input v-model.number="friendStake" type="number" min="0" :max="maxStake" step="1" inputmode="numeric" /><span>WILD</span></div>
           <div class="stakes"><button v-for="s in stakes" :key="s" type="button" class="px stake" :class="{ on: friendStake === s }" :disabled="!open(s)" @click="friendStake = s">{{ wild(s) }}</button></div>
-          <button class="px go wide" :disabled="!found.online || !friendStakeOk" @click="send('challenge', { to: found.id, stake: friendStake })">CHALLENGE{{ friendStake ? ` FOR ${friendStake.toLocaleString()} WILD` : '' }}</button>
+          <button class="px go wide" :disabled="!found.online || !friendStakeOk" @click="send('challenge', { to: found.id, stake: friendStake })">CHALLENGE @{{ found.name.toUpperCase() }}{{ friendStake ? ` FOR ${friendStake.toLocaleString()} WILD` : '' }} ▶</button>
         </div>
         <div v-for="c in outgoing" :key="c.id" class="card">
           <small>Waiting for @{{ c.to.name }} to accept…</small>
@@ -187,6 +190,9 @@ input,select{font:inherit;font-size:19px;color:#26443a;background:#f6efd2;border
 .stakes{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}.stake{padding:8px 2px;font-size:9px}.stake.on{background:#e9d86b;color:#26443a}
 .hint{color:#b9cdb6;font-size:15px;margin:0}
 .go{background:#3f6e2a;padding:8px 12px;font-size:10px}.go.wide{padding:12px;font-size:11px}
+/* A found player reads as a player card, with the challenge as its button. */
+.friend{box-shadow:0 0 0 2px #0b1a15,0 0 0 4px #9ccf6e}.friend .who{display:flex;align-items:baseline;gap:8px}.friend .who b{font-size:30px;line-height:1}
+.dot{width:10px;height:10px;border-radius:50%;background:#6b6b5e;align-self:center;flex:none}.dot.on{background:#9ccf6e;box-shadow:0 0 6px #9ccf6e}
 .cancel{background:#7a3b1e;padding:8px 12px;font-size:10px;justify-self:start}
 .row{display:flex;gap:8px;align-items:center}.row input{flex:1}
 .notice{margin:0;padding:8px 10px;background:#e9dcb4;color:#2b1a10;box-shadow:0 0 0 2px #2b1a10}
