@@ -24,6 +24,7 @@ export default {
     'game.error.match-over': 'The match is over.', 'game.error.already-chosen': 'You have already chosen this turn; waiting for your opponent.',
     'game.error.choice-consumed': 'You have already committed to a campaign path.',
     'game.error.invalid-command': 'That action is unavailable.',
+    'game.error.look-picked': 'Your trainer is already chosen.',
     'game.error.no-rod': 'You need a fishing rod to cast.', 'game.error.unknown-creature': 'That creature is not in your party.',
     'game.error.no-item': 'You have none of that item. Bramble sells them.', 'game.error.not-wild': 'You cannot capture a trainer’s creature.',
     'game.error.already-beaten': 'You already beat this trainer. Rest at camp for a rematch.', 'game.error.sold-out': 'Bramble has no more of that.', 'game.error.not-for-sale': 'Bramble won’t buy your lead or your last creature.', 'game.error.unknown-trainer': 'There is no such trainer.',

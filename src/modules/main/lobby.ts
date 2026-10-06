@@ -215,7 +215,8 @@ export function leaveLobby(player: RpgPlayer) {
  */
 function nameTag(player: RpgPlayer, username: string | null, wallet: string) {
   player.name = username ? `@${username}` : wallet.slice(0, 6);
-  player.setComponentsTop(Components.text('{name}', { fill: '#f6efd2', stroke: '#0b1a15', fontSize: 9, fontWeight: 'bold' }));
+  // Black on a white outline reads on grass, path and water alike.
+  player.setComponentsTop(Components.text('{name}', { fill: '#111111', stroke: '#ffffff', fontSize: 12, fontWeight: 'bold' }));
 }
 
 export async function rejoin(player: RpgPlayer) {

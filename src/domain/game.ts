@@ -140,8 +140,9 @@ export const stateSchema = z.object({
   trainersBeaten: z.array(z.string()).default([]),
   /** The player's chosen team for team battles, in order (creature ids); empty means lead first. */
   team: z.array(z.string()).max(TEAM_SIZE).default([]),
-  /** The trainer's look; saves from before the choice keep the classic one. */
+  /** The trainer's look, picked once when the game first opens; it does not change after. */
   look: z.enum(LOOKS).default('classic'),
+  lookPicked: z.boolean().default(false),
 }).superRefine((s, ctx) => {
   const ids = s.creatures.map(c => c.id);
   if (new Set(ids).size !== ids.length || new Set(s.consumed).size !== s.consumed.length ||
@@ -158,7 +159,7 @@ export type Command =
   | { type: 'set-lead'; creatureId: string } | { type: 'rename'; creatureId: string; nick: string }
   /** Choose up to three creatures, in order, for team battles. */
   | { type: 'set-team'; creatureIds: string[] }
-  /** Choose how the trainer looks. */
+  /** Pick how the trainer looks: once, the first time the game opens. */
   | { type: 'set-look'; look: Look }
   /** Spend this battle turn on a bag item for one of the fielded creatures; the opponent still acts. */
   | { type: 'battle-item'; item: UsableItem; creatureId: string }
@@ -186,7 +187,7 @@ export type Command =
   /** DSM ledger: a creature the wallet holds that this state does not: it joins the party. */
   | { type: 'receive-creature'; creature: Creature };
 export type ErrorCode = 'stale' | 'battle-active' | 'no-battle' | 'fainted' | 'no-charges' |
-  'no-capsules' | 'not-weakened' | 'choice-consumed' | 'invalid-command' | 'no-rod' | 'unknown-creature' |
+  'no-capsules' | 'not-weakened' | 'choice-consumed' | 'invalid-command' | 'look-picked' | 'no-rod' | 'unknown-creature' |
   'no-item' | 'not-wild' | 'already-beaten' | 'unknown-trainer' | 'sold-out' | 'not-for-sale' | 'gift-cooldown';
 /** What Bramble's board sells. The Map is a key item: one per player. */
 export type ShopItemId = 'capsule' | 'poultice' | 'tonic' | 'map';
@@ -318,8 +319,9 @@ export function transition(parent: GameState, expected: number, commandId: strin
       s.team = [...ids]; break;
     }
     case 'set-look': {
+      if (s.lookPicked) fail('look-picked');
       if (!LOOKS.includes(command.look)) fail('invalid-command');
-      s.look = command.look; break;
+      s.look = command.look; s.lookPicked = true; break;
     }
     case 'set-lead': {
       const i = s.creatures.findIndex(c => c.id === command.creatureId);
