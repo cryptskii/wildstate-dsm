@@ -44,6 +44,22 @@ export interface Match {
   events: MatchEvent[];
   winner: Side | null;
   reason: 'knockouts' | 'forfeit' | 'timeout' | null;
+  /** A staked match's escrow on DSM: what the game has seen happen to it, step by step. */
+  escrow?: MatchEscrow;
+}
+/**
+ * The stakes are each player's own, locked in their own vault on one verdict cell (DSM A12); the
+ * game only records what its account saw: each side's vault once locked, the verdict it decided as
+ * the referee, and whether the winnings (or, for a void match, each stake) went back to a wallet.
+ */
+export interface MatchEscrow {
+  a: string | null;
+  b: string | null;
+  verdict: 'a-wins' | 'b-wins' | 'void' | null;
+  paid: boolean;
+  refunded: { a: boolean; b: boolean };
+  /** The last thing that went wrong, for the players; empty when nothing did. */
+  problem: string;
 }
 export type MatchError = 'not-your-turn' | 'unknown-move' | 'no-charges' | 'match-over' | 'already-chosen' | 'no-item' | 'unknown-creature';
 

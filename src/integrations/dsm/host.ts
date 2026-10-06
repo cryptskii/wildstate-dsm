@@ -141,19 +141,14 @@ export class DsmHost {
     supply: bigint;
     description: string;
   }): Promise<Uint8Array> {
-    const supply = new Uint8Array(16);
-    let rest = args.supply;
-    for (let i = 15; i >= 0; i--) {
-      supply[i] = Number(rest & 255n);
-      rest >>= 8n;
-    }
     const payload = await this.invoke(
       'token.create',
       new pb.TokenCreateRequest({
         ticker: args.ticker,
         alias: args.alias,
         decimals: 0,
-        genesisSupplyU128: supply,
+        // Whole units as digits: the SDK parses the amount the player entered (decimals 0).
+        genesisSupplyEntered: args.supply.toString(),
         burnEnabled: false,
         transferable: true,
         threshold: 1,
@@ -238,6 +233,19 @@ export class DsmHost {
   }
 
   /** What the account established about request `seq`. `recorded` puts the check in the record. */
+  /**
+   * Decide a match on its escrow cell, as the referee the wager names (A12): `a-wins`, `b-wins`
+   * or `void`. Any vault of the match names the cell; the account signs with its own key.
+   */
+  async adjudicate(vaultId: Bytes, outcome: 'a-wins' | 'b-wins' | 'void'): Promise<pb.EscrowVerdictResponse> {
+    const payload = await this.invoke(
+      'escrow.adjudicate',
+      new pb.EscrowOutcomeRequest({ vaultId, outcome: new TextEncoder().encode(outcome) }).toBinary(),
+    );
+    if (payload.case !== 'escrowVerdictResponse') throw new HostError(`escrow.adjudicate answered ${payload.case}`);
+    return payload.value;
+  }
+
   async status(sessionId: Bytes, seq: bigint, recorded = false): Promise<pb.ConnectAppStatusV1> {
     const reply = this.connectReply(
       'connect.app.status',
