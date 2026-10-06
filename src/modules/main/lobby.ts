@@ -222,8 +222,8 @@ function nameTag(player: RpgPlayer, username: string | null, wallet: string) {
   player.name = username ? `@${username}` : wallet.slice(0, 6);
   // Black on a thick white outline reads on grass, path and water alike. The client hands the
   // outline to Pixi as is, so it takes a width as well as a colour.
-  const outline = { color: '#ffffff', width: 4, join: 'round' } as unknown as string;
-  player.setComponentsTop(Components.text('{name}', { fill: '#111111', stroke: outline, fontSize: 15, fontWeight: 'bold' }));
+  const outline = { color: '#ffffff', width: 3, join: 'round' } as unknown as string;
+  player.setComponentsTop(Components.text('{name}', { fill: '#111111', stroke: outline, fontSize: 12, fontWeight: 'bold' }));
 }
 
 export async function rejoin(player: RpgPlayer) {

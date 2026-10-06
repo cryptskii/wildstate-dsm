@@ -55,6 +55,8 @@ const held = (action: 'quote' | 'swap') => (props.busy ?? pressed.value) === act
       </div>
       <p v-if="quote" class="quote">{{ quote.amountIn }} → {{ quote.amountOut }} ({{ quote.hops }} hop{{ quote.hops === 1 ? '' : 's' }})</p>
       <p class="status" aria-live="polite">{{ status }}</p>
+      <!-- Turning while the wallet works on a quote or a swap: it has not frozen. -->
+      <i v-if="busy || pressed" class="spinner" role="progressbar" aria-label="Working"></i>
     </section>
   </div>
 </template>
@@ -64,7 +66,7 @@ const held = (action: 'quote' | 'swap') => (props.busy ?? pressed.value) === act
 .overlay{position:fixed;inset:0;z-index:105;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:#06100cb3;pointer-events:auto;color:#f3f3df;font-family:'VT323',ui-monospace,monospace}
 /* Beside the DSM panel (right, 460px) on a wide screen, so both stay in reach. */
 @media (min-width:1000px){.overlay{justify-content:flex-start;padding-left:24px}}
-.card{width:min(520px,100%);padding:16px 18px;background:#10261f;box-shadow:0 0 0 2px #0b1a15,0 0 0 4px #e2c35a,0 0 0 6px #0b1a15}
+.card{position:relative;width:min(520px,100%);padding:16px 18px;background:#10261f;box-shadow:0 0 0 2px #0b1a15,0 0 0 4px #e2c35a,0 0 0 6px #0b1a15}
 .head{display:flex;justify-content:space-between;align-items:center}
 h1{font-family:'Silkscreen',monospace;font-size:14px;color:#f3d77a;margin:0}
 .x{font:inherit;font-size:16px;border:0;background:none;color:#cfe3cb;cursor:pointer}
@@ -80,5 +82,7 @@ input{display:block;width:100%;box-sizing:border-box;margin-top:4px;font:inherit
 /* Waiting on the wallet: greyed and pressed in, as if held down. */
 .actions button.held{background:#5d6b62;color:#d8e2d3;transform:translateY(2px);box-shadow:inset 0 3px 0 #0b1a1599;cursor:progress;opacity:1}
 .quote{font-size:22px;color:#f3d77a;margin:8px 0 0}
-.status{font-family:'Silkscreen',monospace;font-size:10px;color:#e7f6c9;min-height:14px;margin-top:8px}
+.status{font-family:'Silkscreen',monospace;font-size:10px;color:#e7f6c9;min-height:14px;margin-top:8px;padding-right:30px}
+.spinner{position:absolute;right:12px;bottom:12px;width:20px;height:20px;border-radius:50%;border:3px solid #24402f;border-top-color:#e2c35a;border-right-color:#e2c35a;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 </style>
