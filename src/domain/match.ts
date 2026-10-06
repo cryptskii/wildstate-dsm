@@ -13,7 +13,7 @@ import { ITEMS, SPECIES, applyItem, level, type Creature, type UsableItem } from
 
 export type Side = 'a' | 'b';
 export const other = (s: Side): Side => (s === 'a' ? 'b' : 'a');
-/** Seconds a player has to choose each turn; a missed turn plays Strike, three in a row forfeit. */
+/** Seconds a player has to choose each turn; a missed turn passes (does nothing), three in a row forfeit. */
 export const TURN_MS = 30_000;
 export const MISSES_TO_FORFEIT = 3;
 
@@ -23,7 +23,7 @@ export interface MatchSide {
   team: Creature[];
   active: number;
   ko: number;
-  /** A move id, or `item:<poultice|tonic>:<creature id>`: the turn spent on a bag item. */
+  /** A move id, `item:<poultice|tonic>:<creature id>` (the turn spent on a bag item), or `pass` (a turn let run out). */
   choice: string | null;
   misses: number;
   /** Bag items brought into the match; spending one here also spends it from the player's bag. */
@@ -96,14 +96,14 @@ export function choose(m: Match, side: Side, move: string, now: number): MatchEr
   return null;
 }
 
-/** At the deadline, a player who has not chosen plays Strike; three misses in a row forfeit. */
+/** At the deadline, a player who has not chosen passes: their creature does nothing. Three misses in a row forfeit. */
 export function expire(m: Match, now: number): void {
   if (m.phase !== 'battle' || now < m.deadline) return;
   for (const s of ['a', 'b'] as const) {
     if (m[s].choice !== null) continue;
     m[s].misses += 1;
     if (m[s].misses >= MISSES_TO_FORFEIT) { finish(m, other(s), 'timeout'); return; }
-    m[s].choice = 'strike';
+    m[s].choice = 'pass';
   }
   resolve(m, now);
 }
@@ -120,6 +120,7 @@ export function parseItem(choice: string): { item: UsableItem; creatureId: strin
 }
 /** A side's action: an item takes effect now and spends the turn; a move waits for the exchange. */
 function actionOf(side: MatchSide): Action {
+  if (side.choice === 'pass') return { pass: true };
   const item = parseItem(side.choice!);
   if (item) { applyItem(side.team.find(x => x.id === item.creatureId)!, item.item); return { item: item.item }; }
   const c = side.team[side.active];

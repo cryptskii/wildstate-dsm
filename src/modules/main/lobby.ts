@@ -34,6 +34,8 @@ const absentSince = new Map<string, number>();
 /** The move each side chose for the turn that just resolved, so its screen animates it as its own. */
 const chosen = new Map<string, string>();
 const notices = new Map<string, string>();
+/** Who each player last found in FRIENDS: kept between the lobby's refreshes until they challenge or search again. */
+const founds = new Map<string, string>();
 let serial = 0;
 
 const sideOf = (m: Match, wallet: string): Side => (m.a.wallet === wallet ? 'a' : 'b');
@@ -75,6 +77,7 @@ async function lobbyView(player: RpgPlayer) {
     live: liveOf.get(wallet) ?? null,
     liveMatch: (() => { const id = liveOf.get(wallet); const m = id ? matches[id] : undefined; return m ? { id: m.id, stake: m.stake, opponent: brief(m[other(sideOf(m, wallet))].wallet) } : null; })(),
     notice: notices.get(wallet) ?? '',
+    found: (() => { const f = founds.get(wallet); return f ? brief(f) : null; })(),
     team: teamView(session(player).read()),
   };
 }
@@ -97,7 +100,8 @@ function battleView(m: Match, side: Side) {
   };
   return {
     state, mode: 'pvp', lastAction: chosen.get(`${m.id}/${side}`) ?? '', error: '',
-    pvp: { opponent: foe.name, stake: m.stake, deadline: m.deadline, waiting: me.choice !== null && foe.choice === null, reason: m.reason },
+    // Whose move it is: whether each side has chosen this turn (never what the opponent chose).
+    pvp: { opponent: foe.name, stake: m.stake, deadline: m.deadline, waiting: me.choice !== null && foe.choice === null, chosen: me.choice !== null, foeReady: foe.choice !== null, reason: m.reason },
   };
 }
 
@@ -130,11 +134,12 @@ export async function openLobby(player: RpgPlayer): Promise<void> {
       }
       case 'find': {
         const found = resolvePlayer(dir, String(d.query ?? ''));
+        founds.delete(wallet);
+        // The result is its own card, with the challenge on it; only a miss needs words.
         if (!found) say('No player by that name or ID.');
         else if (found === wallet) say('That is you.');
-        else say(`Found @${shownName(dir, found)} · ${found.slice(0, 10)}… · rating ${dir.players[found]?.rating ?? 1200}${playerOfWallet(found) ? ' · online' : ' · offline'}`);
-        gui.update({ ...(await lobbyView(player)), found: found && found !== wallet ? { id: found, name: shownName(dir, found), rating: dir.players[found]?.rating ?? 1200, online: playerOfWallet(found) !== null } : null });
-        return;
+        else founds.set(wallet, found);
+        break;
       }
       case 'challenge': {
         const to = String(d.to ?? ''), stake = Number(d.stake ?? 0);
@@ -143,7 +148,7 @@ export async function openLobby(player: RpgPlayer): Promise<void> {
         else if (to === wallet || !playerOfWallet(to)) say('That player is not online.');
         else if (pvpTeam(session(player).read()).length === 0) say('Heal a creature first: your team has none standing.');
         else if (liveOf.has(to) || liveOf.has(wallet)) say('One of you is already in a match.');
-        else { const id = `ch/${Date.now().toString(36)}/${serial++}`; challenges.set(id, { id, from: wallet, to, stake, at: Date.now() }); say(`Challenge sent to @${shownName(dir, to)}.`); void refreshLobby(to); }
+        else { const id = `ch/${Date.now().toString(36)}/${serial++}`; challenges.set(id, { id, from: wallet, to, stake, at: Date.now() }); founds.delete(wallet); say(`Challenge sent to @${shownName(dir, to)}.`); void refreshLobby(to); }
         break;
       }
       case 'accept': {
@@ -330,7 +335,7 @@ async function tickLobby() {
     const gone = (['a', 'b'] as const).find(s => now - (absentSince.get(m[s].wallet) ?? now) > GRACE_MS);
     if (gone) forfeit(m, gone);
     else if (now >= m.deadline) {
-      for (const s of ['a', 'b'] as const) if (m[s].choice === null) chosen.set(`${m.id}/${s}`, 'strike');
+      for (const s of ['a', 'b'] as const) if (m[s].choice === null) chosen.set(`${m.id}/${s}`, 'pass');
       expire(m, now);
     } else continue;
     save();
