@@ -30,9 +30,13 @@ export const MEADOW = { x0: 448, x1: 640, y0: 192, y1: 352 };
 /** Pond water tiles (tx,ty); casting is allowed from any 4-neighbour of these. */
 export const POND = new Set(["17,12","18,12","19,12","20,12","21,12","17,13","18,13","19,13","20,13","21,13","22,13","16,14","17,14","18,14","19,14","20,14","21,14","22,14","16,15","17,15","18,15","19,15","20,15","21,15","22,15","16,16","17,16","18,16","19,16","20,16","21,16","22,16","17,17","18,17","19,17","20,17","21,17","17,18","18,18","19,18","20,18"]);
 const T = 32;
-export function nearPond(player: RpgPlayer): boolean {
+/** Which way the water is from the player: the first neighbouring pond tile, or none. */
+function pondSide(player: RpgPlayer): [number, number] | undefined {
   const tx = Math.floor(player.x() / T), ty = Math.floor(player.y() / T);
-  return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => POND.has(`${tx + dx},${ty + dy}`));
+  return ([[1, 0], [-1, 0], [0, 1], [0, -1]] as [number, number][]).find(([dx, dy]) => POND.has(`${tx + dx},${ty + dy}`));
+}
+export function nearPond(player: RpgPlayer): boolean {
+  return pondSide(player) !== undefined;
 }
 function nearNpc(player: RpgPlayer): string | undefined {
   const spots: [string, { x: number; y: number }][] = [['Wayfinding sign', WAY_SIGN], ['Scarecrow', SCARECROW], ['Mira', npcPosition(player, 'mira', MIRA)], ['Rowan', npcPosition(player, 'rowan', ROWAN)], ...Object.entries(TRAINER_SPOTS).map(([id, p]) => [TRAINERS[id].name, npcPosition(player, id, p)] as [string, { x: number; y: number }])];
@@ -188,7 +192,16 @@ async function startBattle(player: RpgPlayer, kind: 'encounter' | 'cast' | 'chal
   fighting.add(player);
   player.breakRoutes(true);
   try {
-    if (kind === 'cast') { player.getGui('field-hud')?.update(hudData(player, { notice: 'Cast… waiting for a bite.' })); await new Promise(r => setTimeout(r, 1600)); }
+    // A cast: the rod goes out and the bobber floats, then a bite pulls the line taut.
+    if (kind === 'cast') {
+      // Face the water, and tell the screen which way the line goes.
+      const [dx, dy] = pondSide(player) ?? [0, 1];
+      player.changeDirection((dx > 0 ? 'right' : dx < 0 ? 'left' : dy < 0 ? 'up' : 'down') as Parameters<RpgPlayer['changeDirection']>[0]);
+      player.getGui('field-hud')?.update(hudData(player, { notice: 'Cast… waiting for a bite.', fishing: { phase: 'cast', dx, dy } }));
+      await new Promise(r => setTimeout(r, 1800));
+      player.getGui('field-hud')?.update(hudData(player, { notice: 'Something bit!', fishing: { phase: 'bite', dx, dy } }));
+      await new Promise(r => setTimeout(r, 900));
+    }
     const command: Command = kind === 'challenge' ? { type: 'challenge', trainer: trainer! } : { type: kind };
     const resumed = state.battle?.outcome === 'active';
     let next;
