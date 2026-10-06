@@ -7,7 +7,7 @@
  * price or a balance: the reserves are the vault's own reading, the balances are
  * proven holdings, the quote is the wallet's.
  */
-import { inject, ref } from 'vue';
+import { inject, ref, watch } from 'vue';
 import type { MarketData } from '../modules/main/dsm';
 
 const props = defineProps<MarketData>();
@@ -15,8 +15,20 @@ const interact = inject<(id: string, event: string, data: unknown) => void>('rpg
 const side = ref<'buy' | 'sell'>('buy');
 const amount = ref('');
 
-const send = (action: 'quote' | 'swap' | 'close') =>
+/** The button just pressed stays down until the game answers: at once, before the server's first word. */
+const pressed = ref<'quote' | 'swap' | null>(null);
+const send = (action: 'quote' | 'swap' | 'close') => {
+  if (action !== 'close') {
+    if (props.busy || pressed.value) return;
+    pressed.value = action;
+    // A tap the game turns down at once (no amount) may not change a word on screen: let go anyway.
+    setTimeout(() => { if (!props.busy && pressed.value === action) pressed.value = null; }, 3000);
+  }
   interact('dsm-market', 'market', { action, side: side.value, amount: amount.value });
+};
+// Released once the market is waiting on nothing: an answer, a refusal or a failure.
+watch(() => [props.busy, props.status] as const, ([busy]) => { if (!busy && pressed.value) pressed.value = null; });
+const held = (action: 'quote' | 'swap') => (props.busy ?? pressed.value) === action;
 </script>
 
 <template>
@@ -38,8 +50,8 @@ const send = (action: 'quote' | 'swap' | 'close') =>
         <input v-model="amount" inputmode="decimal" :placeholder="side === 'buy' ? '1.00' : '50'" @keydown.stop />
       </label>
       <div class="actions">
-        <button @click="send('quote')">QUOTE</button>
-        <button class="go" :disabled="!quote" @click="send('swap')">SWAP</button>
+        <button :class="{ held: held('quote') }" :disabled="!!(busy || pressed) && !held('quote')" @click="send('quote')">{{ held('quote') ? 'QUOTING…' : 'QUOTE' }}</button>
+        <button class="go" :class="{ held: held('swap') }" :disabled="!quote || (!!(busy || pressed) && !held('swap'))" @click="send('swap')">{{ held('swap') ? 'SWAPPING…' : 'SWAP' }}</button>
       </div>
       <p v-if="quote" class="quote">{{ quote.amountIn }} → {{ quote.amountOut }} ({{ quote.hops }} hop{{ quote.hops === 1 ? '' : 's' }})</p>
       <p class="status" aria-live="polite">{{ status }}</p>
@@ -65,6 +77,8 @@ input{display:block;width:100%;box-sizing:border-box;margin-top:4px;font:inherit
 .actions{display:flex;gap:8px;margin-top:8px}
 .actions .go{background:#e2c35a;color:#10261f}
 .actions button:disabled{opacity:.4}
+/* Waiting on the wallet: greyed and pressed in, as if held down. */
+.actions button.held{background:#5d6b62;color:#d8e2d3;transform:translateY(2px);box-shadow:inset 0 3px 0 #0b1a1599;cursor:progress;opacity:1}
 .quote{font-size:22px;color:#f3d77a;margin:8px 0 0}
 .status{font-family:'Silkscreen',monospace;font-size:10px;color:#e7f6c9;min-height:14px;margin-top:8px}
 </style>

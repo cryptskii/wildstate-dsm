@@ -14,6 +14,8 @@ export const isFighting = (player: RpgPlayer) => fighting.has(player);
 export function setFighting(player: RpgPlayer, on: boolean) { if (on) fighting.add(player); else fighting.delete(player); }
 /** A card the player taps through (the encounter card, Bramble's door), waiting for its tap. */
 const taps = new WeakMap<RpgPlayer, () => void>();
+/** The card a new fight waits on: every HUD refresh carries it, so it never goes missing while the battle waits for its tap. */
+const cards = new WeakMap<RpgPlayer, { title: string; line: string }>();
 /** NPC anchors match server.ts event positions and the camp layout in simplemap.tmx (fieldmap-v10). */
 export const MIRA = { x: 304, y: 432 }, ROWAN = { x: 240, y: 240 };
 /** Trainers: Kade by the meadow's west edge, Nessa on the far northeast shore. */
@@ -47,6 +49,7 @@ export function hudData(player: RpgPlayer, extra: Record<string, unknown> = {}) 
     state, mode: 'field', nearPond: nearPond(player), nearNpc: who, atShop: atShopDoor(player),
     walletCoins: walletCoins(player),
     trainerBeaten: trainer ? state.trainersBeaten.includes(trainer) : false,
+    encounter: cards.get(player) ?? null,
     ...extra,
   };
 }
@@ -198,9 +201,11 @@ async function startBattle(player: RpgPlayer, kind: 'encounter' | 'cast' | 'chal
         : { title: 'WILD ENCOUNTER', line: 'A wild creature appeared!' };
       await new Promise<void>((tapped) => {
         taps.set(player, tapped);
-        player.getGui('field-hud')?.update(hudData(player, { encounter: card }));
+        cards.set(player, card);
+        player.getGui('field-hud')?.update(hudData(player));
       });
       taps.delete(player);
+      cards.delete(player);
     }
     const gui = player.gui('creature-battle');
     gui.on<{ action: string; revision: number; nick?: string; creatureId?: string }>('battle', ({ action, revision, nick, creatureId }) => {

@@ -138,8 +138,44 @@ function seatOf(player: RpgPlayer): Seat {
   return seat;
 }
 
+/** A wallet's DSM panel history, kept while its page is away, so coming back does not empty it. */
+const feeds = new Map<string, OverlayEntry[]>();
+
 export function leave(player: RpgPlayer): void {
+  const seat = seats.get(player.id);
+  if (seat?.wallet) feeds.set(seat.wallet, seat.feed);
   seats.delete(player.id);
+}
+
+/** The wallet session a request goes over. A page that has just come back may not have it yet. */
+function sessionOf(seat: Seat): Bytes {
+  if (!seat.session) throw new Error('Your wallet is reconnecting; try again in a moment.');
+  return seat.session;
+}
+
+/**
+ * A page that comes back with its game already loaded (the phone switched to the wallet app and
+ * back, or the network dropped) still has its wallet's session on the game's account: the
+ * connection the wallet approved outlives the page's socket. Pick it up again, so requests keep
+ * going over it; false when there is none to pick up and the wallet must connect afresh.
+ */
+export async function resumeWallet(player: RpgPlayer, holder: string): Promise<boolean> {
+  const seat = seatOf(player);
+  if (seat.session && seat.wallet === holder) return true;
+  const w = await world();
+  const live = (await w.host.sessions())
+    .filter((s) => b32(s.peerDeviceId) === holder && s.status !== pb.ConnectSessionStatus.DISCONNECTED)
+    // The one in use most recently: the wallet answers on every session it approved.
+    .sort((a, b) => (a.lastSeq < b.lastSeq ? 1 : a.lastSeq > b.lastSeq ? -1 : 0));
+  if (!live.length || !seats.has(player.id)) return false;
+  seat.session = own(live[0].sessionId);
+  seat.wallet = holder;
+  const kept = feeds.get(holder);
+  if (kept) { seat.feed = kept; feeds.delete(holder); }
+  seat.offerDigest = b32(live[0].offerDigest);
+  pushEntries(seat, [entry('web2', 'Connection resumed', `The page came back; it goes on with wallet ${short(holder)}'s session. Nothing about DSM changed`, 'ok')]);
+  enqueue(player, 'Proving your holdings', () => refreshHoldings(player));
+  return true;
 }
 
 function panel(seat: Seat): PanelData {
@@ -503,14 +539,15 @@ async function settle(
   what: string,
   onWaiting?: () => void,
 ): Promise<pb.ConnectAppStatusV1> {
-  const seat = seatOf(player);
+  // The request's own session: a page that drops and comes back mid-wait gets a fresh seat.
+  const session = sessionOf(seatOf(player));
   const w = await world();
   let saidWaiting = false;
   for (let round = 0; round < 240; round++) {
-    const s = await w.host.status(seat.session!, seq);
+    const s = await w.host.status(session, seq);
     if (done(s)) {
       // Once more, into the record: what the account established.
-      return w.host.status(seat.session!, seq, true);
+      return w.host.status(session, seq, true);
     }
     if (s.answered && (s.outcome === pb.ConnectOutcome.FAILED || s.outcome === pb.ConnectOutcome.DECLINED)) {
       throw new Error(`${what}: the wallet answered ${pb.ConnectOutcome[s.outcome]}${s.reason ? ` (${s.reason})` : ''}`);
@@ -571,7 +608,7 @@ async function handOver(player: RpgPlayer, anchor: string, started = Date.now())
   const seat = seatOf(player);
   const issued = w.economy.record.creatures[anchor];
   const species = issued.species;
-  const seq = await w.host.request(seat.session!, {
+  const seq = await w.host.request(sessionOf(seat), {
     case: 'acceptIssued',
     value: new pb.ConnectAcceptIssuedV1({ anchor: fromB32(anchor) }),
   });
@@ -605,7 +642,7 @@ async function buyItem(player: RpgPlayer, item: ShopItem, n: number): Promise<vo
   const started = Date.now();
   const cost = ITEM_PRICES[item] * BigInt(n);
   const what = `${n} × ${ITEM_NAMES[item]}`;
-  const seq = await w.host.request(seat.session!, {
+  const seq = await w.host.request(sessionOf(seat), {
     case: 'pay',
     value: new pb.ConnectPayV1({ policyCommit: w.economy.wild, amount: cost, memo: what.toLowerCase() }),
   });
@@ -635,7 +672,7 @@ async function sellCreature(player: RpgPlayer, creatureId: string): Promise<void
   const anchor = c.anchor;
   const name = displayName(c);
   const price = BigInt(salePrice(c));
-  const seq = await w.host.request(seat.session!, {
+  const seq = await w.host.request(sessionOf(seat), {
     case: 'pay',
     value: new pb.ConnectPayV1({ policyCommit: fromB32(anchor), amount: 1n, memo: `${name} to Bramble` }),
   });
@@ -723,7 +760,7 @@ async function refreshHoldings(player: RpgPlayer): Promise<void> {
   const w = await world();
   const seat = seatOf(player);
   const asked = holdingsAsked(w);
-  const seq = await w.host.request(seat.session!, {
+  const seq = await w.host.request(sessionOf(seat), {
     case: 'holdings',
     value: new pb.ConnectHoldingsV1({ policyCommits: asked }),
   });
@@ -831,6 +868,8 @@ export interface MarketData {
   era: string | null;
   quote: { side: 'buy' | 'sell'; amountIn: string; amountOut: string; hops: number } | null;
   status: string;
+  /** What the market is waiting on the wallet for; its button stays held down until the answer. */
+  busy: 'quote' | 'swap' | null;
 }
 
 async function vaultReading(): Promise<MarketData['vault']> {
@@ -850,10 +889,11 @@ const openMarkets = new Map<string, () => Promise<void>>();
 
 export async function openMarket(player: RpgPlayer): Promise<void> {
   const seat = seatOf(player);
-  if (!seat.session) return;
+  sessionOf(seat);
   const gui = player.gui('dsm-market');
   let quote: MarketData['quote'] = null;
   let shownStatus = '';
+  let busy: MarketData['busy'] = null;
   const data = async (status: string): Promise<MarketData> => {
     shownStatus = status;
     // A vault that cannot be read is said so, beside whatever else is shown.
@@ -867,6 +907,7 @@ export async function openMarket(player: RpgPlayer): Promise<void> {
       era: seat.era === null ? null : eraText(seat.era),
       quote,
       status: status + unread,
+      busy,
     };
   };
   openMarkets.set(player.id, async () => gui.update(await data(shownStatus)));
@@ -874,8 +915,10 @@ export async function openMarket(player: RpgPlayer): Promise<void> {
     if (action === 'close') { openMarkets.delete(player.id); void gui.close(); return; }
     // Whatever goes wrong underneath (a wallet that has not answered, a host out of reach) is
     // the market's to say: it must never take the game server down with it.
+    // One question to the wallet at a time: a second tap while one waits would only queue behind it.
+    if (busy) return;
     try { await marketAction(action, side, amount); }
-    catch (e) { gui.update(await data(e instanceof Error ? e.message : String(e))); }
+    catch (e) { busy = null; gui.update(await data(e instanceof Error ? e.message : String(e))); }
   });
   const marketAction = async (action: string, side: 'buy' | 'sell' | undefined, amount: string | undefined) => {
     const w = await world();
@@ -885,28 +928,33 @@ export async function openMarket(player: RpgPlayer): Promise<void> {
     if (!(amountIn > 0n)) { gui.update(await data('Enter an amount.')); return; }
     const [tokenIn, tokenOut] = buy ? [w.economy.eraCommit, w.economy.wild] : [w.economy.wild, w.economy.eraCommit];
     if (action === 'quote') {
+      busy = 'quote';
       gui.update(await data('Asking your wallet for a SoFi quote…'));
       web2(player, 'Market', 'Quote: the game asks your wallet to price the swap through SoFi');
-      const seq = await w.host.request(seat.session!, { case: 'quote', value: new pb.ConnectQuoteV1({ tokenIn, tokenOut, amountIn }) });
+      const seq = await w.host.request(sessionOf(seat), { case: 'quote', value: new pb.ConnectQuoteV1({ tokenIn, tokenOut, amountIn }) });
       const s = await settle(player, seq, (x) => x.answered && x.quote !== undefined, 'Quote');
       const q = s.quote!;
       quote = { side: buy ? 'buy' : 'sell', amountIn: buy ? eraText(q.amountIn) : wildText(q.amountIn), amountOut: buy ? wildText(q.amountOut) : eraText(q.amountOut), hops: q.hops };
+      busy = null;
       gui.update(await data(`Quote: ${quote.amountIn} → ${quote.amountOut} over ${q.hops} hop(s). Information only.`));
       return;
     }
     if (action === 'swap') {
       const started = Date.now();
+      busy = 'swap';
       gui.update(await data('Your wallet is trading through SoFi…'));
       web2(player, 'Market', 'Swap: the game asks your wallet to trade; the wallet runs an ordinary SoFi trade');
-      const seq = await w.host.request(seat.session!, { case: 'swap', value: new pb.ConnectSwapV1({ tokenIn, tokenOut, amountIn, minAmountOut: 1n }) });
+      const seq = await w.host.request(sessionOf(seat), { case: 'swap', value: new pb.ConnectSwapV1({ tokenIn, tokenOut, amountIn, minAmountOut: 1n }) });
       try {
         const s = await settle(player, seq, (x) => x.answered && x.outcome === pb.ConnectOutcome.CARRIED_OUT, 'Swap');
         const position = s.swap?.position ?? 0n;
         pushEntries(seat, [entry('dsm', 'Swap realized', `SoFi trade through the WILD/ERA vault at wallet position ${position}; the vault's own record shows it`, 'ok', Date.now() - started)]);
         proveLater(player);
         quote = null;
+        busy = null;
         gui.update(await data(`Swapped. Realized at position ${position}.`));
       } catch (e) {
+        busy = null;
         gui.update(await data(e instanceof Error ? e.message : String(e)));
       }
     }

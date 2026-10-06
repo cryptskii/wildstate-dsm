@@ -82,7 +82,8 @@ onUnmounted(() => { window.removeEventListener('blur', up); document.removeEvent
 /* The lower-left of the screen is the stick's: touch it anywhere there. */
 .stickZone{position:absolute;left:0;bottom:0;width:58%;height:44%;z-index:5;pointer-events:auto;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .ghost,.base{position:absolute;width:104px;height:104px;border-radius:50%}
-.ghost{left:22px;bottom:34px;background:#0b1a1526;box-shadow:inset 0 0 0 3px #f6efd240}
+/* Its resting spot sits clear of the screen's bottom edge, where Android takes an upward drag for its own swipe gesture. */
+.ghost{left:22px;bottom:64px;background:#0b1a1526;box-shadow:inset 0 0 0 3px #f6efd240}
 .ghost i{position:absolute;left:30px;top:30px;width:44px;height:44px;border-radius:50%;background:#f6efd233}
 .base{background:radial-gradient(circle,#0b1a1540 0 55%,#0b1a1566 56%);box-shadow:inset 0 0 0 3px #f6efd280,0 2px 0 #0b1a1566}
 .knob{position:absolute;left:28px;top:28px;width:48px;height:48px;border-radius:50%;background:radial-gradient(circle at 40% 35%,#fff8dc,#e2c35a 60%,#a8743c);box-shadow:0 0 0 3px #2b1a10,0 3px 0 #0b1a15;will-change:transform}
