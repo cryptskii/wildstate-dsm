@@ -1113,14 +1113,17 @@ export async function openMarket(player: RpgPlayer): Promise<void> {
     const [tokenIn, tokenOut] = buy ? [w.economy.eraCommit, w.economy.wild] : [w.economy.wild, w.economy.eraCommit];
     if (action === 'quote') {
       busy = 'quote';
-      gui.update(data('Asking your wallet for a SoFi quote…'));
-      web2(player, 'Market', 'Quote: the game asks your wallet to price the swap through SoFi');
-      const seq = await w.host.request(sessionOf(seat), { case: 'quote', value: new pb.ConnectQuoteV1({ tokenIn, tokenOut, amountIn }) });
-      const s = await settle(player, seq, (x) => x.answered && x.quote !== undefined, 'Quote', () => { gui.update(data('Your DSM wallet is waiting for you to approve this.')); });
-      const q = s.quote!;
-      quote = { side: buy ? 'buy' : 'sell', amountIn: buy ? eraText(q.amountIn) : wildText(q.amountIn), amountOut: buy ? wildText(q.amountOut) : eraText(q.amountOut), hops: q.hops };
+      gui.update(data('Pricing the swap through SoFi…'));
+      // A price is information read from the vaults' public state: the game's own account finds it,
+      // at once. Only the swap, which moves the player's coins, goes to their wallet (and waits there
+      // behind whatever the wallet is still taking in).
+      web2(player, 'Market', 'Quote: the game prices the swap through SoFi from the vaults\' public state');
+      const entered = buy ? `${amountIn / 100n}.${String(amountIn % 100n).padStart(2, '0')}` : String(amountIn);
+      const q = await w.host.findRoute(tokenIn, tokenOut, entered);
       busy = null;
-      gui.update(data(`Quote: ${quote.amountIn} → ${quote.amountOut} over ${q.hops} hop(s). Information only.`));
+      if (q.hops.length === 0) { gui.update(data('No route between WILD and ERA right now.')); return; }
+      quote = { side: buy ? 'buy' : 'sell', amountIn: buy ? eraText(q.amountIn) : wildText(q.amountIn), amountOut: buy ? wildText(q.amountOut) : eraText(q.amountOut), hops: q.hops.length };
+      gui.update(data(`Quote: ${quote.amountIn} → ${quote.amountOut} over ${q.hops.length} hop(s). Information only.`));
       return;
     }
     if (action === 'swap') {

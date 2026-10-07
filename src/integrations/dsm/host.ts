@@ -198,6 +198,24 @@ export class DsmHost {
     return payload.value.vaults;
   }
 
+  /**
+   * A route's price over the market's vaults, found by this account (`sofi.findRoute`): information
+   * only, read from the vaults' public state. No route among vaults that could not all be read is an
+   * error, never "no route".
+   */
+  async findRoute(tokenIn: Bytes, tokenOut: Bytes, amountInEntered: string): Promise<pb.SofiFindRouteResponse> {
+    const payload = await this.invoke(
+      'sofi.findRoute',
+      new pb.SofiFindRouteRequest({ tokenInPolicyCommit: tokenIn, tokenOutPolicyCommit: tokenOut, amountInEntered }).toBinary(),
+      true,
+    );
+    if (payload.case !== 'sofiFindRouteResponse') throw new HostError(`sofi.findRoute answered ${payload.case}`);
+    if (payload.value.hops.length === 0 && payload.value.search !== pb.SofiSearch.COMPLETE) {
+      throw new HostError('no route among the liquidity that could be read; some could not be reached, try again');
+    }
+    return payload.value;
+  }
+
   /** An online transfer from the game's account (`wallet.sendSmart`). */
   async send(to: Bytes, ticker: string, amount: string, memo: string): Promise<void> {
     await this.invoke(

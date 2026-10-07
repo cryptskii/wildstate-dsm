@@ -25,6 +25,8 @@ const fixture = vi.hoisted(() => ({
   refuseWild: 0,
   /** How long the wallet takes to pay, in ms (a payment past the grant waits for the player's approval). */
   payAfter: 5,
+  /** Every price the account was asked for, as entered. */
+  routes: [] as string[],
 }));
 const later = <T>(value: () => T, ms = 5) => new Promise<T>((resolve, reject) => setTimeout(() => { try { resolve(value()); } catch (e) { reject(e); } }, ms));
 const bytes32 = (text: string) => new Uint8Array(createHash('sha256').update(text).digest());
@@ -76,6 +78,12 @@ vi.mock('../src/integrations/dsm/host', async (original) => {
       }
       return { answered: true, outcome: 3, fact: 1, reason: 'not part of this fixture', factDetail: 'not part of this fixture' };
     }, { acceptIssued: fixture.acceptAfter, pay: fixture.payAfter }[fixture.requests.get(seq)?.case ?? ''] ?? 5);
+    // The market's price, as the account finds it over the vaults' public state.
+    findRoute = (_in: Uint8Array, _out: Uint8Array, entered: string) => later(() => {
+      fixture.routes.push(entered);
+      return { hops: [{}], search: 1, amountIn: 1000n, amountOut: 97n };
+    });
+    vaults = () => later(() => []);
     readAuthored = () => later(() => ({ complete: true, objects: [] }));
     publishAuthored = () => later(() => ({ stored: true }));
   }
@@ -107,12 +115,14 @@ type Page = Parameters<typeof dsm.connectWallet>[0];
 function page(id: string): Page {
   const gui = {
     on: (event: string, f: (d: { token?: string }) => void) => { if (event === 'resume') f({ token: tokenOf.get(id) }); handlers.set(`${id} ${event}`, f); },
-    open: async () => {}, update: () => {}, close: () => {},
+    open: async () => {}, update: (d: unknown) => { screens.set(id, d); }, close: () => {},
   };
   const panel = { update: (data: PanelData) => { panels.set(id, data); } };
   return { id, gui: () => gui, getGui: (name: string) => (name === 'dsm-panel' ? panel : undefined) } as unknown as Page;
 }
 const panels = new Map<string, PanelData>();
+/** What each page's open screen shows last, by page id. */
+const screens = new Map<string, unknown>();
 /** What each page's screens do on an event, by page id and event. */
 const handlers = new Map<string, (d: Record<string, unknown>) => void>();
 /** What a page's DSM panel says went wrong (holdings proofs are not part of these fixtures). */
@@ -384,5 +394,19 @@ describe('Bramble\'s board', () => {
     await connect(`${holder}/page-2`);
     await idle();
     expect(fixture.sends.filter((x) => x.to === holder && x.ticker === 'WILD' && x.sent).map((x) => x.amount)).toEqual(['8']);
+  });
+
+  it('prices a swap from the game account at once, asking the wallet nothing', async () => {
+    const { holder, connect, w } = await wallet(settled, true);
+    const p = await connect(`${holder}/page`);
+    await idle();
+    await w.economy.era();
+    const asked = fixture.requests.size;
+    await dsm.openMarket(p);
+    handlers.get(`${p.id} market`)!({ action: 'quote', side: 'buy', amount: '10' });
+    await idle(60);
+    expect(fixture.requests.size).toBe(asked);
+    expect(fixture.routes).toEqual(['10.00']);
+    expect(screens.get(p.id)).toMatchObject({ quote: { side: 'buy', amountIn: '10.00 ERA', amountOut: '97 WILD', hops: 1 }, busy: null });
   });
 });
