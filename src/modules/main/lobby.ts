@@ -306,6 +306,10 @@ async function freeSetup(m: Match): Promise<Uint8Array> {
 }
 
 async function begin(aWallet: string, bWallet: string, stake: number) {
+  // Read before anything is checked: from the checks to `liveOf` naming the match nothing is
+  // awaited, so two begins for one wallet (two challenges accepted at once, an accept and the
+  // matchmaker) never both pass and put it in two matches.
+  const { dir, matches, save } = await lobbyRecord();
   const pa = playerOfWallet(aWallet), pb = playerOfWallet(bWallet);
   if (!pa || !pb || isFighting(pa) || isFighting(pb) || liveOf.has(aWallet) || liveOf.has(bWallet)) return;
   if (pvpTeam(session(pa).read()).length === 0 || pvpTeam(session(pb).read()).length === 0) return;
@@ -323,7 +327,6 @@ async function begin(aWallet: string, bWallet: string, stake: number) {
       return;
     }
   }
-  const { dir, matches, save } = await lobbyRecord();
   queue.delete(aWallet); queue.delete(bWallet);
   for (const c of challenges.values()) if ([c.from, c.to].some(w => w === aWallet || w === bWallet)) challenges.delete(c.id);
   const id = `pvp/${Date.now().toString(36)}/${serial++}`;
@@ -458,8 +461,9 @@ async function publish(m: Match) {
 
 async function settle(m: Match) {
   const { dir, save } = await lobbyRecord();
-  liveOf.delete(m.a.wallet); liveOf.delete(m.b.wallet);
-  absentSince.delete(m.a.wallet); absentSince.delete(m.b.wallet);
+  // Only while this is still each wallet's match: a staked match is settled again when its payout
+  // lands, by when its players may be in their next match.
+  for (const w of [m.a.wallet, m.b.wallet]) if (liveOf.get(w) === m.id) { liveOf.delete(w); absentSince.delete(w); }
   if (m.winner === null) { save(); return; }
   const winner = m[m.winner], loser = m[other(m.winner)];
   const pw = (dir.players[winner.wallet] ??= freshProfile()), pl = (dir.players[loser.wallet] ??= freshProfile());

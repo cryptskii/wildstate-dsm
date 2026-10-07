@@ -193,4 +193,26 @@ describe('a staked match decided by the program', () => {
     expect(m.turn).toBe(1);
     expect(m.log.find((e) => e.side === 'a')).toMatchObject({ move: 'pass', dmg: 0 });
   });
+
+  it('withdraws once and returns each stake once when both players of a void match come back at once', async () => {
+    const m = staked();
+    Object.assign(m.escrow!, { a: 'vault-a', b: 'vault-b', cell: 'CELL' });
+    m.phase = 'void';
+    await Promise.all([collectWhatIsOwed(A), collectWhatIsOwed(B)]);
+    expect(dsm.calls.filter((c) => c.startsWith('withdraw'))).toHaveLength(1);
+    expect(dsm.calls.filter((c) => c.startsWith('collect')).sort()).toEqual([`collect ${A} vault-a`, `collect ${B} vault-b`]);
+    expect(m.escrow).toMatchObject({ start: 'withdrawn', refunded: { a: true, b: true }, problem: expect.not.stringContaining('Returning') });
+  });
+
+  it('settles and collects once when the winner comes back twice at once (a page that resumes and reconnects)', async () => {
+    const m = staked();
+    await lockMatch(m, events);
+    dsm.online.delete(B);
+    await resignStaked(m, 'a', events);
+    dsm.online.add(B);
+    await Promise.all([collectWhatIsOwed(B), collectWhatIsOwed(B)]);
+    expect(dsm.calls.filter((c) => c.startsWith('settle'))).toEqual([`settle ${B} on CELL with 1`]);
+    expect(dsm.calls.filter((c) => c.startsWith('collect'))).toEqual([`collect ${B} vault-a+vault-b`]);
+    expect(m.escrow).toMatchObject({ outcome: 'b-wins', paid: true, problem: '' });
+  });
 });

@@ -30,6 +30,8 @@ export interface IssuedCreature {
   species: Species;
   serial: number;
   ticker: string;
+  /** The game creature (its id) the object was issued for; absent in records kept before it was. */
+  creature?: string;
 }
 
 /** What a browser's login names: the offer it was shown, and the session the wallet made of it. */
@@ -61,6 +63,11 @@ export interface EconomyRecord {
   resume: Record<string, Login>;
   /** Wallets the starting coin was paid to. */
   welcomed: string[];
+  /**
+   * WILD the game owes each wallet (a creature's price, a victory's reward), by wallet: recorded
+   * before it is sent and cleared once sent, so a transfer that failed is sent when the wallet is back.
+   */
+  owed: Record<string, { amount: string; why: string }[]>;
   /** Lobby profiles (username, rating, history), keyed by the wallet's DSM identity. Game data. */
   players: Directory['players'];
   /** Username index into `players`: a human-friendly label bound to an identity. */
@@ -85,7 +92,7 @@ export class Economy {
   constructor(readonly host: DsmHost, readonly path: string, account: string) {
     this.record = existsSync(path)
       ? (JSON.parse(readFileSync(path, 'utf8')) as EconomyRecord)
-      : { account, wild: null, vault: null, creatures: {}, nextSerial: 1, profiles: {}, stats: {}, inFlight: {}, resume: {}, welcomed: [], players: {}, usernames: {}, matches: {} };
+      : { account, wild: null, vault: null, creatures: {}, nextSerial: 1, profiles: {}, stats: {}, inFlight: {}, resume: {}, welcomed: [], owed: {}, players: {}, usernames: {}, matches: {} };
     this.record.inFlight ??= {};
     this.record.resume ??= {};
     // Logins kept before they named their offer named only a session.
@@ -93,6 +100,7 @@ export class Economy {
       if (typeof login === 'string') this.record.resume[token] = { offer: '', session: login };
     }
     this.record.welcomed ??= [];
+    this.record.owed ??= {};
     this.record.players ??= {};
     this.record.usernames ??= {};
     this.record.matches ??= {};
@@ -172,7 +180,17 @@ export class Economy {
    * record it was issued with when there is none, else a successor naming the latest one.
    * Publishing the state already latest publishes nothing. Resolves with the state published.
    */
-  async publishState(anchor: string, state: Uint8Array): Promise<Uint8Array> {
+  publishState(anchor: string, state: Uint8Array): Promise<Uint8Array> {
+    // One creature's states one after the other: two publishes that read the same tip would each
+    // publish a successor of it, and a creature with two successors of one state is never fielded again.
+    const run = (this.publishing.get(anchor) ?? Promise.resolve()).then(() => this.publishAfterTip(anchor, state));
+    this.publishing.set(anchor, run.catch(() => {}));
+    return run;
+  }
+  /** Each creature's publish under way, by anchor. */
+  private readonly publishing = new Map<string, Promise<unknown>>();
+
+  private async publishAfterTip(anchor: string, state: Uint8Array): Promise<Uint8Array> {
     const read = await this.host.readAuthored(fromB32(this.record.account), fromB32(anchor));
     if (!read.complete) throw new Error(`not every state of creature ${anchor.slice(0, 8)} could be read back; try again`);
     let parent: Uint8Array;
@@ -197,7 +215,7 @@ export class Economy {
   }
 
   /** A new creature object: a token of supply one whose policy says what it is. */
-  async issueCreature(species: Species, say: (line: string) => void): Promise<string> {
+  async issueCreature(species: Species, say: (line: string) => void, creature?: string): Promise<string> {
     // The serial is taken before anything is awaited. A creature's anchor follows from its policy,
     // and its policy from its serial: two issuances that read one serial would create one token of
     // supply one and bind two players to it.
@@ -219,7 +237,7 @@ export class Economy {
     if (already !== undefined) {
       throw new Error(`creature ${ticker} came out as ${already.ticker}'s anchor ${anchor.slice(0, 8)}: one object is never issued to two creatures`);
     }
-    this.record.creatures[anchor] = { species, serial, ticker };
+    this.record.creatures[anchor] = creature === undefined ? { species, serial, ticker } : { species, serial, ticker, creature };
     this.save();
     return anchor;
   }

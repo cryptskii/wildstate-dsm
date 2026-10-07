@@ -66,4 +66,18 @@ describe('a creature\'s published states', () => {
     c.hp -= 1;
     await expect(economy.publishState(anchorText, creatureState(c, anchor))).rejects.toThrow(/two states it was issued with/);
   });
+
+  it('publishes two states asked for at once one after the other, as one chain, never two successors of one record', async () => {
+    const { economy, objects } = account();
+    const c = { ...newCreature('c1', 'mossling', undefined, 3), anchor: anchorText };
+    const grown = creatureState(c, anchor);
+    c.hp -= 4;
+    const hurt = creatureState(c, anchor);
+    // Its first record after its delivery, and its state for a staked match, both under way.
+    await Promise.all([economy.publishState(anchorText, grown), economy.publishState(anchorText, hurt)]);
+    const records = objects.get(anchorText)!;
+    expect(records).toHaveLength(3);
+    expect(records[2]).toEqual(creatureRecord(creatureRecordDigest(records[1]), hurt));
+    expect(Buffer.from(latestCreatureState(anchor, records).state).equals(Buffer.from(hurt))).toBe(true);
+  });
 });

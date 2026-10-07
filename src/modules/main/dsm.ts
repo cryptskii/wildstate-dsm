@@ -17,7 +17,7 @@
  * (Web2) and what DSM did underneath, as the game's account recorded it.
  */
 import type { RpgPlayer } from '@rpgjs/server';
-import { stateSchema, SCARECROW_CAPSULES, SPECIES, SHOP_QTY_MAX, TRAINERS, displayName, newCreature, initialState, salePrice, type Command, type Creature, type GameState } from '../../domain/game';
+import { stateSchema, GameError, SCARECROW_CAPSULES, SPECIES, SHOP_QTY_MAX, TRAINERS, displayName, newCreature, initialState, salePrice, transition, type Command, type Creature, type GameState } from '../../domain/game';
 import { DsmHost, HostError, b32, fromB32, own, short, type Bytes } from '../../integrations/dsm/host';
 import { PROGRAM, anchorBytes, creatureState } from '../../domain/program';
 import type { Economy, Login, Species } from '../../integrations/dsm/economy';
@@ -456,13 +456,18 @@ export async function connectWallet(player: RpgPlayer, bound: (state: GameState)
       enqueue(player, `Delivering ${SPECIES[issued.species].name} #${issued.serial}`, () => handOver(player, anchor));
     }
   });
-  if (!w.economy.record.welcomed.includes(seat.wallet!)) {
+  const holder = seat.wallet!;
+  if (!w.economy.record.welcomed.includes(holder)) {
     enqueue(player, 'Paying your starting coin', async () => {
-      await payReward(player, WELCOME_COINS, 'welcome');
-      w.economy.record.welcomed.push(seat.wallet!);
+      // Asked again when it runs: a wallet that connected twice before the first payment was
+      // through has two of these queued, one after the other, and only the first pays.
+      if (w.economy.record.welcomed.includes(holder)) return;
+      await payReward(player, holder, WELCOME_COINS, 'welcome');
+      w.economy.record.welcomed.push(holder);
       w.economy.save();
     });
   }
+  if (w.economy.record.owed[holder]?.length) enqueue(player, 'Paying what the game owes you', () => payOwed(player, holder));
   proveLater(player);
 }
 
@@ -625,13 +630,16 @@ async function settle(
   }
 }
 
-/** An online transfer from the game's account, retried while its relationship settles. */
-async function sendFromGame(player: RpgPlayer, ticker: string, amount: string, memo: string): Promise<void> {
-  const seat = seatOf(player);
+/**
+ * An online transfer from the game's account to wallet `to`, retried while its relationship
+ * settles. `to` is named by the caller, never read off the page: a page can connect another wallet
+ * while what the first one earned (or accepted) is still on its way.
+ */
+async function sendFromGame(player: RpgPlayer, to: string, ticker: string, amount: string, memo: string): Promise<void> {
   const w = await world();
   for (let round = 0; ; round++) {
     try {
-      await w.host.send(fromB32(seat.wallet!), ticker, amount, memo);
+      await w.host.send(fromB32(to), ticker, amount, memo);
       return;
     } catch (e) {
       const settling = e instanceof HostError && /not send-ready|pending online transition/.test(e.message);
@@ -648,7 +656,16 @@ async function sendFromGame(player: RpgPlayer, ticker: string, amount: string, m
 async function deliverCreature(player: RpgPlayer, creatureId: string, species: Species): Promise<void> {
   const w = await world();
   const started = Date.now();
-  const anchor = await w.economy.issueCreature(species, (line) => web2(player, 'Game account', line, 'wait'));
+  // Looked at when the delivery runs, not when it was queued: a page that connected again, or a
+  // second page of the wallet, queued it once more, and one creature is one object.
+  if (readState(player).creatures.find((c) => c.id === creatureId)?.anchor !== null) return;
+  const already = Object.keys(w.economy.record.creatures).find((a) => w.economy.record.creatures[a].creature === creatureId);
+  if (already !== undefined) {
+    // Issued for it before (by another page, or before this one went away): this page knows it by that object.
+    commit(player, { type: 'bind-creature', creatureId, anchor: already });
+    return;
+  }
+  const anchor = await w.economy.issueCreature(species, (line) => web2(player, 'Game account', line, 'wait'), creatureId);
   commit(player, { type: 'bind-creature', creatureId, anchor });
   await handOver(player, anchor, started);
   // The state it was issued in, published as its first record: what wallets read it against before a staked match.
@@ -663,8 +680,11 @@ async function deliverCreature(player: RpgPlayer, creatureId: string, species: S
 async function onTheWay(player: RpgPlayer): Promise<string[]> {
   const w = await world();
   const held = new Set((await w.host.balances()).filter((b) => b.available === 1n).map((b) => b.policyAnchorB32));
+  // An object the account holds again after its creature left a party (its game data kept in
+  // `stats`) came back to it: Bramble bought it. It is the game's, on its way to nobody, whatever
+  // an older page of the wallet that sold it still shows.
   return readState(player).creatures.flatMap((c) =>
-    c.anchor !== null && w.economy.record.creatures[c.anchor] !== undefined && held.has(c.anchor) ? [c.anchor] : [],
+    c.anchor !== null && w.economy.record.creatures[c.anchor] !== undefined && held.has(c.anchor) && w.economy.record.stats[c.anchor] === undefined ? [c.anchor] : [],
   );
 }
 
@@ -674,27 +694,58 @@ async function handOver(player: RpgPlayer, anchor: string, started = Date.now())
   const seat = seatOf(player);
   const issued = w.economy.record.creatures[anchor];
   const species = issued.species;
-  const seq = await w.host.request(sessionOf(seat), {
-    case: 'acceptIssued',
-    value: new pb.ConnectAcceptIssuedV1({ anchor: fromB32(anchor) }),
-  });
-  await settle(player, seq, (s) => s.answered && s.outcome === pb.ConnectOutcome.CARRIED_OUT, 'Accepting the creature');
-  await sendFromGame(player, issued.ticker, '1', `${SPECIES[species].name} #${issued.serial}`);
+  const what = `${SPECIES[species].name} #${issued.serial} (${short(anchor)})`;
+  // The wallet asked to accept it is the one it goes to, whatever the page connects meanwhile.
+  const wallet = seat.wallet!;
+  // One object goes out once. Claimed before anything is awaited: two wallets' tasks never both send it.
+  if (handingOver.has(anchor)) throw new Error(`${what} is already being handed over; it is not sent twice`);
+  handingOver.add(anchor);
+  try {
+    // The account sends only what it holds: an object it already gave away is never retried.
+    if (!(await w.host.balances()).some((b) => b.policyAnchorB32 === anchor && b.available === 1n)) {
+      throw new Error(`The game account no longer holds ${what}: it was handed over already, so it is not sent again`);
+    }
+    const seq = await w.host.request(sessionOf(seat), {
+      case: 'acceptIssued',
+      value: new pb.ConnectAcceptIssuedV1({ anchor: fromB32(anchor) }),
+    });
+    await settle(player, seq, (s) => s.answered && s.outcome === pb.ConnectOutcome.CARRIED_OUT, 'Accepting the creature');
+    await sendFromGame(player, wallet, issued.ticker, '1', `${SPECIES[species].name} #${issued.serial}`);
+  } finally {
+    handingOver.delete(anchor);
+  }
   // Sent: it stays in the party until a proof shows the wallet holding it.
-  w.economy.record.inFlight[seat.wallet!] = [...(w.economy.record.inFlight[seat.wallet!] ?? []), anchor];
+  w.economy.record.inFlight[wallet] = [...(w.economy.record.inFlight[wallet] ?? []), anchor];
   w.economy.save();
   pushEntries(seat, [
-    entry('dsm', `${SPECIES[species].name} #${issued.serial} delivered`, `State object ${short(anchor)}: supply 1, issued by the game account, now in wallet ${short(seat.wallet!)}`, 'ok', Date.now() - started),
+    entry('dsm', `${SPECIES[species].name} #${issued.serial} delivered`, `State object ${short(anchor)}: supply 1, issued by the game account, now in wallet ${short(wallet)}`, 'ok', Date.now() - started),
   ]);
   proveLater(player);
 }
+/** Creature objects being handed over now, by anchor. */
+const handingOver = new Set<string>();
 
 /** A victory's reward: WILD from the game's account. */
-async function payReward(player: RpgPlayer, amount: bigint, why: string): Promise<void> {
+async function payReward(player: RpgPlayer, to: string, amount: bigint, why: string): Promise<void> {
   const started = Date.now();
-  await sendFromGame(player, COIN.ticker, String(amount), why);
+  await sendFromGame(player, to, COIN.ticker, String(amount), why);
   pushEntries(seatOf(player), [entry('dsm', `${why[0].toUpperCase()}${why.slice(1)}: ${wildText(amount)}`, 'An online transfer from the game account to your wallet', 'ok', Date.now() - started)]);
   proveLater(player);
+}
+
+/** WILD the game owes `to`, in its record before anything is sent: nothing earned is lost to a failed transfer. */
+function owe(w: World, to: string, amount: bigint, why: string): void {
+  w.economy.record.owed[to] = [...(w.economy.record.owed[to] ?? []), { amount: String(amount), why }];
+  w.economy.save();
+}
+/** Everything the game owes `to`, each cleared once sent. A failed transfer stays owed, for the next time the wallet is here. */
+async function payOwed(player: RpgPlayer, to: string): Promise<void> {
+  const w = await world();
+  for (let debt = w.economy.record.owed[to]?.[0]; debt !== undefined; debt = w.economy.record.owed[to]?.[0]) {
+    await payReward(player, to, BigInt(debt.amount), debt.why);
+    w.economy.record.owed[to] = (w.economy.record.owed[to] ?? []).filter((d) => d !== debt);
+    w.economy.save();
+  }
 }
 
 const ITEM_NAMES: Record<ShopItem, string> = { capsule: 'Capture Capsule', poultice: 'Herb Poultice', tonic: 'Charge Tonic', map: 'Ranger’s Map' };
@@ -708,6 +759,7 @@ async function buyItem(player: RpgPlayer, item: ShopItem, n: number): Promise<vo
   const started = Date.now();
   const cost = ITEM_PRICES[item] * BigInt(n);
   const what = `${n} × ${ITEM_NAMES[item]}`;
+  refusedBeforeDsm(player, { type: 'grant-item', item, qty: n, fact: 'not yet paid' }, what);
   const seq = await w.host.request(sessionOf(seat), {
     case: 'pay',
     value: new pb.ConnectPayV1({ policyCommit: w.economy.wild, amount: cost, memo: what.toLowerCase() }),
@@ -731,6 +783,8 @@ async function buyItem(player: RpgPlayer, item: ShopItem, n: number): Promise<vo
 async function sellCreature(player: RpgPlayer, creatureId: string): Promise<void> {
   const w = await world();
   const seat = seatOf(player);
+  // The wallet that hands the creature over is the one paid for it.
+  const wallet = seat.wallet!;
   const started = Date.now();
   const c = readState(player).creatures.find((x) => x.id === creatureId);
   if (!c) throw new Error('That creature is not in your party');
@@ -738,22 +792,39 @@ async function sellCreature(player: RpgPlayer, creatureId: string): Promise<void
   const anchor = c.anchor;
   const name = displayName(c);
   const price = BigInt(salePrice(c));
+  refusedBeforeDsm(player, { type: 'sell', creatureId, fact: 'not yet handed over' }, `Selling ${name}`);
   const seq = await w.host.request(sessionOf(seat), {
     case: 'pay',
     value: new pb.ConnectPayV1({ policyCommit: fromB32(anchor), amount: 1n, memo: `${name} to Bramble` }),
   });
   const paid = await settle(player, seq, (s) => s.fact === pb.ConnectFact.PAID, `Handing ${name} to Bramble`,
     () => shopShow(player, { status: 'Approve the sale on your phone: Apps → Waiting' }), 'sync');
-  // Its game data stays with its object, as for any creature that leaves a party.
+  // Its game data stays with its object, as for any creature that leaves a party. Bramble holds it
+  // from here, so its price is owed before the game state is asked (which a change made while the
+  // player approved, say a new lead, can refuse): a refused state never leaves it unpaid.
   w.economy.record.stats[anchor] = c;
-  w.economy.save();
+  owe(w, wallet, price, `Bramble bought ${name}`);
   commit(player, { type: 'sell', creatureId, fact: new TextDecoder().decode(paid.paidTx) });
   shopShow(player, { status: `${name} is Bramble’s now · paying ${wildText(price)}…` });
-  await sendFromGame(player, COIN.ticker, String(price), `Bramble bought ${name}`);
+  await payOwed(player, wallet);
   pushEntries(seat, [entry('dsm', `Sold ${name}: ${wildText(price)}`, `Its state object ${short(anchor)} reached the game account, which paid for it`, 'ok', Date.now() - started)]);
   shopShow(player, { busy: false, status: `${name} sold · ${wildText(price)} on its way to your wallet`, say: BRAMBLE.sold, delta: `+${price}`, deltaAt: Date.now() });
   player.getGui('field-hud')?.update(hudData(player));
   proveLater(player);
+}
+
+/**
+ * What the game state would refuse (the lead or last creature for sale, a second map) is refused
+ * before the wallet pays or hands anything over, never after.
+ */
+function refusedBeforeDsm(player: RpgPlayer, command: Command, what: string): void {
+  const now = readState(player);
+  try {
+    transition(now, now.revision, `${now.holder}/before-dsm`, command);
+  } catch (e) {
+    if (e instanceof GameError) throw new Error(`${what}: the game refuses it (${e.code}); nothing was asked of your wallet`);
+    throw e;
+  }
 }
 
 /** What Bramble's screen shows besides the game state: the step DSM is on and his last line. */
@@ -934,10 +1005,17 @@ export function onCommitted(player: RpgPlayer, command: Command, before: GameSta
   if (finished && battle!.outcome === 'victory' && battle!.source === 'trainer') {
     const t = TRAINERS[battle!.trainer!];
     web2(player, `${t.name} beaten`, `The game decides the bounty (${wildText(TRAINER_REWARD)}); the game account pays it as a transfer`);
-    enqueue(player, `Paying ${t.name}'s bounty`, () => payReward(player, TRAINER_REWARD, `bounty from ${t.name}`));
+    // To the wallet whose game won it (its state's holder), whatever the page connects by the time it is paid.
+    void world().then((w) => {
+      owe(w, after.holder, TRAINER_REWARD, `bounty from ${t.name}`);
+      enqueue(player, `Paying ${t.name}'s bounty`, () => payOwed(player, after.holder));
+    });
   } else if (finished && battle!.outcome === 'victory') {
     web2(player, 'Victory', 'The game decides the reward; the game account pays it as a transfer');
-    enqueue(player, 'Paying the reward', () => payReward(player, VICTORY_REWARD, 'victory reward'));
+    void world().then((w) => {
+      owe(w, after.holder, VICTORY_REWARD, 'victory reward');
+      enqueue(player, 'Paying the reward', () => payOwed(player, after.holder));
+    });
   }
   if (finished && battle!.outcome === 'captured') {
     const caught = after.creatures[after.creatures.length - 1];
