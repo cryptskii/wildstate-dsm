@@ -198,8 +198,13 @@ export class Economy {
 
   /** A new creature object: a token of supply one whose policy says what it is. */
   async issueCreature(species: Species, say: (line: string) => void): Promise<string> {
-    await this.ensureEra(CREATION_FEE_ERA, say);
+    // The serial is taken before anything is awaited. A creature's anchor follows from its policy,
+    // and its policy from its serial: two issuances that read one serial would create one token of
+    // supply one and bind two players to it.
     const serial = this.record.nextSerial;
+    this.record.nextSerial = serial + 1;
+    this.save();
+    await this.ensureEra(CREATION_FEE_ERA, say);
     const ticker = `${CODE[species]}${String(serial).padStart(4, '0')}`;
     const name = `${SPECIES[species].name} #${serial}`;
     const anchor = b32(
@@ -210,8 +215,11 @@ export class Economy {
         description: `Wildstate creature: ${species}, capture ${serial}, issued by the Wildstate game account`,
       }),
     );
+    const already = this.record.creatures[anchor];
+    if (already !== undefined) {
+      throw new Error(`creature ${ticker} came out as ${already.ticker}'s anchor ${anchor.slice(0, 8)}: one object is never issued to two creatures`);
+    }
     this.record.creatures[anchor] = { species, serial, ticker };
-    this.record.nextSerial = serial + 1;
     this.save();
     return anchor;
   }
