@@ -74,6 +74,19 @@ function queued(m: Match, task: () => Promise<void>): Promise<void> {
   return run;
 }
 
+/**
+ * Each match's stakes moving (withdraw and refunds, or settle and collect), one run at a time: a
+ * run reads what the one before it recorded. Both players coming back at once, or one page coming
+ * back twice, would otherwise withdraw twice and collect each vault twice. Apart from `queues`:
+ * a payout runs from inside a queued turn.
+ */
+const payouts = new Map<string, Promise<void>>();
+function onePayout(m: Match, task: () => Promise<void>): Promise<void> {
+  const run = (payouts.get(m.id) ?? Promise.resolve()).then(task);
+  payouts.set(m.id, run.catch(() => {}));
+  return run;
+}
+
 // ------------------------------------------------------------------ setting up and locking
 
 /**
@@ -166,7 +179,10 @@ export async function voidMatch(m: Match, why: string, events: StakedEvents, by?
 }
 
 /** Withdraw (once a stake is locked), then each side's stake back to its own wallet, each as soon as that wallet is here. */
-export async function withdrawAndRefund(m: Match, events: StakedEvents, by?: Side): Promise<void> {
+export function withdrawAndRefund(m: Match, events: StakedEvents, by?: Side): Promise<void> {
+  return onePayout(m, () => refund(m, events, by));
+}
+async function refund(m: Match, events: StakedEvents, by?: Side): Promise<void> {
   const { save } = await lobbyRecord();
   const e = m.escrow!;
   if (e.cell && e.start === 'open') {
@@ -343,7 +359,10 @@ export function passIfDue(m: Match, now: number, events: StakedEvents): void {
  * the whole match) and collects both stakes, once the account read the outcome there. A winner who
  * is away settles and collects when they are back.
  */
-export async function payOut(m: Match, events: StakedEvents): Promise<void> {
+export function payOut(m: Match, events: StakedEvents): Promise<void> {
+  return onePayout(m, () => pay(m, events));
+}
+async function pay(m: Match, events: StakedEvents): Promise<void> {
   const { save } = await lobbyRecord();
   const e = m.escrow!;
   if (m.phase !== 'done' || m.winner === null) return;
