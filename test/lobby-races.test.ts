@@ -10,10 +10,16 @@ const dsm = vi.hoisted(() => ({
   matches: {} as Record<string, Match>,
   /** Holds the winner's settlement until the test lets it through. */
   settling: null as Promise<void> | null,
+  /** The lobby's directory, kept between reads as the game's record keeps it. */
+  dir: { players: {} as Record<string, unknown>, usernames: {} as Record<string, string> },
+  /** What each wallet shared as its contacts. */
+  contacts: new Map<string, string[]>(),
 }));
 const bytes32 = (text: string) => new Uint8Array(createHash('sha256').update(text).digest());
 vi.mock('../src/modules/main/dsm', () => ({
-  lobbyRecord: async () => ({ dir: { players: {}, usernames: {} }, matches: dsm.matches, save: () => {} }),
+  lobbyRecord: async () => ({ dir: dsm.dir, matches: dsm.matches, save: () => {} }),
+  walletContacts: (w: string) => dsm.contacts.get(w) ?? [],
+  refreshContacts: async () => {},
   playerOfWallet: (w: string) => dsm.online.get(w) ?? null,
   walletOf: (p: { id: string }) => p.id,
   web2: vi.fn(),
@@ -40,6 +46,7 @@ vi.mock('../src/modules/main/field', () => ({ commit: vi.fn(), isFighting: () =>
 vi.mock('../src/modules/main/dialogue', () => ({ isSpeaking: () => false }));
 
 import { openLobby } from '../src/modules/main/lobby';
+import { freshProfile } from '../src/domain/username';
 
 const states = new Map<string, GameState>();
 type Handler = (d: Record<string, unknown>) => Promise<void> | void;
@@ -72,8 +79,21 @@ const tick = (ms = 20) => new Promise((r) => setTimeout(r, ms));
 const live = (wallet: string) => Object.values(dsm.matches).filter((m) => (m.a.wallet === wallet || m.b.wallet === wallet) && (m.phase === 'locking' || m.phase === 'battle'));
 
 let n = 0;
-beforeEach(() => { dsm.online.clear(); dsm.matches = {}; dsm.settling = null; n += 1; });
+beforeEach(() => { dsm.online.clear(); dsm.matches = {}; dsm.settling = null; dsm.dir = { players: {}, usernames: {} }; dsm.contacts.clear(); n += 1; });
 const wallet = (who: string) => `${who}${n}`.padEnd(52, who);
+
+describe('friends from the wallet', () => {
+  it('lists a wallet contact who plays here as a friend, marked a contact, and no contact who never did', async () => {
+    const a = online(wallet('A'));
+    online(wallet('B'));
+    dsm.dir.players[wallet('B')] = freshProfile();
+    dsm.contacts.set(wallet('A'), [wallet('B'), 'NEVERPLAYED'.padEnd(52, 'N')]);
+    await openLobby(a.player as never);
+    await tick();
+    const friends = (a.shown() as unknown as { friends: { id: string; contact: boolean; online: boolean }[] }).friends;
+    expect(friends.map((f) => [f.id, f.contact, f.online])).toEqual([[wallet('B'), true, true]]);
+  });
+});
 
 describe('one wallet, one match', () => {
   it('a player who accepts two challenges at once is put in one match, not two', async () => {

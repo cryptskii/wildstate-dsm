@@ -372,6 +372,8 @@ function scopes(w: World): pb.ConnectScopeV1[] {
     // all without asking, only in matches of this program; a bigger stake waits for the player.
     // Moves, readies, settling and collecting spend nothing and run under the grant.
     new pb.ConnectScopeV1({ kind: pb.ConnectScopeKind.DUEL, caps: [cap(wild, 1_000n, 10_000n)], programs: [own(PROGRAM)] }),
+    // Which of the wallet's contacts are here, as DSM IDs only, for FRIENDS (DSM Amendment A16).
+    new pb.ConnectScopeV1({ kind: pb.ConnectScopeKind.CONTACTS }),
   ];
 }
 
@@ -495,6 +497,7 @@ export async function connectWallet(player: RpgPlayer, bound: (state: GameState)
       enqueue(player, `Delivering ${SPECIES[issued.species].name} #${issued.serial}`, () => handOver(player, anchor));
     }
   });
+  enqueue(player, 'Finding your friends', () => refreshContacts(player));
   const holder = seat.wallet!;
   if (!w.economy.record.welcomed.includes(holder)) {
     enqueue(player, 'Paying your starting coin', async () => {
@@ -1245,6 +1248,33 @@ function answered(s: pb.ConnectAppStatusV1): pb.AppResponseBodyV1['result'] {
   return pb.AppResponseBodyV1.fromBinary(s.answerBody).result;
 }
 const carried = (s: pb.ConnectAppStatusV1) => s.answered && s.outcome === pb.ConnectOutcome.CARRIED_OUT;
+
+/** Each wallet's contacts as it last shared them (DSM Amendment A16), by wallet: game data, never evidence. */
+const contactsOf = new Map<string, string[]>();
+
+/** The DSM IDs `wallet` last shared as its contacts, or none before it has. */
+export function walletContacts(wallet: string): string[] {
+  return contactsOf.get(wallet) ?? [];
+}
+
+/**
+ * Ask `player`'s wallet which of its contacts are who, once its grant covers it: a request outside
+ * the grant would wait in the wallet for the player and hold every later request behind it.
+ */
+export async function refreshContacts(player: RpgPlayer): Promise<void> {
+  const w = await world();
+  const seat = seatOf(player);
+  const session = sessionOf(seat);
+  const wallet = seat.wallet;
+  if (!wallet) return;
+  const same = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((x, i) => x === b[i]);
+  const granted = (await w.host.sessions()).find((s) => same(s.sessionId, session))?.granted ?? [];
+  if (!granted.some((g) => g.kind === pb.ConnectScopeKind.CONTACTS)) return;
+  const seq = await w.host.request(session, { case: 'contacts', value: new pb.ConnectContactsV1() });
+  const r = answered(await settle(player, seq, carried, 'Finding your friends'));
+  if (r.case !== 'contacts') throw new Error(`the wallet answered ${r.case} for its contacts`);
+  contactsOf.set(wallet, r.value.contacts.map((c) => b32(c.deviceId)));
+}
 
 /** `player`'s wallet's session public key for the match whose setup carries `nonce`. */
 export async function sessionKey(player: RpgPlayer, nonce: Bytes): Promise<Bytes> {

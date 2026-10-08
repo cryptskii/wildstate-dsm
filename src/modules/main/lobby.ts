@@ -10,7 +10,7 @@
  */
 import { Components, type RpgPlayer } from '@rpgjs/server';
 import { session } from './journey';
-import { deliverUnissued, lobbyRecord, playerOfWallet, walletIdentity, walletOf, walletWaiting, web2 } from './dsm';
+import { deliverUnissued, lobbyRecord, playerOfWallet, refreshContacts, walletContacts, walletIdentity, walletOf, walletWaiting, web2 } from './dsm';
 import { commit, isFighting, setFighting, setInArena } from './field';
 import { isSpeaking } from './dialogue';
 import { SPECIES, GameError, displayName, fieldedTeam, level, maxCharges, maxHp, type Command, type Creature, type GameState } from '../../domain/game';
@@ -98,10 +98,14 @@ async function lobbyView(player: RpgPlayer) {
     notice: notices.get(wallet) ?? '',
     walletWaiting: walletWaiting(player),
     found: (() => { const f = founds.get(wallet); return f ? brief(f) : null; })(),
-    // Everyone this player found, challenged or played: online first, each as the lobby sees them now.
-    friends: (me.friends ?? [])
-      .map((id) => ({ ...brief(id), playing: liveOf.has(id) }))
-      .sort((x, y) => Number(y.online) - Number(x.online)),
+    // Everyone this player found, challenged or played, and every contact their wallet shared who
+    // plays here (DSM Amendment A16): online first, each as the lobby sees them now.
+    friends: (() => {
+      const contacts = walletContacts(wallet).filter((id) => id !== wallet && dir.players[id] !== undefined);
+      return [...new Set([...(me.friends ?? []), ...contacts])]
+        .map((id) => ({ ...brief(id), playing: liveOf.has(id), contact: contacts.includes(id) }))
+        .sort((x, y) => Number(y.online) - Number(x.online));
+    })(),
     team: teamView(session(player).read()),
   };
 }
@@ -226,6 +230,10 @@ export async function openLobby(player: RpgPlayer): Promise<void> {
   setInArena(player, true);
   // The lobby holds the player where they stand: a tap on it is never a step on the map beneath.
   void gui.open(await lobbyView(player), { blockPlayerInput: true });
+  // The wallet's contacts as they are now, into FRIENDS once they arrive.
+  refreshContacts(player)
+    .then(async () => { if (player.getGui('lobby')) gui.update(await lobbyView(player)); })
+    .catch((e) => web2(player, 'Friends from your wallet', `not read: ${e instanceof Error ? e.message : String(e)}`, 'fail'));
 }
 
 const NAME_ERRORS = {
