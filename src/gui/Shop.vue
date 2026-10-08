@@ -129,7 +129,7 @@ button:disabled{cursor:default}
 .res{position:relative;display:flex;align-items:center;gap:10px;font-size:20px;white-space:nowrap}
 .wild{color:#e9d86b;font-size:13px;padding:4px 8px;background:#0b1a15}
 .delta{position:absolute;right:0;top:-14px;color:#dc6a4e;font-size:10px;animation:coinPop .9s ease-out forwards}.delta.up{color:#c4ec79}
-.speech{position:absolute;left:14px;right:14px;top:166px;display:flex;gap:10px;padding:6px 10px;background:#10261fef;box-shadow:0 0 0 2px #0b1a15,0 0 0 4px #9ccf6e,0 0 0 6px #0b1a15;min-height:44px;cursor:pointer;animation:reveal .2s}
+.speech{position:absolute;left:14px;right:14px;top:124px;display:flex;gap:10px;padding:6px 10px;background:#10261fef;box-shadow:0 0 0 2px #0b1a15,0 0 0 4px #9ccf6e,0 0 0 6px #0b1a15;min-height:44px;cursor:pointer;animation:reveal .2s}
 .grow{flex:1;min-width:0}.who{font-size:8px;color:#c4ec79;margin-bottom:3px}.speech p{margin:0;font-size:17px;line-height:1.2}
 .cursor{align-self:flex-end;color:#c4ec79;font-size:13px;animation:blink 1s steps(1) infinite}
 .tabs{position:absolute;left:30px;right:26px;top:452px;display:flex;gap:6px}
@@ -151,7 +151,7 @@ button:disabled{cursor:default}
 .confirm{font-size:9px;color:#f3f3df;background:#3f6e2a;padding:0 12px;min-width:92px;box-shadow:0 0 0 2px #0b1a15,inset 2px 2px 0 #ffffff22,inset -2px -3px 0 #00000055;display:grid;gap:3px;place-items:center;line-height:1}
 .confirm.sell{background:#7a3b1e}.confirm:disabled{opacity:.45}.confirm:active:not(:disabled){translate:0 2px}
 .total{color:#ffe08a;font-size:11px}
-.ledger{position:absolute;left:14px;right:14px;bottom:8px;display:flex;justify-content:space-between;align-items:flex-end;gap:10px;font-size:7px;line-height:1.5;color:#8fb09a}
+.ledger{position:absolute;left:14px;right:14px;bottom:6px;display:flex;justify-content:space-between;align-items:flex-end;gap:10px;font-size:9px;line-height:1.4;color:#e8e2c8;background:#0b1a15e0;padding:3px 6px}
 .ledger>span:first-child{white-space:nowrap}.note{min-width:0;text-align:right}
 @keyframes blink{50%{opacity:0}}
 @keyframes reveal{from{opacity:0;transform:scale(1.04)}to{opacity:1;transform:scale(1)}}
