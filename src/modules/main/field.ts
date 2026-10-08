@@ -1,15 +1,28 @@
-import { isCurrentAvatar } from './presence';
+import { openLobby } from './lobby';
+import { graphicOf, isCurrentAvatar } from './presence';
 import { npcPosition, pauseNpc } from './patrol';
 import { type RpgPlayer } from '@rpgjs/server';
-import { GameError, SCARECROW_CAPSULES, SPECIES, TRAINERS, displayName, type Command } from '../../domain/game';
+import { GameError, LOOKS, SCARECROW_CAPSULES, SPECIES, TRAINERS, displayName, type Command, type Look } from '../../domain/game';
 import { session } from './journey';
 import { portraitDialogue, talkToRowan, readWayfindingSign, isSpeaking } from './dialogue';
-import { claimScarecrowGift, onCommitted, openMarket, openShop, useCommit, useHudData, useReadState, walked, walletCoins, web2 } from './dsm';
+import { claimScarecrowGift, onCommitted, openMarket, openShop, useCommit, useHudData, useReadState, walked, walletCoins, walletWaiting, web2 } from './dsm';
 const inside = new WeakSet<RpgPlayer>();
 const proximity = new WeakMap<RpgPlayer, string>();
 const fighting = new WeakSet<RpgPlayer>();
+/** A player in a battle or a match: field actions wait until it ends. */
+export const isFighting = (player: RpgPlayer) => fighting.has(player);
+export function setFighting(player: RpgPlayer, on: boolean) { if (on) fighting.add(player); else fighting.delete(player); }
+const inArena = new WeakSet<RpgPlayer>();
+/**
+ * A player in the arena's lobby: the map under it starts no encounter (phones, 2026-10-08: a
+ * player's taps on the lobby walked their character into the meadow beneath it, and a wild
+ * creature appeared while the lobby was still on screen).
+ */
+export function setInArena(player: RpgPlayer, on: boolean) { if (on) inArena.add(player); else inArena.delete(player); }
 /** A card the player taps through (the encounter card, Bramble's door), waiting for its tap. */
 const taps = new WeakMap<RpgPlayer, () => void>();
+/** The card a new fight waits on: every HUD refresh carries it, so it never goes missing while the battle waits for its tap. */
+const cards = new WeakMap<RpgPlayer, { title: string; line: string }>();
 /** NPC anchors match server.ts event positions and the camp layout in simplemap.tmx (fieldmap-v10). */
 export const MIRA = { x: 304, y: 432 }, ROWAN = { x: 240, y: 240 };
 /** Trainers: Kade by the meadow's west edge, Nessa on the far northeast shore. */
@@ -24,9 +37,13 @@ export const MEADOW = { x0: 448, x1: 640, y0: 192, y1: 352 };
 /** Pond water tiles (tx,ty); casting is allowed from any 4-neighbour of these. */
 export const POND = new Set(["17,12","18,12","19,12","20,12","21,12","17,13","18,13","19,13","20,13","21,13","22,13","16,14","17,14","18,14","19,14","20,14","21,14","22,14","16,15","17,15","18,15","19,15","20,15","21,15","22,15","16,16","17,16","18,16","19,16","20,16","21,16","22,16","17,17","18,17","19,17","20,17","21,17","17,18","18,18","19,18","20,18"]);
 const T = 32;
-export function nearPond(player: RpgPlayer): boolean {
+/** Which way the water is from the player: the first neighbouring pond tile, or none. */
+function pondSide(player: RpgPlayer): [number, number] | undefined {
   const tx = Math.floor(player.x() / T), ty = Math.floor(player.y() / T);
-  return [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => POND.has(`${tx + dx},${ty + dy}`));
+  return ([[1, 0], [-1, 0], [0, 1], [0, -1]] as [number, number][]).find(([dx, dy]) => POND.has(`${tx + dx},${ty + dy}`));
+}
+export function nearPond(player: RpgPlayer): boolean {
+  return pondSide(player) !== undefined;
 }
 function nearNpc(player: RpgPlayer): string | undefined {
   const spots: [string, { x: number; y: number }][] = [['Wayfinding sign', WAY_SIGN], ['Scarecrow', SCARECROW], ['Mira', npcPosition(player, 'mira', MIRA)], ['Rowan', npcPosition(player, 'rowan', ROWAN)], ...Object.entries(TRAINER_SPOTS).map(([id, p]) => [TRAINERS[id].name, npcPosition(player, id, p)] as [string, { x: number; y: number }])];
@@ -42,7 +59,9 @@ export function hudData(player: RpgPlayer, extra: Record<string, unknown> = {}) 
   return {
     state, mode: 'field', nearPond: nearPond(player), nearNpc: who, atShop: atShopDoor(player),
     walletCoins: walletCoins(player),
+    walletWaiting: walletWaiting(player),
     trainerBeaten: trainer ? state.trainersBeaten.includes(trainer) : false,
+    encounter: cards.get(player) ?? null,
     ...extra,
   };
 }
@@ -68,7 +87,7 @@ useReadState((player) => session(player).read());
 useHudData((player) => hudData(player));
 export function fieldHud(player: RpgPlayer) {
   const hud = player.gui('field-hud');
-  hud.on<{ action: string; creatureId?: string; nick?: string; item?: string }>('field', async ({ action, creatureId, nick, item }) => {
+  hud.on<{ action: string; creatureId?: string; creatureIds?: unknown[]; nick?: string; item?: string; look?: string }>('field', async ({ action, creatureId, creatureIds, nick, item, look }) => {
     // The tap a card is waiting for: the battle (or the shop) opens behind it.
     if (!isCurrentAvatar(player)) return;
     if (action === 'fight') { taps.get(player)?.(); return; }
@@ -88,7 +107,14 @@ export function fieldHud(player: RpgPlayer) {
     }
     if (action === 'cast') { if (nearPond(player)) await startBattle(player, 'cast'); return; }
     if (action === 'set-lead' && creatureId) { tryCommit(player, { type: 'set-lead', creatureId }); return; }
+    if (action === 'set-team' && Array.isArray(creatureIds)) { tryCommit(player, { type: 'set-team', creatureIds: creatureIds.filter((x): x is string => typeof x === 'string') }); return; }
     if (action === 'rename' && creatureId) { tryCommit(player, { type: 'rename', creatureId, nick: nick ?? '' }); return; }
+    if (action === 'set-look' && (LOOKS as readonly string[]).includes(look ?? '')) {
+      tryCommit(player, { type: 'set-look', look: look as Look });
+      player.setGraphic(graphicOf(player));
+      return;
+    }
+    if (action === 'lobby') { await openLobby(player); return; }
     if (action === 'shop' || action === 'enter-shop') {
       hud.update(hudData(player));
       try { await openShop(player); }
@@ -130,7 +156,7 @@ export async function checkEncounter(player: RpgPlayer) {
   const x = player.x(), y = player.y();
   const inWild = x >= MEADOW.x0 && x < MEADOW.x1 && y >= MEADOW.y0 && y < MEADOW.y1;
   if (!inWild) { inside.delete(player); return; }
-  if (inside.has(player) || fighting.has(player)) return;
+  if (inside.has(player) || fighting.has(player) || inArena.has(player)) return;
   inside.add(player);
   await startBattle(player, 'encounter');
 }
@@ -174,7 +200,16 @@ async function startBattle(player: RpgPlayer, kind: 'encounter' | 'cast' | 'chal
   fighting.add(player);
   player.breakRoutes(true);
   try {
-    if (kind === 'cast') { player.getGui('field-hud')?.update(hudData(player, { notice: 'Cast… waiting for a bite.' })); await new Promise(r => setTimeout(r, 1600)); }
+    // A cast: the rod goes out and the bobber floats, then a bite pulls the line taut.
+    if (kind === 'cast') {
+      // Face the water, and tell the screen which way the line goes.
+      const [dx, dy] = pondSide(player) ?? [0, 1];
+      player.changeDirection((dx > 0 ? 'right' : dx < 0 ? 'left' : dy < 0 ? 'up' : 'down') as Parameters<RpgPlayer['changeDirection']>[0]);
+      player.getGui('field-hud')?.update(hudData(player, { notice: 'Cast… waiting for a bite.', fishing: { phase: 'cast', dx, dy } }));
+      await new Promise(r => setTimeout(r, 1800));
+      player.getGui('field-hud')?.update(hudData(player, { notice: 'Something bit!', fishing: { phase: 'bite', dx, dy } }));
+      await new Promise(r => setTimeout(r, 900));
+    }
     const command: Command = kind === 'challenge' ? { type: 'challenge', trainer: trainer! } : { type: kind };
     const resumed = state.battle?.outcome === 'active';
     let next;
@@ -192,12 +227,14 @@ async function startBattle(player: RpgPlayer, kind: 'encounter' | 'cast' | 'chal
         : { title: 'WILD ENCOUNTER', line: 'A wild creature appeared!' };
       await new Promise<void>((tapped) => {
         taps.set(player, tapped);
-        player.getGui('field-hud')?.update(hudData(player, { encounter: card }));
+        cards.set(player, card);
+        player.getGui('field-hud')?.update(hudData(player));
       });
       taps.delete(player);
+      cards.delete(player);
     }
     const gui = player.gui('creature-battle');
-    gui.on<{ action: string; revision: number; nick?: string }>('battle', ({ action, revision, nick }) => {
+    gui.on<{ action: string; revision: number; nick?: string; creatureId?: string }>('battle', ({ action, revision, nick, creatureId }) => {
       if (action === 'continue') {
         if (session(player).read().battle?.outcome !== 'active') gui.close();
         return;
@@ -205,8 +242,13 @@ async function startBattle(player: RpgPlayer, kind: 'encounter' | 'cast' | 'chal
       const current = session(player).read();
       const combatant = current.creatures.find(c => c.id === current.battle?.creatureId) ?? current.creatures[current.lead];
       const isMove = SPECIES[combatant.species].moves.some(m => m.id === action);
+      const [kind, item, ...target] = action.split(':');
       const command: Command | undefined = isMove ? { type: 'move', move: action }
-        : action === 'capture' ? { type: 'capture', nick } : action === 'escape' ? { type: 'escape' } : undefined;
+        // An item spends the turn: `item:<poultice|tonic>:<creature id>`.
+        : kind === 'item' && (item === 'poultice' || item === 'tonic') && target.length ? { type: 'battle-item', item, creatureId: target.join(':') }
+        : action === 'capture' ? { type: 'capture', nick } : action === 'escape' ? { type: 'escape' }
+        // A creature is named after it is caught, while the battle screen is still open.
+        : action === 'rename' && creatureId ? { type: 'rename', creatureId, nick: nick ?? '' } : undefined;
       if (!command) return;
       try { gui.update({ state: commit(player, command, revision), mode: 'battle', lastAction: action, error: '' }); }
       catch (error) {

@@ -8,6 +8,7 @@
 import { inject, onMounted, onUnmounted, ref, watch } from 'vue';
 import QRCode from 'qrcode';
 import { RESUME_KEY } from './resume';
+import { LOGO_HTML } from './logo';
 
 const props = defineProps<{ code: string; status: string; resumeToken?: string | null }>();
 const interact = inject<(id: string, event: string, data: unknown) => void>('rpgGuiInteraction')!;
@@ -73,6 +74,7 @@ async function copy() {
 <template>
   <div class="overlay">
     <section class="card" aria-label="Connect your DSM wallet">
+      <div class="ws-logo brand" v-html="LOGO_HTML"></div>
       <h1>Connect your DSM wallet</h1>
       <p class="lead">Wildstate keeps running as a normal game. What you catch and earn lives in your wallet.</p>
       <!-- On this phone: the link opens the DSM wallet with the code filled in. -->
@@ -95,12 +97,13 @@ async function copy() {
 
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=VT323&display=swap');
-.overlay{position:fixed;inset:0;z-index:110;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:#06100cd9;pointer-events:auto;color:#f3f3df;font-family:'VT323',ui-monospace,monospace}
+.overlay{position:fixed;inset:0;z-index:110;display:flex;align-items:safe center;justify-content:center;overflow-y:auto;padding:16px;box-sizing:border-box;background:#06100cd9;pointer-events:auto;color:#f3f3df;font-family:'VT323',ui-monospace,monospace}
+.brand{width:min(78%,360px);margin:2px auto 10px}
 .card{width:min(560px,100%);padding:18px 20px;background:#10261f;box-shadow:0 0 0 2px #0b1a15,0 0 0 4px #9ccf6e,0 0 0 6px #0b1a15;text-align:center}
 h1{font-family:'Silkscreen',monospace;font-size:16px;color:#c4ec79;margin:0 0 6px}
 .lead{margin:0 0 12px;font-size:20px;color:#cfe3cb}
 .qr{display:flex;justify-content:center;margin:8px 0 12px}
-.qr img{width:min(320px,70vw);height:auto;image-rendering:pixelated;background:#fff;padding:6px}
+.qr img{width:min(300px,60vw);height:auto;image-rendering:pixelated;background:#fff;padding:6px}
 .wait{width:220px;height:220px;display:flex;align-items:center;justify-content:center;font-size:40px;color:#9ccf6e}
 ol{text-align:left;margin:0 auto 10px;padding-left:22px;font-size:19px;line-height:1.25;max-width:480px}
 .status{font-family:'Silkscreen',monospace;font-size:10px;color:#e7f6c9;min-height:14px}

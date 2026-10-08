@@ -16,11 +16,12 @@ const interact = inject<(id: string, event: string, data: unknown) => void>('rpg
 const send = (data: Record<string, unknown>) => interact('bramble-shop', 'shop', data);
 
 /** The board: the design's catalogue, with what each item does in this game. */
-const CATALOGUE: { id: ShopItemId; name: string; tag: string; desc: string; stock?: number }[] = [
+const CATALOGUE: { id: ShopItemId; name: string; tag: string; desc: string; stock?: number; unavailable?: 'for now' }[] = [
   { id: 'capsule', name: 'Capture Capsule', tag: 'ITEM', desc: 'Catch a weakened creature.' },
   { id: 'poultice', name: 'Herb Poultice', tag: 'HEAL · 1 USE', desc: 'Restore 15 HP to one creature, from the Bag.' },
   { id: 'tonic', name: 'Charge Tonic', tag: 'RESTORE', desc: 'Refill every charge of one creature.' },
-  { id: 'map', name: 'Ranger’s Map', tag: 'KEY ITEM · 1', desc: 'Opens the path east of the meadow.', stock: 1 },
+  // Not sold for now (owner, 2026-10-08): shown, never buyable, whatever the wallet holds.
+  { id: 'map', name: 'Ranger’s Map', tag: 'KEY ITEM · 1', desc: 'Opens the path south of Mira’s camp.', stock: 1, unavailable: 'for now' },
 ];
 /** Served from public/, like every other picture the screens show. */
 const INTERIOR = 'shop/interior.png';
@@ -43,7 +44,8 @@ const keep = (c: GameState['creatures'][number]) =>
 
 const rows = computed(() => tab.value === 'buy'
   ? CATALOGUE.map((it) => ({ id: it.id, name: it.name, tag: it.tag, desc: it.desc, price: price(it.id), icon: `shop/icon-${it.id}.png`,
-      stock: soldOut(it) ? 'sold' : it.stock !== undefined ? `${it.stock - owned(it.id)} left` : '∞', off: soldOut(it) }))
+      stock: it.unavailable ? `unavailable ${it.unavailable}` : soldOut(it) ? 'sold' : it.stock !== undefined ? `${it.stock - owned(it.id)} left` : '∞',
+      off: it.unavailable !== undefined || soldOut(it) }))
   : props.state.creatures.map((c) => ({ id: c.id, name: displayName(c), tag: keep(c) || SPECIES[c.species].el.toUpperCase(),
       desc: `Lv ${level(c)} · ${c.hp}/${maxHp(c)} HP · transfers ownership`, price: salePrice(c), icon: `creatures/${c.species}.png`,
       stock: keep(c) ? 'not for sale' : 'offer', off: !!keep(c) })));
@@ -64,7 +66,8 @@ function confirm() {
 }
 const nextLine = () => { line.value = (Math.max(0, line.value) + 1) % LINES.length; };
 
-// The design is a 402 x 874 phone frame; scale it to the screen without stretching it.
+// The design is a 402 x 874 phone frame; scale it to the screen without stretching it. Scaling does
+// not shrink its layout box, so the frame is centred by its own middle rather than laid out.
 const k = ref(1);
 const fit = () => { k.value = Math.min(window.innerWidth / 402, window.innerHeight / 874); };
 onMounted(() => { fit(); window.addEventListener('resize', fit); });
@@ -73,7 +76,7 @@ onUnmounted(() => window.removeEventListener('resize', fit));
 
 <template>
   <div class="shop">
-    <div class="frame" :style="{ transform: `scale(${k})` }">
+    <div class="frame" :style="{ transform: `translate(-50%, -50%) scale(${k})` }">
       <img class="interior" :src="INTERIOR" alt="" />
       <i class="lantern"></i>
 
@@ -113,8 +116,8 @@ onUnmounted(() => window.removeEventListener('resize', fit));
 
 <style scoped>
 @import url('https://fonts.googleapis.com/css2?family=Silkscreen:wght@400;700&family=VT323&display=swap');
-.shop{position:fixed;inset:0;background:#2a1a10;display:grid;justify-items:center;align-items:start;overflow:hidden;pointer-events:auto;font-family:'VT323',ui-monospace,monospace;font-size:18px;color:#f3f3df}
-.frame{position:relative;width:402px;height:874px;transform-origin:top center;overflow:hidden;background:#2a1a10}
+.shop{position:fixed;inset:0;background:#2a1a10;overflow:hidden;pointer-events:auto;font-family:'VT323',ui-monospace,monospace;font-size:18px;color:#f3f3df}
+.frame{position:absolute;left:50%;top:50%;width:402px;height:874px;transform-origin:center;overflow:hidden;background:#2a1a10}
 .px{font-family:'Silkscreen',monospace;letter-spacing:0}
 button{font:inherit;cursor:pointer;border:0}
 button:disabled{cursor:default}
@@ -126,7 +129,7 @@ button:disabled{cursor:default}
 .res{position:relative;display:flex;align-items:center;gap:10px;font-size:20px;white-space:nowrap}
 .wild{color:#e9d86b;font-size:13px;padding:4px 8px;background:#0b1a15}
 .delta{position:absolute;right:0;top:-14px;color:#dc6a4e;font-size:10px;animation:coinPop .9s ease-out forwards}.delta.up{color:#c4ec79}
-.speech{position:absolute;left:14px;right:14px;top:166px;display:flex;gap:10px;padding:6px 10px;background:#10261fef;box-shadow:0 0 0 2px #0b1a15,0 0 0 4px #9ccf6e,0 0 0 6px #0b1a15;min-height:44px;cursor:pointer;animation:reveal .2s}
+.speech{position:absolute;left:14px;right:14px;top:124px;display:flex;gap:10px;padding:6px 10px;background:#10261fef;box-shadow:0 0 0 2px #0b1a15,0 0 0 4px #9ccf6e,0 0 0 6px #0b1a15;min-height:44px;cursor:pointer;animation:reveal .2s}
 .grow{flex:1;min-width:0}.who{font-size:8px;color:#c4ec79;margin-bottom:3px}.speech p{margin:0;font-size:17px;line-height:1.2}
 .cursor{align-self:flex-end;color:#c4ec79;font-size:13px;animation:blink 1s steps(1) infinite}
 .tabs{position:absolute;left:30px;right:26px;top:452px;display:flex;gap:6px}
@@ -148,7 +151,7 @@ button:disabled{cursor:default}
 .confirm{font-size:9px;color:#f3f3df;background:#3f6e2a;padding:0 12px;min-width:92px;box-shadow:0 0 0 2px #0b1a15,inset 2px 2px 0 #ffffff22,inset -2px -3px 0 #00000055;display:grid;gap:3px;place-items:center;line-height:1}
 .confirm.sell{background:#7a3b1e}.confirm:disabled{opacity:.45}.confirm:active:not(:disabled){translate:0 2px}
 .total{color:#ffe08a;font-size:11px}
-.ledger{position:absolute;left:14px;right:14px;bottom:8px;display:flex;justify-content:space-between;align-items:flex-end;gap:10px;font-size:7px;line-height:1.5;color:#8fb09a}
+.ledger{position:absolute;left:14px;right:14px;bottom:6px;display:flex;justify-content:space-between;align-items:flex-end;gap:10px;font-size:9px;line-height:1.4;color:#e8e2c8;background:#0b1a15e0;padding:3px 6px}
 .ledger>span:first-child{white-space:nowrap}.note{min-width:0;text-align:right}
 @keyframes blink{50%{opacity:0}}
 @keyframes reveal{from{opacity:0;transform:scale(1.04)}to{opacity:1;transform:scale(1)}}

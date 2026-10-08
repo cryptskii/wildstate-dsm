@@ -22,7 +22,7 @@ The public frontend is https://wildstate-dsm.vercel.app/ and the repository is h
 
 The account uses the committed DSM integration checkout revision `9723f2cca`, which contains `crates/dsm-app-host`. It is separate from the main DSM checkout. Source code in DSM has not been changed for this deployment.
 
-`deploy/account/Dockerfile` builds the real Rust SDK host from that checkout, using its lockfile and toolchain. `deploy/game/Dockerfile` builds the game and runs `scripts/server.mjs` under Node 24. Both run as uid/gid 10001. The combined `deploy/compose.yml` uses one replica each, persistent bind mounts, restart policies and bounded logs. Multiple independent game replicas are unsupported.
+`deploy/account/Dockerfile` builds the real Rust SDK host from that checkout, using its lockfile and toolchain. `deploy/game/Dockerfile` builds the game and bundles the server (`npm run build:server`: `scripts/server.mjs` with the server module and the few packages it uses) into one file; the runtime image is Node 24 Alpine with that file and `src/tiled` only, no `node_modules` or client code. Both run as uid/gid 10001. The combined `deploy/compose.yml` uses one replica each, persistent bind mounts, restart policies and bounded logs. Multiple independent game replicas are unsupported.
 
 ## Network boundaries
 
@@ -32,7 +32,7 @@ The account uses the committed DSM integration checkout revision `9723f2cca`, wh
 - Public `80`: HTTPS redirect and certificate issuance.
 - Public `8443`: wallet DSM Connect relay at `https://34.58.75.224:8443`. Its self-signed certificate is pinned by the wallet-connect code, as in the existing DSM host implementation.
 
-The backend accepts browser origins `https://wildstate-dsm.vercel.app` and its own HTTPS origin. Map publication runs internally from trusted Tiled files, protected by `RPGJS_MAP_UPDATE_TOKEN`. Caddy rejects the public map-update route. The browser never receives that token or the account mnemonic.
+The backend accepts browser origins `https://wildstate-dsm.vercel.app`, the Android app's bundled client at `https://appassets.androidplatform.net`, and its own HTTPS origin. `/version` reports the client protocol (`src/protocol.ts`) that clients check before connecting; deploy a backend before the frontend or APK that expects it. Map publication runs internally from trusted Tiled files, protected by `RPGJS_MAP_UPDATE_TOKEN`. Caddy rejects the public map-update route. The browser never receives that token or the account mnemonic.
 
 The initial backend hostname uses sslip.io to resolve the existing fleet IP. It can be replaced with an owned DNS name by changing `WILDSTATE_BACKEND_DOMAIN`, the allowed origins, and the Vercel frontend's `VITE_GAME_HOST`. The wallet relay endpoint and TLS identity must be handled consistently with issued connect codes.
 

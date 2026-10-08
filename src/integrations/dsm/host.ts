@@ -72,18 +72,30 @@ export const fromB32 = (text: string): Bytes => {
 export const short = (bytes: Uint8Array | string): string =>
   (typeof bytes === 'string' ? bytes : b32(bytes)).slice(0, 8);
 
+/** The longest one call to the game's account may take: a lineage walk on a cold account can take a minute. */
+const HOST_CALL_TIMEOUT_MS = 120_000;
+
 export class DsmHost {
   constructor(readonly base: string) {}
 
   private async ingress(request: pb.IngressRequest, quiet: boolean): Promise<pb.IngressResponse> {
     const path = quiet ? '/ingress/quiet' : '/ingress';
-    const res = await fetch(`${this.base}${path}`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/x-protobuf' },
-      body: own(request.toBinary()),
-    });
-    if (!res.ok) throw new HostError(`${path}: the host answered ${res.status}: ${await res.text()}`);
-    return pb.IngressResponse.fromBinary(new Uint8Array(await res.arrayBuffer()));
+    const op = request.operation.value as { method?: string } | undefined;
+    const started = Date.now();
+    try {
+      const res = await fetch(`${this.base}${path}`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/x-protobuf' },
+        body: own(request.toBinary()),
+        // A call the account never answers fails, instead of holding its player forever.
+        signal: AbortSignal.timeout(HOST_CALL_TIMEOUT_MS),
+      });
+      if (!res.ok) throw new HostError(`${path}: the host answered ${res.status}: ${await res.text()}`);
+      return pb.IngressResponse.fromBinary(new Uint8Array(await res.arrayBuffer()));
+    } finally {
+      const ms = Date.now() - started;
+      if (ms >= 250) console.log(`[host] ${op?.method ?? request.operation.case} took ${ms} ms`);
+    }
   }
 
   async invoke(method: string, body: Uint8Array, quiet = false): Promise<Payload> {
@@ -141,19 +153,14 @@ export class DsmHost {
     supply: bigint;
     description: string;
   }): Promise<Uint8Array> {
-    const supply = new Uint8Array(16);
-    let rest = args.supply;
-    for (let i = 15; i >= 0; i--) {
-      supply[i] = Number(rest & 255n);
-      rest >>= 8n;
-    }
     const payload = await this.invoke(
       'token.create',
       new pb.TokenCreateRequest({
         ticker: args.ticker,
         alias: args.alias,
         decimals: 0,
-        genesisSupplyU128: supply,
+        // Whole units as digits: the SDK parses the amount the player entered (decimals 0).
+        genesisSupplyEntered: args.supply.toString(),
         burnEnabled: false,
         transferable: true,
         threshold: 1,
@@ -164,8 +171,11 @@ export class DsmHost {
     return payload.value.policyAnchor;
   }
 
-  /** A SoFi vault of the game's own, funded from its account (SoFi §28). */
-  async createVault(a: Bytes, reserveA: string, b: Bytes, reserveB: string, feeBps: number) {
+  /**
+   * A SoFi vault of the game's own, funded from its account (SoFi §28). `label` is the account's
+   * own name for it (bookkeeping only, never protocol): how the game recognizes its market's vaults.
+   */
+  async createVault(a: Bytes, reserveA: string, b: Bytes, reserveB: string, feeBps: number, label = '') {
     const less = (x: Uint8Array, y: Uint8Array) => {
       for (let i = 0; i < Math.min(x.length, y.length); i++) if (x[i] !== y[i]) return x[i] < y[i];
       return x.length < y.length;
@@ -179,16 +189,47 @@ export class DsmHost {
         reserveAEntered: rLo,
         reserveBEntered: rHi,
         feeBps,
+        label,
       }).toBinary(),
     );
     if (payload.case !== 'sofiVaultCreatedResponse') throw new HostError(`sofi.createVault answered ${payload.case}`);
     return payload.value;
   }
 
+  /**
+   * Close a vault this account owns (`sofi.close`, SoFi §32): its reserves return to the account.
+   * Resolves once the close is realized; any other outcome is an error, and nothing is assumed.
+   */
+  async close(vaultId: Bytes): Promise<void> {
+    const payload = await this.invoke('sofi.close', new pb.SofiCloseRequest({ vaultId }).toBinary());
+    if (payload.case !== 'sofiPositionResponse') throw new HostError(`sofi.close answered ${payload.case}`);
+    if (payload.value.state !== pb.SofiPositionState.REALIZED) {
+      throw new HostError(`sofi.close: the close at position ${payload.value.position} is ${pb.SofiPositionState[payload.value.state]}, not realized`);
+    }
+  }
+
   async vaults(): Promise<pb.SofiOwnedVaultV1[]> {
     const payload = await this.invoke('sofi.vaults', new pb.SofiVaultsRequest().toBinary(), true);
     if (payload.case !== 'sofiVaultsResponse') throw new HostError(`sofi.vaults answered ${payload.case}`);
     return payload.value.vaults;
+  }
+
+  /**
+   * A route's price over the market's vaults, found by this account (`sofi.findRoute`): information
+   * only, read from the vaults' public state. No route among vaults that could not all be read is an
+   * error, never "no route".
+   */
+  async findRoute(tokenIn: Bytes, tokenOut: Bytes, amountInEntered: string): Promise<pb.SofiFindRouteResponse> {
+    const payload = await this.invoke(
+      'sofi.findRoute',
+      new pb.SofiFindRouteRequest({ tokenInPolicyCommit: tokenIn, tokenOutPolicyCommit: tokenOut, amountInEntered }).toBinary(),
+      true,
+    );
+    if (payload.case !== 'sofiFindRouteResponse') throw new HostError(`sofi.findRoute answered ${payload.case}`);
+    if (payload.value.hops.length === 0 && payload.value.search !== pb.SofiSearch.COMPLETE) {
+      throw new HostError('no route among the liquidity that could be read; some could not be reached, try again');
+    }
+    return payload.value;
   }
 
   /** An online transfer from the game's account (`wallet.sendSmart`). */
@@ -235,6 +276,23 @@ export class DsmHost {
     );
     if (reply.case !== 'request') throw new HostError(`connect.app.request answered ${reply.case}`);
     return reply.value.seq;
+  }
+
+  /**
+   * Publish `payload` as an object of this account's on `topic` (`authored.publish`): content
+   * addressed, signed by the account's key, found by anyone under the account's locator for the topic.
+   */
+  async publishAuthored(topic: Bytes, payload: Bytes): Promise<pb.AuthoredPublishedResponse> {
+    const payloadOf = await this.invoke('authored.publish', new pb.AuthoredPublishRequestV1({ topic, payload }).toBinary());
+    if (payloadOf.case !== 'authoredPublishedResponse') throw new HostError(`authored.publish answered ${payloadOf.case}`);
+    return payloadOf.value;
+  }
+
+  /** Every object `author` published on `topic`, each checked from its own bytes (`authored.read`). */
+  async readAuthored(author: Bytes, topic: Bytes): Promise<pb.AuthoredObjectsResponse> {
+    const payloadOf = await this.query('authored.read', new pb.AuthoredReadRequestV1({ authorDeviceId: author, topic }).toBinary());
+    if (payloadOf.case !== 'authoredObjectsResponse') throw new HostError(`authored.read answered ${payloadOf.case}`);
+    return payloadOf.value;
   }
 
   /** What the account established about request `seq`. `recorded` puts the check in the record. */

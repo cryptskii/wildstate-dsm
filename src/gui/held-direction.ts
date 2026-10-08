@@ -4,15 +4,29 @@ type BoundMovement = {
 };
 export type MovementControls = { getControls(): Record<string, BoundMovement> };
 
-/** Sample one engine movement callback per tick; applyControl fans out to three devices. */
+/**
+ * Run `fn` every displayed frame. Phones starve timers while the game renders: measured on a
+ * Galaxy A16, a 60-per-second interval fired 6.5 times a second while frames ran at ~42 fps,
+ * so a held direction stepped in visible jerks. Without frames (tests, servers), 60 per second.
+ */
+function everyFrame(fn: () => void): () => void {
+  if (typeof requestAnimationFrame === 'function') {
+    let id = requestAnimationFrame(function loop() { fn(); id = requestAnimationFrame(loop); });
+    return () => cancelAnimationFrame(id);
+  }
+  const timer = setInterval(fn, 1000 / 60);
+  return () => clearInterval(timer);
+}
+
+/** Sample one engine movement callback per frame; applyControl fans out to three devices. */
 export function heldDirection(controls: () => MovementControls | null | undefined) {
-  let timer: ReturnType<typeof setInterval> | undefined;
+  let cancel: (() => void) | undefined;
   let held: { controls: MovementControls; direction: string; binding: BoundMovement } | undefined;
   const bindingFor = (target: MovementControls, direction: string) =>
     Object.values(target.getControls()).find(binding => binding.actionName === direction);
   function stop() {
-    clearInterval(timer);
-    timer = undefined;
+    cancel?.();
+    cancel = undefined;
     const previous = held;
     held = undefined;
     previous?.binding.options.keyUp?.(previous.binding);
@@ -39,7 +53,12 @@ export function heldDirection(controls: () => MovementControls | null | undefine
       if (!binding) return;
       held = { controls: target, direction, binding };
       sample();
-      timer = setInterval(sample, 1000 / 60);
+      cancel = everyFrame(sample);
+    },
+    /** Hold `direction`, or stop for null; holding the same direction again changes nothing. */
+    set(direction: string | null) {
+      if (direction === null) { stop(); return; }
+      if (held?.direction !== direction) this.start(direction);
     },
     stop,
   };

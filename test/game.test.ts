@@ -49,12 +49,14 @@ describe('gameplay contract (v4 moves)', () => {
     expect(s.battle!.log[1].dmg).toBe(2);
     expect(s.creatures[0].guard).toBe(false);
   });
-  it('consumes capture item and opportunity together, retaining captured HP and charges', () => {
+  it('consumes capture item and opportunity together; the catch is born at level 1 with whole HP and charges', () => {
     const weakened = strike(strike(encounter())); // 28 → 20 → 12
     const caught = step(weakened, { type: 'capture' });
     expect(caught.inventory.capsules).toBe(2);
-    expect(caught.creatures[1]).toMatchObject({ hp: 12, species: 'mossling', statuses: [], guard: false, anchor: null });
-    expect(caught.creatures[1].charges).toEqual({ 'leaf-cut': 5, 'root-bind': 3, photosynth: 1 });
+    // Born at level 1 whatever it was met at (owner ruling 2026-10-06): no XP, whole HP, whole charges.
+    const born = newCreature(caught.creatures[1].id, 'mossling');
+    expect(caught.creatures[1]).toMatchObject({ xp: 0, hp: born.hp, species: 'mossling', statuses: [], guard: false, anchor: null });
+    expect(caught.creatures[1].charges).toEqual(born.charges);
     expect(caught.consumed).toEqual([`encounter/${caught.battle!.id}`]);
     expect(score(caught)).toBe(20);
     expect(() => step(caught, { type: 'capture' })).toThrow('no-battle');
@@ -132,7 +134,7 @@ describe('species', () => {
     expect(s.battle!.wild.species).toBe('leon');
     s = step(step(s, { type: 'move', move: 'strike' }), { type: 'move', move: 'strike' });
     s = step(s, { type: 'capture', nick: 'Leon' });
-    expect(s.creatures[1]).toMatchObject({ species: 'leon', hp: 12, nick: 'Leon' });
+    expect(s.creatures[1]).toMatchObject({ species: 'leon', xp: 0, hp: newCreature(s.creatures[1].id, 'leon').hp, nick: 'Leon' });
     s = step(step(s, { type: 'heal' }), { type: 'set-lead', creatureId: s.creatures[1].id });
     s = step(s, { type: 'encounter' }); // Embercub: Leon's grass is resisted, fire is not
     s = step(s, { type: 'move', move: 'sticky-snare' });
@@ -214,15 +216,13 @@ describe('DSM ledger: the wallet owns coins and creatures, this state only proje
 
 describe('shop items and trainer battles', () => {
   const alice = initialState('alice');
-  it('grants a quantity for one payment, sells the Map once, and never grants a payment twice', () => {
+  it('grants a quantity for one payment, never sells the Map for now, and never grants a payment twice', () => {
     const four = step(alice, { type: 'grant-item', item: 'capsule', qty: 4, fact: 'tx-q' });
     expect(four.inventory.capsules).toBe(alice.inventory.capsules + 4);
     expect(() => step(four, { type: 'grant-item', item: 'tonic', fact: 'tx-q' })).toThrow('choice-consumed');
     expect(() => step(alice, { type: 'grant-item', item: 'capsule', qty: SHOP_QTY_MAX + 1, fact: 'tx-big' })).toThrow('invalid-command');
-    const map = step(alice, { type: 'grant-item', item: 'map', fact: 'tx-map' });
-    expect(map.inventory.map).toBe(1);
-    expect(() => step(map, { type: 'grant-item', item: 'map', fact: 'tx-map-2' })).toThrow('sold-out');
-    expect(() => step(alice, { type: 'grant-item', item: 'map', qty: 2, fact: 'tx-maps' })).toThrow('sold-out');
+    expect(() => step(alice, { type: 'grant-item', item: 'map', fact: 'tx-map' })).toThrow('unavailable');
+    expect(() => step(alice, { type: 'grant-item', item: 'map', qty: 2, fact: 'tx-maps' })).toThrow('unavailable');
   });
   it('sells a creature that is neither the lead nor the last, once per transfer', () => {
     expect(() => step(alice, { type: 'sell', creatureId: 'alice/starter', fact: 'tx-s0' })).toThrow('not-for-sale');
@@ -257,10 +257,16 @@ describe('shop items and trainer battles', () => {
     expect(after.creatures[0].charges.flare).toBe(5);
     expect(after.inventory.tonic).toBe(0);
   });
-  it('fights a trainer at its own level and full strength, pays no capture, and reopens after a rest', () => {
-    const b = step(alice, { type: 'challenge', trainer: 'kade' });
-    expect(b.battle).toMatchObject({ source: 'trainer', trainer: 'kade' });
+  it('fights a trainer team of three at its level, one at a time; knocking out all three wins, then it reopens after a rest', () => {
+    // A team of three strong creatures, chosen in order.
+    let strong = structuredClone(alice);
+    strong.creatures = [newCreature('alice/starter', 'embercub', undefined, 8), newCreature('alice/volt', 'voltusk', undefined, 8), newCreature('alice/moss', 'mossling', undefined, 8)];
+    strong = step(strong, { type: 'set-team', creatureIds: ['alice/starter', 'alice/volt', 'alice/moss'] });
+    const b = step(strong, { type: 'challenge', trainer: 'kade' });
+    expect(b.battle).toMatchObject({ source: 'trainer', trainer: 'kade', format: 'team3', roster: ['alice/starter', 'alice/volt', 'alice/moss'], ko: { own: 0, foe: 0 } });
+    expect(b.battle!.bench.map(c => c.species)).toEqual(['voltusk', 'leon']);
     const foe = b.battle!.wild;
+    expect(foe).toMatchObject({ species: 'mossling', nick: 'Burr' });
     expect(level(foe)).toBe(TRAINER_LEVEL.kade);
     expect(foe.hp).toBe(maxHp(foe));
     expect(() => step(b, { type: 'capture' })).toThrow('not-wild');
@@ -273,10 +279,16 @@ describe('shop items and trainer battles', () => {
     expect(t2.battle!.log[0]).toMatchObject({ move: 'flare', skipped: true, dmg: 0 });
     expect(t2.creatures[0].charges.flare).toBe(t1.creatures[0].charges.flare);
     expect(t2.creatures[0].statuses.some(x => x.id === 'root')).toBe(false);
-    let won = t2;
-    for (let turn = 0; won.battle!.outcome === 'active' && turn < 6; turn++) won = flare(won);
+    // Fight on: the first knockout sends in the trainer's next creature.
+    let won = t2, events: string[] = [];
+    for (let turn = 0; won.battle!.outcome === 'active' && turn < 20; turn++) {
+      won = step(won, { type: 'move', move: 'strike' });
+      events.push(...won.battle!.events.map(e => `${e.side}:${e.kind}`));
+    }
     expect(won.battle!.outcome).toBe('victory');
-    expect(won.creatures[0].xp).toBe(xpGain(15, TRAINER_LEVEL.kade, 1));
+    expect(won.battle!.ko.foe).toBe(3);
+    expect(won.battle!.bench).toEqual([]);
+    expect(events).toEqual(expect.arrayContaining(['foe:faint', 'foe:switch']));
     expect(won.trainersBeaten).toEqual(['kade']);
     expect(won.coins).toBe(alice.coins);
     expect(() => step(won, { type: 'challenge', trainer: 'kade' })).toThrow('already-beaten');
@@ -284,6 +296,30 @@ describe('shop items and trainer battles', () => {
     expect(rested.trainersBeaten).toEqual([]);
     expect(step(rested, { type: 'challenge', trainer: 'kade' }).battle!.id).toBe('alice/trainer/kade/1');
     expect(() => step(alice, { type: 'challenge', trainer: 'nobody' })).toThrow('unknown-trainer');
+  });
+  it('sends in the next creature when one faints, and loses when none stand', () => {
+    let pair = structuredClone(alice);
+    pair.creatures = [newCreature('alice/starter', 'embercub'), newCreature('alice/second', 'mossling')];
+    let s = step(pair, { type: 'challenge', trainer: 'nessa' });
+    let switched: string | undefined;
+    for (let turn = 0; s.battle!.outcome === 'active' && turn < 30; turn++) {
+      s = step(s, { type: 'move', move: 'strike' });
+      if (s.battle!.events.some(e => e.side === 'own' && e.kind === 'switch')) switched = s.battle!.creatureId;
+    }
+    expect(switched).toBe('alice/second');
+    expect(s.battle!.outcome).toBe('defeat');
+    expect(s.battle!.ko.own).toBe(2);
+    // A lone creature loses as soon as it faints.
+    let lone = step(alice, { type: 'challenge', trainer: 'nessa' });
+    for (let turn = 0; lone.battle!.outcome === 'active' && turn < 30; turn++) lone = step(lone, { type: 'move', move: 'strike' });
+    expect(lone.battle!.outcome).toBe('defeat');
+    expect(lone.battle!.ko.own).toBe(1);
+  });
+  it('keeps a chosen team of up to three distinct creatures, and not during a battle', () => {
+    expect(() => step(alice, { type: 'set-team', creatureIds: ['nobody'] })).toThrow('invalid-command');
+    expect(() => step(alice, { type: 'set-team', creatureIds: ['alice/starter', 'alice/starter'] })).toThrow('invalid-command');
+    expect(step(alice, { type: 'set-team', creatureIds: ['alice/starter'] }).team).toEqual(['alice/starter']);
+    expect(() => step(step(alice, { type: 'encounter' }), { type: 'set-team', creatureIds: [] })).toThrow('battle-active');
   });
 });
 
@@ -314,5 +350,49 @@ describe('growth (flat 20 XP per level, cap 10)', () => {
     let s = initialState('alice'); s.creatures[0].xp = 40; // Lv 3: +2 damage
     const after = strike(step(s, { type: 'encounter' }));
     expect(after.battle!.log[0].dmg).toBe(10);
+  });
+});
+
+describe('items in battle cost the turn', () => {
+  const step = (s: GameState, c: Command) => transition(s, s.revision, `command/${s.revision}`, c);
+  it('heals the creature in front, spends the item, and the wild creature still acts', () => {
+    let s = initialState('ivy');
+    s.creatures[0].hp = 20;
+    s = step(s, { type: 'encounter' });
+    const hpBefore = s.creatures[0].hp;
+    const next = step(s, { type: 'battle-item', item: 'poultice', creatureId: 'ivy/starter' });
+    expect(next.inventory.poultice).toBe(0);
+    expect(next.battle!.log.map(e => [e.actor, e.move])).toEqual([['own', 'item:poultice'], ['wild', next.battle!.log[1].move]]);
+    expect(next.battle!.turn).toBe(1);
+    expect(next.creatures[0].hp).toBe(hpBefore + 15 - next.battle!.log[1].dmg - next.battle!.log[1].burn);
+    expect(() => step(next, { type: 'battle-item', item: 'poultice', creatureId: 'ivy/starter' })).toThrow('no-item');
+  });
+  it('can heal a benched teammate in a team battle, but not a fainted or unknown one', () => {
+    let s = initialState('ivy');
+    s.creatures = [newCreature('ivy/starter', 'embercub', undefined, 8), newCreature('ivy/two', 'mossling', undefined, 8), newCreature('ivy/three', 'tidefin', undefined, 8)];
+    s.creatures[1].hp = 10; s.creatures[2].hp = 0; s.inventory.poultice = 3;
+    s = step(s, { type: 'set-team', creatureIds: ['ivy/starter', 'ivy/two', 'ivy/three'] });
+    s.creatures[2].hp = 1; // standing when the battle starts, so it is fielded
+    s = step(s, { type: 'challenge', trainer: 'kade' });
+    const healed = step(s, { type: 'battle-item', item: 'poultice', creatureId: 'ivy/two' });
+    expect(healed.creatures.find(c => c.id === 'ivy/two')!.hp).toBe(25);
+    const down = structuredClone(healed); down.creatures.find(c => c.id === 'ivy/three')!.hp = 0;
+    expect(() => step(down, { type: 'battle-item', item: 'poultice', creatureId: 'ivy/three' })).toThrow('unknown-creature');
+    expect(() => step(healed, { type: 'battle-item', item: 'poultice', creatureId: 'nobody' })).toThrow('unknown-creature');
+  });
+});
+
+describe('trainer look', () => {
+  it('is picked once, the first time; saves from before the picker get to pick too', async () => {
+    const { stateSchema, lookGraphic, lookPortrait } = await import('../src/domain/game');
+    const s = initialState('alice');
+    expect(s).toMatchObject({ look: 'classic', lookPicked: false });
+    const { look: _, lookPicked: __, ...old } = s;
+    expect(stateSchema.parse(old)).toMatchObject({ look: 'classic', lookPicked: false });
+    const next = step(s, { type: 'set-look', look: 'curly' });
+    expect(next).toMatchObject({ look: 'curly', lookPicked: true });
+    expect(() => step(next, { type: 'set-look', look: 'bearded' })).toThrow('look-picked');
+    expect([lookGraphic('classic'), lookGraphic('curly'), lookPortrait('classic'), lookPortrait('bearded')]).toEqual(['hero', 'hero-curly', 'player', 'player-bearded']);
+    expect(() => step(s, { type: 'set-look', look: 'wizard' as never })).toThrow();
   });
 });
