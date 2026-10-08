@@ -1093,6 +1093,38 @@ proto3.util.setEnumType(ContactPairingPhase, "dsm.ContactPairingPhase", [
 ]);
 
 /**
+ * What kind of holding a balance row is (BalanceGetResponse.holding).
+ *
+ * @generated from enum dsm.BalanceHolding
+ */
+export enum BalanceHolding {
+  /**
+   * @generated from enum value: BALANCE_HOLDING_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * Fungible: counted in units.
+   *
+   * @generated from enum value: BALANCE_HOLDING_CURRENCY = 1;
+   */
+  CURRENCY = 1,
+
+  /**
+   * A token whose whole supply is one: a state object, held or not.
+   *
+   * @generated from enum value: BALANCE_HOLDING_STATE_OBJECT = 2;
+   */
+  STATE_OBJECT = 2,
+}
+// Retrieve enum metadata with: proto3.getEnumType(BalanceHolding)
+proto3.util.setEnumType(BalanceHolding, "dsm.BalanceHolding", [
+  { no: 0, name: "BALANCE_HOLDING_UNSPECIFIED" },
+  { no: 1, name: "BALANCE_HOLDING_CURRENCY" },
+  { no: 2, name: "BALANCE_HOLDING_STATE_OBJECT" },
+]);
+
+/**
  * @generated from enum dsm.SdkEventKind
  */
 export enum SdkEventKind {
@@ -9027,6 +9059,65 @@ export class DsmSuccessorEvidenceV1 extends Message<DsmSuccessorEvidenceV1> {
 
   static equals(a: DsmSuccessorEvidenceV1 | PlainMessage<DsmSuccessorEvidenceV1> | undefined, b: DsmSuccessorEvidenceV1 | PlainMessage<DsmSuccessorEvidenceV1> | undefined): boolean {
     return proto3.util.equals(DsmSuccessorEvidenceV1, a, b);
+  }
+}
+
+/**
+ * An owner baseline of a vault (SoFi Amendment S24): the owner's
+ * presentation over c_n = H(vault-baseline/v1; auth_ccb), the exact
+ * OwnerBaselineAuthV1 bytes it signs, and the exact VaultFrontierV1 bytes
+ * those bind. Published under vault_baseline_locator(v, g); discovery only
+ * until Core authenticates it.
+ *
+ * @generated from message dsm.VaultBaselineV1
+ */
+export class VaultBaselineV1 extends Message<VaultBaselineV1> {
+  /**
+   * @generated from field: dsm.AnchorPresentationV3 presentation = 1;
+   */
+  presentation?: AnchorPresentationV3;
+
+  /**
+   * class 0x0073
+   *
+   * @generated from field: bytes auth_ccb = 2;
+   */
+  authCcb = new Uint8Array(0);
+
+  /**
+   * class 0x0071
+   *
+   * @generated from field: bytes frontier_ccb = 3;
+   */
+  frontierCcb = new Uint8Array(0);
+
+  constructor(data?: PartialMessage<VaultBaselineV1>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "dsm.VaultBaselineV1";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "presentation", kind: "message", T: AnchorPresentationV3 },
+    { no: 2, name: "auth_ccb", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
+    { no: 3, name: "frontier_ccb", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): VaultBaselineV1 {
+    return new VaultBaselineV1().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): VaultBaselineV1 {
+    return new VaultBaselineV1().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): VaultBaselineV1 {
+    return new VaultBaselineV1().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: VaultBaselineV1 | PlainMessage<VaultBaselineV1> | undefined, b: VaultBaselineV1 | PlainMessage<VaultBaselineV1> | undefined): boolean {
+    return proto3.util.equals(VaultBaselineV1, a, b);
   }
 }
 
@@ -18509,6 +18600,15 @@ export class SofiCreateVaultRequest extends Message<SofiCreateVaultRequest> {
    */
   reserveBEntered = "";
 
+  /**
+   * A name the creating account keeps for the vault in its own store (owner
+   * bookkeeping: carried nowhere, never read for validity), returned by
+   * sofi.vaults. Empty for none. At most 128 bytes.
+   *
+   * @generated from field: string label = 8;
+   */
+  label = "";
+
   constructor(data?: PartialMessage<SofiCreateVaultRequest>) {
     super();
     proto3.util.initPartial(data, this);
@@ -18522,6 +18622,7 @@ export class SofiCreateVaultRequest extends Message<SofiCreateVaultRequest> {
     { no: 5, name: "fee_bps", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 6, name: "reserve_a_entered", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 7, name: "reserve_b_entered", kind: "scalar", T: 9 /* ScalarType.STRING */ },
+    { no: 8, name: "label", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SofiCreateVaultRequest {
@@ -19094,6 +19195,13 @@ export class SofiOwnedVaultV1 extends Message<SofiOwnedVaultV1> {
    */
   status = SofiVaultStatus.UNSPECIFIED;
 
+  /**
+   * the creator's own name for it, empty for none
+   *
+   * @generated from field: string label = 13;
+   */
+  label = "";
+
   constructor(data?: PartialMessage<SofiOwnedVaultV1>) {
     super();
     proto3.util.initPartial(data, this);
@@ -19114,6 +19222,7 @@ export class SofiOwnedVaultV1 extends Message<SofiOwnedVaultV1> {
     { no: 10, name: "fee_bps", kind: "scalar", T: 13 /* ScalarType.UINT32 */ },
     { no: 11, name: "generation", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
     { no: 12, name: "status", kind: "enum", T: proto3.getEnumType(SofiVaultStatus) },
+    { no: 13, name: "label", kind: "scalar", T: 9 /* ScalarType.STRING */ },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): SofiOwnedVaultV1 {
@@ -23281,6 +23390,16 @@ export class BalanceGetResponse extends Message<BalanceGetResponse> {
    */
   offlineAllocation?: OfflineAllocationView;
 
+  /**
+   * What kind of holding the token is, decided by Rust from its committed
+   * supply: a token that exists exactly once (a creature, an item) is a state
+   * object, anything else a currency. The wallet lists the two apart; a screen
+   * that decided it from the amount or the ticker would carry its own rule.
+   *
+   * @generated from field: dsm.BalanceHolding holding = 16;
+   */
+  holding = BalanceHolding.UNSPECIFIED;
+
   constructor(data?: PartialMessage<BalanceGetResponse>) {
     super();
     proto3.util.initPartial(data, this);
@@ -23304,6 +23423,7 @@ export class BalanceGetResponse extends Message<BalanceGetResponse> {
     { no: 13, name: "genesis_supply_display", kind: "scalar", T: 9 /* ScalarType.STRING */ },
     { no: 14, name: "permissions", kind: "message", T: TokenPolicyPermissions },
     { no: 15, name: "offline_allocation", kind: "message", T: OfflineAllocationView },
+    { no: 16, name: "holding", kind: "enum", T: proto3.getEnumType(BalanceHolding) },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): BalanceGetResponse {
@@ -28788,6 +28908,63 @@ export class ConnectPayV1 extends Message<ConnectPayV1> {
 }
 
 /**
+ * A vault this account owns, at the generation of a baseline it published
+ * (SoFi Amendment S24), with the session wallet's witness under that
+ * baseline's root: the vault's state leaf and the wallet's relationship proof.
+ * It carries no authority; the wallet authenticates the baseline it reads
+ * under vault_baseline_locator(v, g) and checks the witness against its root.
+ *
+ * @generated from message dsm.ConnectVaultWitnessV1
+ */
+export class ConnectVaultWitnessV1 extends Message<ConnectVaultWitnessV1> {
+  /**
+   * @generated from field: bytes vault_id = 1;
+   */
+  vaultId = new Uint8Array(0);
+
+  /**
+   * @generated from field: uint64 generation = 2;
+   */
+  generation = protoInt64.zero;
+
+  /**
+   * class 0x0072
+   *
+   * @generated from field: bytes witness_ccb = 3;
+   */
+  witnessCcb = new Uint8Array(0);
+
+  constructor(data?: PartialMessage<ConnectVaultWitnessV1>) {
+    super();
+    proto3.util.initPartial(data, this);
+  }
+
+  static readonly runtime: typeof proto3 = proto3;
+  static readonly typeName = "dsm.ConnectVaultWitnessV1";
+  static readonly fields: FieldList = proto3.util.newFieldList(() => [
+    { no: 1, name: "vault_id", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
+    { no: 2, name: "generation", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
+    { no: 3, name: "witness_ccb", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
+  ]);
+
+  static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ConnectVaultWitnessV1 {
+    return new ConnectVaultWitnessV1().fromBinary(bytes, options);
+  }
+
+  static fromJson(jsonValue: JsonValue, options?: Partial<JsonReadOptions>): ConnectVaultWitnessV1 {
+    return new ConnectVaultWitnessV1().fromJson(jsonValue, options);
+  }
+
+  static fromJsonString(jsonString: string, options?: Partial<JsonReadOptions>): ConnectVaultWitnessV1 {
+    return new ConnectVaultWitnessV1().fromJsonString(jsonString, options);
+  }
+
+  static equals(a: ConnectVaultWitnessV1 | PlainMessage<ConnectVaultWitnessV1> | undefined, b: ConnectVaultWitnessV1 | PlainMessage<ConnectVaultWitnessV1> | undefined): boolean {
+    return proto3.util.equals(ConnectVaultWitnessV1, a, b);
+  }
+}
+
+/**
  * @generated from message dsm.ConnectQuoteV1
  */
 export class ConnectQuoteV1 extends Message<ConnectQuoteV1> {
@@ -28808,6 +28985,11 @@ export class ConnectQuoteV1 extends Message<ConnectQuoteV1> {
    */
   amountIn = protoInt64.zero;
 
+  /**
+   * @generated from field: repeated dsm.ConnectVaultWitnessV1 vault_witnesses = 4;
+   */
+  vaultWitnesses: ConnectVaultWitnessV1[] = [];
+
   constructor(data?: PartialMessage<ConnectQuoteV1>) {
     super();
     proto3.util.initPartial(data, this);
@@ -28819,6 +29001,7 @@ export class ConnectQuoteV1 extends Message<ConnectQuoteV1> {
     { no: 1, name: "token_in", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
     { no: 2, name: "token_out", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
     { no: 3, name: "amount_in", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
+    { no: 4, name: "vault_witnesses", kind: "message", T: ConnectVaultWitnessV1, repeated: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ConnectQuoteV1 {
@@ -28866,6 +29049,11 @@ export class ConnectSwapV1 extends Message<ConnectSwapV1> {
    */
   minAmountOut = protoInt64.zero;
 
+  /**
+   * @generated from field: repeated dsm.ConnectVaultWitnessV1 vault_witnesses = 5;
+   */
+  vaultWitnesses: ConnectVaultWitnessV1[] = [];
+
   constructor(data?: PartialMessage<ConnectSwapV1>) {
     super();
     proto3.util.initPartial(data, this);
@@ -28878,6 +29066,7 @@ export class ConnectSwapV1 extends Message<ConnectSwapV1> {
     { no: 2, name: "token_out", kind: "scalar", T: 12 /* ScalarType.BYTES */ },
     { no: 3, name: "amount_in", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
     { no: 4, name: "min_amount_out", kind: "scalar", T: 4 /* ScalarType.UINT64 */ },
+    { no: 5, name: "vault_witnesses", kind: "message", T: ConnectVaultWitnessV1, repeated: true },
   ]);
 
   static fromBinary(bytes: Uint8Array, options?: Partial<BinaryReadOptions>): ConnectSwapV1 {

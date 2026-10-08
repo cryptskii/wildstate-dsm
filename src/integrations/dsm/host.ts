@@ -171,8 +171,11 @@ export class DsmHost {
     return payload.value.policyAnchor;
   }
 
-  /** A SoFi vault of the game's own, funded from its account (SoFi §28). */
-  async createVault(a: Bytes, reserveA: string, b: Bytes, reserveB: string, feeBps: number) {
+  /**
+   * A SoFi vault of the game's own, funded from its account (SoFi §28). `label` is the account's
+   * own name for it (bookkeeping only, never protocol): how the game recognizes its market's vaults.
+   */
+  async createVault(a: Bytes, reserveA: string, b: Bytes, reserveB: string, feeBps: number, label = '') {
     const less = (x: Uint8Array, y: Uint8Array) => {
       for (let i = 0; i < Math.min(x.length, y.length); i++) if (x[i] !== y[i]) return x[i] < y[i];
       return x.length < y.length;
@@ -186,10 +189,23 @@ export class DsmHost {
         reserveAEntered: rLo,
         reserveBEntered: rHi,
         feeBps,
+        label,
       }).toBinary(),
     );
     if (payload.case !== 'sofiVaultCreatedResponse') throw new HostError(`sofi.createVault answered ${payload.case}`);
     return payload.value;
+  }
+
+  /**
+   * Close a vault this account owns (`sofi.close`, SoFi §32): its reserves return to the account.
+   * Resolves once the close is realized; any other outcome is an error, and nothing is assumed.
+   */
+  async close(vaultId: Bytes): Promise<void> {
+    const payload = await this.invoke('sofi.close', new pb.SofiCloseRequest({ vaultId }).toBinary());
+    if (payload.case !== 'sofiPositionResponse') throw new HostError(`sofi.close answered ${payload.case}`);
+    if (payload.value.state !== pb.SofiPositionState.REALIZED) {
+      throw new HostError(`sofi.close: the close at position ${payload.value.position} is ${pb.SofiPositionState[payload.value.state]}, not realized`);
+    }
   }
 
   async vaults(): Promise<pb.SofiOwnedVaultV1[]> {

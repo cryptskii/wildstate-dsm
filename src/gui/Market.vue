@@ -38,8 +38,8 @@ const held = (action: 'quote' | 'swap') => (props.busy ?? pressed.value) === act
         <h1>Market · WILD / ERA</h1>
         <button class="x" @click="send('close')">CLOSE</button>
       </div>
-      <p class="vault" v-if="vault">The game's vault holds {{ vault.wild }} WILD · {{ vault.era }} ERA · {{ vault.generation }} trade(s) so far</p>
-      <p class="vault" v-else>Reading the vault…</p>
+      <p class="vault" v-if="vault">The game's {{ vault.vaults }} vaults hold {{ vault.wild }} WILD · {{ vault.era }} ERA · {{ vault.generation }} trade(s) so far</p>
+      <p class="vault" v-else>Reading the market's vaults…</p>
       <p class="mine">You hold {{ coins ?? '…' }} and {{ era ?? '…' }} (proven).</p>
       <div class="sides">
         <button :class="{ sel: side === 'buy' }" @click="side = 'buy'">BUY WILD with ERA</button>
