@@ -18,7 +18,7 @@ const props = defineProps<{
   liveMatch: { id: string; stake: number; opponent: Brief; locking: { keys: boolean; mine: boolean; theirs: boolean; ready: { mine: boolean; theirs: boolean }; started: boolean } | null } | null;
   found?: Brief | null;
   /** Everyone this player found, challenged or played, online first. */
-  friends?: (Brief & { playing: boolean })[];
+  friends?: (Brief & { playing: boolean; contact?: boolean })[];
   notice: string;
   walletWaiting?: string | null;
   team: {
@@ -161,7 +161,7 @@ async function copyId() { await navigator.clipboard.writeText(props.me.id); copi
           <small v-if="!friends?.length">Players you find, challenge or play stay here.</small>
           <button v-for="f in friends" :key="f.id" type="button" class="friendrow" @click="send('find', { query: f.id })">
             <i class="dot" :class="{ on: f.online }"></i><b>@{{ f.name }}</b>
-            <small>{{ f.playing ? 'in a match' : f.online ? 'online' : 'offline' }} · {{ f.rating }}</small>
+            <small>{{ f.contact ? 'contact · ' : '' }}{{ f.playing ? 'in a match' : f.online ? 'online' : 'offline' }} · {{ f.rating }}</small>
           </button>
         </div>
         <div v-if="found" class="card friend">
