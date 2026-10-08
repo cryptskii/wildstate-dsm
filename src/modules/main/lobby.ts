@@ -362,6 +362,8 @@ async function begin(aWallet: string, bWallet: string, stake: number) {
 /** Both players into the battle screen. */
 function startBattle(m: Match) {
   liveOf.set(m.a.wallet, m.id); liveOf.set(m.b.wallet, m.id);
+  // What the lobby said before the match began is behind them now.
+  notices.delete(m.a.wallet); notices.delete(m.b.wallet);
   for (const side of ['a', 'b'] as const) {
     const p = playerOfWallet(m[side].wallet);
     if (!p) { absentSince.set(m[side].wallet, Date.now()); continue; }

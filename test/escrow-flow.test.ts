@@ -11,6 +11,8 @@ const dsm = vi.hoisted(() => ({
   matches: {} as Record<string, Match>,
   failLockFor: null as string | null,
   readyHangs: null as string | null,
+  /** What a withdrawal finds on the match cell: the withdrawal, or a Start that got there first. */
+  withdrawFinds: 'withdrawn' as 'withdrawn' | 'started',
   calls: [] as string[],
   signed: [] as { wallet: string; index: number; kind: number; preceding: number[] }[],
 }));
@@ -41,7 +43,7 @@ vi.mock('../src/modules/main/dsm', () => ({
     if (dsm.readyHangs === p.id) return new Promise(() => {});
     return { readySignature: new TextEncoder().encode(`ready-${p.id}`), started: theirs !== undefined };
   }),
-  withdrawDuel: vi.fn(async (p: { id: string }, cell: string) => { dsm.calls.push(`withdraw ${p.id} on ${cell}`); return 'withdrawn'; }),
+  withdrawDuel: vi.fn(async (p: { id: string }, cell: string) => { dsm.calls.push(`withdraw ${p.id} on ${cell}`); return dsm.withdrawFinds; }),
   signEntry: vi.fn(async (p: { id: string }, _cell: string, preceding: { entry: Uint8Array }[], entry: Uint8Array) => {
     dsm.signed.push({ wallet: p.id, index: indexOf(entry), kind: kindOf(entry), preceding: preceding.map((x) => indexOf(x.entry)) });
     return { index: indexOf(entry), signature: new TextEncoder().encode(`sig-${indexOf(entry)}`) };
@@ -83,7 +85,7 @@ function staked(stake = 100): Match {
 /** Waits until the match's queued wallet requests are done. */
 const settled = (m: Match) => advance(m, events);
 beforeEach(() => {
-  dsm.online = new Set([A, B]); dsm.matches = {}; dsm.failLockFor = null; dsm.readyHangs = null; dsm.calls = []; dsm.signed = []; seen.length = 0;
+  dsm.online = new Set([A, B]); dsm.matches = {}; dsm.failLockFor = null; dsm.readyHangs = null; dsm.withdrawFinds = 'withdrawn'; dsm.calls = []; dsm.signed = []; seen.length = 0;
 });
 afterEach(() => { vi.useRealTimers(); });
 
@@ -124,6 +126,22 @@ describe('a staked match decided by the program', () => {
     expect(seen[0]).toContain(`@bob did not ready in time`);
     expect(dsm.calls.slice(-3)).toEqual([`withdraw ${A} on CELL`, `collect ${A} vault-a`, `collect ${B} vault-b`]);
     expect(m.escrow).toMatchObject({ start: 'withdrawn', refunded: { a: true, b: true } });
+  });
+
+  it('plays a match whose Start beat the withdrawal, and never tells the players it was void', async () => {
+    // Phones, 2026-10-08: readying ran past its window, the void was announced, the withdrawal
+    // found the Start already on the cell, the match was played and won, and the void notice stayed.
+    vi.useFakeTimers();
+    const m = staked();
+    dsm.readyHangs = B;
+    dsm.withdrawFinds = 'started';
+    const locking = lockMatch(m, events);
+    await vi.advanceTimersByTimeAsync(READY_MS + 1);
+    await locking;
+    expect(m.phase).toBe('battle');
+    expect(m.escrow).toMatchObject({ start: 'started', problem: '' });
+    expect(seen).toEqual(['started m1']);
+    expect(dsm.calls.filter((c) => c.startsWith('collect'))).toEqual([]);
   });
 
   it('plays each turn as both wallets\' sealed moves, then both reveals, each relayed to the other wallet, and resolves it by the program', async () => {
