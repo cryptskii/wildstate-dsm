@@ -10,7 +10,7 @@
  */
 import { Components, type RpgPlayer } from '@rpgjs/server';
 import { session } from './journey';
-import { lobbyRecord, playerOfWallet, walletIdentity, walletOf, walletWaiting, web2 } from './dsm';
+import { deliverUnissued, lobbyRecord, playerOfWallet, walletIdentity, walletOf, walletWaiting, web2 } from './dsm';
 import { commit, isFighting, setFighting } from './field';
 import { isSpeaking } from './dialogue';
 import { SPECIES, GameError, displayName, fieldedTeam, level, maxCharges, maxHp, type Command, type Creature, type GameState } from '../../domain/game';
@@ -323,6 +323,7 @@ async function begin(aWallet: string, bWallet: string, stake: number) {
     // Every creature of a staked team is in its wallet: its state is what both wallets check.
     const unissued = ([[pa, aWallet], [pb, bWallet]] as const).find(([p]) => pvpTeam(session(p).read()).some((c) => c.anchor === null));
     if (unissued) {
+      deliverUnissued(unissued[0]);
       for (const w of [aWallet, bWallet]) { notices.set(w, unissued[1] === w ? 'A creature on your team is still on its way to your wallet; a staked match waits for it.' : 'Your opponent\'s team is still arriving in their wallet; try again in a moment.'); void refreshLobby(w); }
       return;
     }
