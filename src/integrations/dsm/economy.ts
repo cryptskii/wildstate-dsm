@@ -156,11 +156,20 @@ export class Economy {
     }
   }
 
+  /**
+   * Keep the record on disk, now: an irreversible step that follows a save finds it written. Compact,
+   * not pretty-printed, and a slow write says so with its size (phones, 2026-10-08: walking paused,
+   * then went on, while the server rewrote its record).
+   */
   save(): void {
+    const started = performance.now();
     mkdirSync(dirname(this.path), { recursive: true });
     const next = `${this.path}.next`;
-    writeFileSync(next, JSON.stringify(this.record, null, 2));
+    const text = JSON.stringify(this.record);
+    writeFileSync(next, text);
     renameSync(next, this.path);
+    const took = Math.round(performance.now() - started);
+    if (took >= 100) console.warn(`[record] ${text.length} bytes written in ${took} ms`);
   }
 
   get wild(): Bytes {
