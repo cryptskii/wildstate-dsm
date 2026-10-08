@@ -216,15 +216,13 @@ describe('DSM ledger: the wallet owns coins and creatures, this state only proje
 
 describe('shop items and trainer battles', () => {
   const alice = initialState('alice');
-  it('grants a quantity for one payment, sells the Map once, and never grants a payment twice', () => {
+  it('grants a quantity for one payment, never sells the Map for now, and never grants a payment twice', () => {
     const four = step(alice, { type: 'grant-item', item: 'capsule', qty: 4, fact: 'tx-q' });
     expect(four.inventory.capsules).toBe(alice.inventory.capsules + 4);
     expect(() => step(four, { type: 'grant-item', item: 'tonic', fact: 'tx-q' })).toThrow('choice-consumed');
     expect(() => step(alice, { type: 'grant-item', item: 'capsule', qty: SHOP_QTY_MAX + 1, fact: 'tx-big' })).toThrow('invalid-command');
-    const map = step(alice, { type: 'grant-item', item: 'map', fact: 'tx-map' });
-    expect(map.inventory.map).toBe(1);
-    expect(() => step(map, { type: 'grant-item', item: 'map', fact: 'tx-map-2' })).toThrow('sold-out');
-    expect(() => step(alice, { type: 'grant-item', item: 'map', qty: 2, fact: 'tx-maps' })).toThrow('sold-out');
+    expect(() => step(alice, { type: 'grant-item', item: 'map', fact: 'tx-map' })).toThrow('unavailable');
+    expect(() => step(alice, { type: 'grant-item', item: 'map', qty: 2, fact: 'tx-maps' })).toThrow('unavailable');
   });
   it('sells a creature that is neither the lead nor the last, once per transfer', () => {
     expect(() => step(alice, { type: 'sell', creatureId: 'alice/starter', fact: 'tx-s0' })).toThrow('not-for-sale');

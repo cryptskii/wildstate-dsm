@@ -16,11 +16,12 @@ const interact = inject<(id: string, event: string, data: unknown) => void>('rpg
 const send = (data: Record<string, unknown>) => interact('bramble-shop', 'shop', data);
 
 /** The board: the design's catalogue, with what each item does in this game. */
-const CATALOGUE: { id: ShopItemId; name: string; tag: string; desc: string; stock?: number }[] = [
+const CATALOGUE: { id: ShopItemId; name: string; tag: string; desc: string; stock?: number; unavailable?: 'for now' }[] = [
   { id: 'capsule', name: 'Capture Capsule', tag: 'ITEM', desc: 'Catch a weakened creature.' },
   { id: 'poultice', name: 'Herb Poultice', tag: 'HEAL · 1 USE', desc: 'Restore 15 HP to one creature, from the Bag.' },
   { id: 'tonic', name: 'Charge Tonic', tag: 'RESTORE', desc: 'Refill every charge of one creature.' },
-  { id: 'map', name: 'Ranger’s Map', tag: 'KEY ITEM · 1', desc: 'Opens the path east of the meadow.', stock: 1 },
+  // Not sold for now (owner, 2026-10-08): shown, never buyable, whatever the wallet holds.
+  { id: 'map', name: 'Ranger’s Map', tag: 'KEY ITEM · 1', desc: 'Opens the path east of the meadow.', stock: 1, unavailable: 'for now' },
 ];
 /** Served from public/, like every other picture the screens show. */
 const INTERIOR = 'shop/interior.png';
@@ -43,7 +44,8 @@ const keep = (c: GameState['creatures'][number]) =>
 
 const rows = computed(() => tab.value === 'buy'
   ? CATALOGUE.map((it) => ({ id: it.id, name: it.name, tag: it.tag, desc: it.desc, price: price(it.id), icon: `shop/icon-${it.id}.png`,
-      stock: soldOut(it) ? 'sold' : it.stock !== undefined ? `${it.stock - owned(it.id)} left` : '∞', off: soldOut(it) }))
+      stock: it.unavailable ? `unavailable ${it.unavailable}` : soldOut(it) ? 'sold' : it.stock !== undefined ? `${it.stock - owned(it.id)} left` : '∞',
+      off: it.unavailable !== undefined || soldOut(it) }))
   : props.state.creatures.map((c) => ({ id: c.id, name: displayName(c), tag: keep(c) || SPECIES[c.species].el.toUpperCase(),
       desc: `Lv ${level(c)} · ${c.hp}/${maxHp(c)} HP · transfers ownership`, price: salePrice(c), icon: `creatures/${c.species}.png`,
       stock: keep(c) ? 'not for sale' : 'offer', off: !!keep(c) })));

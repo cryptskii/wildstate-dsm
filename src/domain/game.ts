@@ -188,7 +188,7 @@ export type Command =
   | { type: 'receive-creature'; creature: Creature };
 export type ErrorCode = 'stale' | 'battle-active' | 'no-battle' | 'fainted' | 'no-charges' |
   'no-capsules' | 'not-weakened' | 'choice-consumed' | 'invalid-command' | 'look-picked' | 'no-rod' | 'unknown-creature' |
-  'no-item' | 'not-wild' | 'already-beaten' | 'unknown-trainer' | 'sold-out' | 'not-for-sale' | 'gift-cooldown';
+  'no-item' | 'not-wild' | 'already-beaten' | 'unknown-trainer' | 'sold-out' | 'not-for-sale' | 'gift-cooldown' | 'unavailable';
 /** What Bramble's board sells. The Map is a key item: one per player. */
 export type ShopItemId = 'capsule' | 'poultice' | 'tonic' | 'map';
 export const SHOP_QTY_MAX = 9;
@@ -422,7 +422,8 @@ export function transition(parent: GameState, expected: number, commandId: strin
       const qty = command.type === 'grant-item' ? command.qty ?? 1 : 1;
       if (!['capsule', 'poultice', 'tonic', 'map'].includes(item)) fail('invalid-command');
       if (!Number.isInteger(qty) || qty < 1 || qty > SHOP_QTY_MAX) fail('invalid-command');
-      if (item === 'map' && (qty !== 1 || s.inventory.map > 0)) fail('sold-out');
+      // The Ranger's Map is not sold for now (owner, 2026-10-08), whatever the player holds.
+      if (item === 'map') fail('unavailable');
       const key = `payment/${command.fact}`;
       if (!command.fact.trim() || s.consumed.includes(key)) fail('choice-consumed');
       s.consumed.push(key);
