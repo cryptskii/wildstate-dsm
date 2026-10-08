@@ -12,6 +12,13 @@ const fighting = new WeakSet<RpgPlayer>();
 /** A player in a battle or a match: field actions wait until it ends. */
 export const isFighting = (player: RpgPlayer) => fighting.has(player);
 export function setFighting(player: RpgPlayer, on: boolean) { if (on) fighting.add(player); else fighting.delete(player); }
+const inArena = new WeakSet<RpgPlayer>();
+/**
+ * A player in the arena's lobby: the map under it starts no encounter (phones, 2026-10-08: a
+ * player's taps on the lobby walked their character into the meadow beneath it, and a wild
+ * creature appeared while the lobby was still on screen).
+ */
+export function setInArena(player: RpgPlayer, on: boolean) { if (on) inArena.add(player); else inArena.delete(player); }
 /** A card the player taps through (the encounter card, Bramble's door), waiting for its tap. */
 const taps = new WeakMap<RpgPlayer, () => void>();
 /** The card a new fight waits on: every HUD refresh carries it, so it never goes missing while the battle waits for its tap. */
@@ -149,7 +156,7 @@ export async function checkEncounter(player: RpgPlayer) {
   const x = player.x(), y = player.y();
   const inWild = x >= MEADOW.x0 && x < MEADOW.x1 && y >= MEADOW.y0 && y < MEADOW.y1;
   if (!inWild) { inside.delete(player); return; }
-  if (inside.has(player) || fighting.has(player)) return;
+  if (inside.has(player) || fighting.has(player) || inArena.has(player)) return;
   inside.add(player);
   await startBattle(player, 'encounter');
 }

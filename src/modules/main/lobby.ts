@@ -11,7 +11,7 @@
 import { Components, type RpgPlayer } from '@rpgjs/server';
 import { session } from './journey';
 import { deliverUnissued, lobbyRecord, playerOfWallet, walletIdentity, walletOf, walletWaiting, web2 } from './dsm';
-import { commit, isFighting, setFighting } from './field';
+import { commit, isFighting, setFighting, setInArena } from './field';
 import { isSpeaking } from './dialogue';
 import { SPECIES, GameError, displayName, fieldedTeam, level, maxCharges, maxHp, type Command, type Creature, type GameState } from '../../domain/game';
 import { befriend, claimUsername, freshProfile, resolvePlayer, shownName, unfriend, HISTORY_MAX, RENAME_COOLDOWN_MS, type Directory, type MatchSummary } from '../../domain/username';
@@ -160,7 +160,7 @@ export async function openLobby(player: RpgPlayer): Promise<void> {
     notices.delete(wallet);
     const { dir, save } = await lobbyRecord();
     switch (d.action) {
-      case 'close': gui.close(); return;
+      case 'close': setInArena(player, false); gui.close(); return;
       case 'set-name': {
         const error = claimUsername(dir, wallet, String(d.name ?? ''), Date.now());
         if (error) say(NAME_ERRORS[error]); else { save(); nameTag(player, dir.players[wallet].username!, wallet); web2(player, 'Username', `Now known as @${dir.players[wallet].username}; your rating and history stay with your DSM identity`); }
@@ -223,7 +223,9 @@ export async function openLobby(player: RpgPlayer): Promise<void> {
     }
     gui.update(await lobbyView(player));
   });
-  void gui.open(await lobbyView(player));
+  setInArena(player, true);
+  // The lobby holds the player where they stand: a tap on it is never a step on the map beneath.
+  void gui.open(await lobbyView(player), { blockPlayerInput: true });
 }
 
 const NAME_ERRORS = {
@@ -241,6 +243,7 @@ async function refreshLobby(wallet: string) {
 
 /** Called when a player leaves the server: it leaves the queue, and its challenges lapse. */
 export function leaveLobby(player: RpgPlayer) {
+  setInArena(player, false);
   const wallet = walletOf(player);
   if (!wallet) return;
   queue.delete(wallet);
