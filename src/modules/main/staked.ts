@@ -166,7 +166,9 @@ const message = (err: unknown) => (err instanceof Error ? err.message : String(e
 /**
  * The match is void before its Start: a side with a stake withdraws (`by` first, else whichever
  * locked and is here), and each stake goes back to its own owner. A Start that won the race is
- * not void: the match is played.
+ * not void: the match is played, and the players are never told it was void (phones,
+ * 2026-10-08: a ready that ran past its window announced a void, the Start had already landed,
+ * the match was played and won, and the void notice stayed on both lobbies).
  */
 export async function voidMatch(m: Match, why: string, events: StakedEvents, by?: Side): Promise<void> {
   const { save } = await lobbyRecord();
@@ -174,8 +176,8 @@ export async function voidMatch(m: Match, why: string, events: StakedEvents, by?
   e.problem = `Match void. ${why}`;
   m.phase = 'void';
   save();
-  events.voided(m, why);
   await withdrawAndRefund(m, events, by);
+  if (e.start !== 'started') events.voided(m, why);
 }
 
 /** Withdraw (once a stake is locked), then each side's stake back to its own wallet, each as soon as that wallet is here. */
