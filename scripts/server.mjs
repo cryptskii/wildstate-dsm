@@ -1,5 +1,6 @@
 import http from 'node:http';
 import { mkdirSync } from 'node:fs';
+import { DatabaseSync } from 'node:sqlite';
 import { resolve } from 'node:path';
 import { WebSocketServer } from 'ws';
 import { createRpgServerTransport, createSqliteNodeRoomStorage } from '@rpgjs/server/node';
@@ -22,11 +23,17 @@ process.env.DSM_GAME_RECORD ??= resolve(dataDir, 'dsm-game.json');
 mkdirSync(dataDir, { recursive: true, mode: 0o700 });
 const port = Number(process.env.PORT ?? 3000);
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('PORT is invalid');
+// Room state is written on every player's every step, on the one thread that moves them all
+// (phones, 2026-10-08: walking paused completely, then went on). In write-ahead mode at NORMAL a
+// commit is not flushed to disk on its own, only a checkpoint is; and the log is folded back every
+// 256 pages (1 MiB) instead of every 1,000, so no checkpoint holds every player for long.
+const rooms = new DatabaseSync(resolve(dataDir, 'rooms.sqlite'));
+rooms.exec('PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL; PRAGMA wal_autocheckpoint = 256;');
 const transport = createRpgServerTransport(ServerModule, {
   initializeMaps: false,
   mapUpdateToken,
   tiledBasePaths: ['src/tiled'],
-  storage: createSqliteNodeRoomStorage({ databasePath: resolve(dataDir, 'rooms.sqlite') }),
+  storage: createSqliteNodeRoomStorage({ database: rooms }),
 });
 let ready = false;
 const server = http.createServer((request, response) => {
