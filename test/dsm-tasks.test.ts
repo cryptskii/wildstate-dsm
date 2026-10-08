@@ -95,7 +95,9 @@ const record = join(mkdtempSync(join(tmpdir(), 'dsm-tasks-')), 'record.json');
 process.env.DSM_APP_HOST = 'http://fixture.invalid';
 process.env.DSM_GAME_RECORD = record;
 writeFileSync(record, JSON.stringify({
-  account: b32(new Uint8Array(32).fill(1)), wild: b32(new Uint8Array(32).fill(2)), vault: b32(new Uint8Array(32).fill(4)), creatures: {}, nextSerial: 1,
+  account: b32(new Uint8Array(32).fill(1)), wild: b32(new Uint8Array(32).fill(2)), vault: null,
+  market: { plan: null, legacyClosed: true, lanes: [4, 5, 6, 7, 8].map((i) => b32(new Uint8Array(32).fill(i))) },
+  creatures: {}, nextSerial: 1,
   profiles: {}, stats: {}, inFlight: {}, resume: {}, welcomed: [], players: {}, usernames: {}, matches: {},
 }));
 const dsm = await import('../src/modules/main/dsm');

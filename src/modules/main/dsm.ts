@@ -21,7 +21,7 @@ import { stateSchema, GameError, SCARECROW_CAPSULES, SPECIES, SHOP_QTY_MAX, TRAI
 import { DsmHost, HostError, b32, fromB32, own, short, type Bytes } from '../../integrations/dsm/host';
 import { PROGRAM, anchorBytes, creatureState } from '../../domain/program';
 import type { Economy, Login, Species } from '../../integrations/dsm/economy';
-import { COIN, ITEM_PRICES, MARKET, TRAINER_REWARD, VICTORY_REWARD, WELCOME_COINS, type ShopItem } from '../../integrations/dsm/terms';
+import { COIN, ITEM_PRICES, MARKET, MARKET_VAULTS, TRAINER_REWARD, VICTORY_REWARD, WELCOME_COINS, entered, type ShopItem } from '../../integrations/dsm/terms';
 import * as pb from '../../integrations/dsm/proto/dsm_app_pb';
 
 /** The game's DSM account (`dsm-app-host`): the game does not run without it. */
@@ -1027,8 +1027,8 @@ export function onCommitted(player: RpgPlayer, command: Command, before: GameSta
 // --------------------------------- market ---------------------------------
 
 export interface MarketData {
-  /** The game's vault's reserves, as the vault itself reports them. */
-  vault: { wild: string; era: string; generation: string } | null;
+  /** The market's reserves, summed over its vaults as each reports them, and how many were read. */
+  vault: { wild: string; era: string; generation: string; vaults: number } | null;
   coins: string | null;
   era: string | null;
   quote: { side: 'buy' | 'sell'; amountIn: string; amountOut: string; hops: number } | null;
@@ -1041,14 +1041,19 @@ export interface MarketData {
 
 async function vaultReading(): Promise<MarketData['vault']> {
   const w = await world();
-  const vault = (await w.host.vaults()).find((v) => b32(v.vaultId) === w.economy.record.vault);
-  if (!vault) return null;
-  const wildIsA = b32(vault.tokenAPolicyCommit) === b32(w.economy.wild);
-  return {
-    wild: wildIsA ? vault.reserveADisplay : vault.reserveBDisplay,
-    era: wildIsA ? vault.reserveBDisplay : vault.reserveADisplay,
-    generation: String(vault.generation),
-  };
+  const lanes = new Set((w.economy.record.market?.lanes ?? []).filter((lane): lane is string => lane !== null));
+  const read = (await w.host.vaults()).filter((v) => lanes.has(b32(v.vaultId)));
+  if (read.length === 0) return null;
+  let wild = 0n;
+  let era = 0n;
+  let generation = 0n;
+  for (const vault of read) {
+    const wildIsA = b32(vault.tokenAPolicyCommit) === b32(w.economy.wild);
+    wild += wildIsA ? vault.reserveA : vault.reserveB;
+    era += wildIsA ? vault.reserveB : vault.reserveA;
+    generation += vault.generation;
+  }
+  return { wild: entered(wild, 0), era: entered(era, 2), generation: String(generation), vaults: read.length };
 }
 
 /** An open market's redraw, by player: a holdings proof that lands while it is open shows in it. */
@@ -1149,7 +1154,7 @@ export async function openMarket(player: RpgPlayer): Promise<void> {
     }
   };
   // Open at once; the vault's reading (a few seconds from the account) fills in when it lands.
-  const greeting = `Swap WILD and ERA with the game's market: ${MARKET.wild} WILD / ${MARKET.era} ERA at the start, ${MARKET.feeBps} bps.`;
+  const greeting = `Swap WILD and ERA with the game's market: ${MARKET_VAULTS} vaults, ${MARKET.feeBps} bps each.`;
   shownStatus = greeting;
   const opened = gui.open(data(greeting), { waitingAction: true, blockPlayerInput: true });
   if (Date.now() - vaultSeen.at > VAULT_FRESH_MS) void readVault();

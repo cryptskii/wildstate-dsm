@@ -4,7 +4,8 @@
  *
  * - WILD, the game's coin: a token the game's account created; its whole
  *   supply is the account's, and it pays players from it.
- * - A WILD/ERA SoFi vault the account funds: the market players swap in.
+ * - The WILD/ERA market: MARKET_VAULTS SoFi vaults the account funds in equal slices, so
+ *   players' swaps through different vaults never race for one vault's key.
  * - Each creature a state object: a token of supply one the account creates
  *   when the creature is caught. Its committed policy names the game as
  *   issuer, the species and the capture; its policy commitment is the
@@ -21,7 +22,8 @@ import { dirname } from 'node:path';
 import { SPECIES, type Creature, type GameState } from '../../domain/game';
 import { SPECIES_IDS, birthCreatureState, creatureRecord, creatureRecordDigest, latestCreatureState } from '../../domain/program';
 import { DsmHost, b32, fromB32, type Bytes } from './host';
-import { COIN, MARKET } from './terms';
+import { COIN, MARKET, MARKET_VAULTS, entered } from './terms';
+import * as pb from './proto/dsm_app_pb';
 
 export type Species = Creature['species'];
 
@@ -45,8 +47,10 @@ export interface EconomyRecord {
   account: string;
   /** WILD's policy anchor (Base32). */
   wild: string | null;
-  /** The WILD/ERA vault the account funds (Base32 vault id). */
+  /** The single WILD/ERA vault the market ran on before it was divided into lanes (Base32). */
   vault: string | null;
+  /** The market's lanes, and how far dividing it has come. */
+  market?: MarketRecord;
   creatures: Record<string, IssuedCreature>;
   nextSerial: number;
   /** Each player's game profile, by their wallet's account (Base32). */
@@ -75,6 +79,33 @@ export interface EconomyRecord {
   /** Player-vs-player matches by id: run by the game server (Web2), kept across restarts. */
   matches: Record<string, Match>;
 }
+
+/**
+ * The market divided into lanes (owner direction 2026-10-07). Each step that cannot be undone is
+ * written here before the next begins, so a restart resumes where it stopped and never repeats one.
+ */
+export interface MarketRecord {
+  /** Each lane's WILD and ERA in base units: exact slices summing to what the market holds. */
+  plan: { wild: string[]; era: string[] } | null;
+  /** The single vault before lanes is closed (or there never was one). */
+  legacyClosed: boolean;
+  /** Each lane's vault (Base32), by lane index; null until opened. */
+  lanes: (string | null)[];
+}
+
+/**
+ * `total` in `parts` exact slices: each `⌊total/parts⌋`, the first `total mod parts` one more.
+ * They sum to `total`, to the base unit; nothing is dropped.
+ */
+export function splitExact(total: bigint, parts: number): bigint[] {
+  const n = BigInt(parts);
+  const each = total / n;
+  const rest = total % n;
+  return Array.from({ length: parts }, (_, i) => each + (BigInt(i) < rest ? 1n : 0n));
+}
+
+/** ERA's decimals. */
+const ERA_DECIMALS = 2;
 
 /** The fee a token's creation burns, in ERA base units (`TOKEN_CREATION_FEE_ERA`). */
 export const CREATION_FEE_ERA = 1_000n;
@@ -165,11 +196,72 @@ export class Economy {
       this.record.wild = b32(anchor);
       this.save();
     }
-    if (!this.record.vault) {
-      say(`Opening the WILD/ERA market: ${MARKET.wild} WILD against ${MARKET.era} ERA, ${MARKET.feeBps} bps`);
+    await this.setUpMarket(say);
+  }
+
+  /**
+   * The account's own name for lane `i`'s vault: this game's market of this pair at this fee. The
+   * game recognizes its lanes by it and by nothing else, so another vault of the same tokens is never
+   * taken for one of them.
+   */
+  laneLabel(i: number): string {
+    return `wildstate:market:v1:${this.record.wild!.slice(0, 16)}:${this.eraAnchor.slice(0, 16)}:${MARKET.feeBps}:lane:${i}`;
+  }
+
+  /**
+   * The market, in MARKET_VAULTS lanes. The plan is written first: each lane's exact slice of the
+   * single vault's reserves (or of MARKET for a new market). Then the single vault is closed, its
+   * reserves returning to the account, and each lane opened and written as it is.
+   */
+  async setUpMarket(say: (line: string) => void): Promise<void> {
+    await this.eraRow();
+    const market = (this.record.market ??= {
+      plan: null,
+      legacyClosed: this.record.vault === null,
+      lanes: Array.from({ length: MARKET_VAULTS }, () => null),
+    });
+    if (market.lanes.length === MARKET_VAULTS && market.lanes.every((lane) => lane !== null)) return;
+    const wildIsA = (v: pb.SofiOwnedVaultV1) => b32(v.tokenAPolicyCommit) === this.record.wild;
+    if (market.plan === null) {
+      let wild = BigInt(MARKET.wild);
+      let era = BigInt(MARKET.era) * 10n ** BigInt(ERA_DECIMALS);
+      if (!market.legacyClosed) {
+        const legacy = (await this.host.vaults()).find((v) => b32(v.vaultId) === this.record.vault);
+        if (!legacy) throw new Error(`the market's vault ${this.record.vault!.slice(0, 8)} is not among the account's vaults`);
+        if (legacy.status !== pb.SofiVaultStatus.ACTIVE) {
+          throw new Error(`the market's vault ${this.record.vault!.slice(0, 8)} is not active and no division of it was written`);
+        }
+        wild = wildIsA(legacy) ? legacy.reserveA : legacy.reserveB;
+        era = wildIsA(legacy) ? legacy.reserveB : legacy.reserveA;
+      }
+      market.plan = { wild: splitExact(wild, MARKET_VAULTS).map(String), era: splitExact(era, MARKET_VAULTS).map(String) };
+      this.save();
+    }
+    if (!market.legacyClosed) {
+      const legacy = (await this.host.vaults()).find((v) => b32(v.vaultId) === this.record.vault);
+      // Closed earlier and not written down before a restart: the close stands.
+      if (legacy?.status !== pb.SofiVaultStatus.RETIRED) {
+        say(`Closing the single WILD/ERA vault to divide its liquidity across ${MARKET_VAULTS} vaults`);
+        await this.host.close(fromB32(this.record.vault!));
+      }
+      market.legacyClosed = true;
+      this.save();
+    }
+    for (let i = 0; i < MARKET_VAULTS; i++) {
+      if (market.lanes[i]) continue;
+      const label = this.laneLabel(i);
+      const opened = (await this.host.vaults()).find((v) => v.label === label && v.status === pb.SofiVaultStatus.ACTIVE);
+      if (opened) {
+        market.lanes[i] = b32(opened.vaultId);
+        this.save();
+        continue;
+      }
+      const wild = entered(BigInt(market.plan.wild[i]), 0);
+      const era = entered(BigInt(market.plan.era[i]), ERA_DECIMALS);
+      say(`Opening market vault ${i + 1}/${MARKET_VAULTS}: ${wild} WILD against ${era} ERA, ${MARKET.feeBps} bps`);
       await this.eraRow();
-      const created = await this.host.createVault(this.wild, MARKET.wild, this.eraCommit, MARKET.era, MARKET.feeBps);
-      this.record.vault = b32(created.vaultId);
+      const created = await this.host.createVault(this.wild, wild, this.eraCommit, era, MARKET.feeBps, label);
+      market.lanes[i] = b32(created.vaultId);
       this.save();
     }
   }
