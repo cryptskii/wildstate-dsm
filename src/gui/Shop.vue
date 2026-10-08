@@ -21,7 +21,7 @@ const CATALOGUE: { id: ShopItemId; name: string; tag: string; desc: string; stoc
   { id: 'poultice', name: 'Herb Poultice', tag: 'HEAL · 1 USE', desc: 'Restore 15 HP to one creature, from the Bag.' },
   { id: 'tonic', name: 'Charge Tonic', tag: 'RESTORE', desc: 'Refill every charge of one creature.' },
   // Not sold for now (owner, 2026-10-08): shown, never buyable, whatever the wallet holds.
-  { id: 'map', name: 'Ranger’s Map', tag: 'KEY ITEM · 1', desc: 'Opens the path east of the meadow.', stock: 1, unavailable: 'for now' },
+  { id: 'map', name: 'Ranger’s Map', tag: 'KEY ITEM · 1', desc: 'Opens the path south of Mira’s camp.', stock: 1, unavailable: 'for now' },
 ];
 /** Served from public/, like every other picture the screens show. */
 const INTERIOR = 'shop/interior.png';
