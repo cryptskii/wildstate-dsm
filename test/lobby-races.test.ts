@@ -14,6 +14,7 @@ const dsm = vi.hoisted(() => ({
   dir: { players: {} as Record<string, unknown>, usernames: {} as Record<string, string> },
   /** What each wallet shared as its contacts. */
   contacts: new Map<string, string[]>(),
+
 }));
 const bytes32 = (text: string) => new Uint8Array(createHash('sha256').update(text).digest());
 vi.mock('../src/modules/main/dsm', () => ({
@@ -46,7 +47,6 @@ vi.mock('../src/modules/main/field', () => ({ commit: vi.fn(), isFighting: () =>
 vi.mock('../src/modules/main/dialogue', () => ({ isSpeaking: () => false }));
 
 import { openLobby } from '../src/modules/main/lobby';
-import { freshProfile } from '../src/domain/username';
 
 const states = new Map<string, GameState>();
 type Handler = (d: Record<string, unknown>) => Promise<void> | void;
@@ -83,15 +83,19 @@ beforeEach(() => { dsm.online.clear(); dsm.matches = {}; dsm.settling = null; ds
 const wallet = (who: string) => `${who}${n}`.padEnd(52, who);
 
 describe('friends from the wallet', () => {
-  it('lists a wallet contact who plays here as a friend, marked a contact, and no contact who never did', async () => {
+  it('lists every contact the wallet shares as a friend, online or not, played here or not', async () => {
     const a = online(wallet('A'));
     online(wallet('B'));
-    dsm.dir.players[wallet('B')] = freshProfile();
-    dsm.contacts.set(wallet('A'), [wallet('B'), 'NEVERPLAYED'.padEnd(52, 'N')]);
+    const never = 'NEVERPLAYED'.padEnd(52, 'N');
+    // Neither picked an arena name; one never opened the game at all.
+    dsm.contacts.set(wallet('A'), [wallet('B'), never, wallet('A')]);
     await openLobby(a.player as never);
     await tick();
     const friends = (a.shown() as unknown as { friends: { id: string; contact: boolean; online: boolean }[] }).friends;
-    expect(friends.map((f) => [f.id, f.contact, f.online])).toEqual([[wallet('B'), true, true]]);
+    expect(friends.map((f) => [f.id, f.contact, f.online])).toEqual([
+      [wallet('B'), true, true],
+      [never, true, false],
+    ]);
   });
 });
 
