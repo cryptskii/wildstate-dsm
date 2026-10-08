@@ -542,14 +542,27 @@ function enqueue(player: RpgPlayer, title: string, task: () => Promise<void>): v
     try {
       await task();
     } catch (e) {
-      // Shown in the DSM panel only; the field stays clear.
-      pushEntries(seat, [entry('web2', `${title}: not done`, e instanceof Error ? e.message : String(e), 'fail', Date.now() - started)]);
+      // Shown in the DSM panel, and in the server's log; the field stays clear.
+      const why = e instanceof Error ? e.message : String(e);
+      console.error(`[task] ${key.slice(0, 8)} ${title}: not done: ${why}`);
+      pushEntries(seat, [entry('web2', `${title}: not done`, why, 'fail', Date.now() - started)]);
     }
   });
   walletQueues.set(key, run);
 }
 
 // --------------------------------- lobby ---------------------------------
+
+/**
+ * Queue the delivery of every creature of `player`'s that is not in its wallet yet: what a staked
+ * match waits for, asked again when the match finds it missing rather than only at the next
+ * connect. A delivery that already ran finds its creature issued and does nothing more.
+ */
+export function deliverUnissued(player: RpgPlayer): void {
+  for (const c of readState(player).creatures.filter((c) => c.anchor === null)) {
+    enqueue(player, `Delivering ${displayName(c)}`, () => deliverCreature(player, c.id, c.species));
+  }
+}
 
 /** The connected wallet's DSM identity (Base32), or null before it connects. */
 export function walletOf(player: RpgPlayer): string | null {

@@ -119,6 +119,22 @@ export class Economy {
   record: EconomyRecord;
   /** ERA's policy anchor, as this account's balances name it. */
   eraAnchor = '';
+  /**
+   * The account's own operations that advance its state, one after another. Each player's tasks
+   * run in that wallet's own queue, so two players connecting together issued two creatures at
+   * once on the one account, and one of them was refused (phones, 2026-10-08).
+   */
+  private accountTurn: Promise<unknown> = Promise.resolve();
+
+  /** Run `op` once every account operation queued before it is done. */
+  private inTurn<T>(op: () => Promise<T>): Promise<T> {
+    const run = this.accountTurn.then(op, op);
+    this.accountTurn = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
 
   constructor(readonly host: DsmHost, readonly path: string, account: string) {
     this.record = existsSync(path)
@@ -314,15 +330,17 @@ export class Economy {
     const serial = this.record.nextSerial;
     this.record.nextSerial = serial + 1;
     this.save();
-    await this.ensureEra(CREATION_FEE_ERA, say);
     const ticker = `${CODE[species]}${String(serial).padStart(4, '0')}`;
     const name = `${SPECIES[species].name} #${serial}`;
     const anchor = b32(
-      await this.host.createToken({
-        ticker,
-        alias: name,
-        supply: 1n,
-        description: `Wildstate creature: ${species}, capture ${serial}, issued by the Wildstate game account`,
+      await this.inTurn(async () => {
+        await this.ensureEra(CREATION_FEE_ERA, say);
+        return this.host.createToken({
+          ticker,
+          alias: name,
+          supply: 1n,
+          description: `Wildstate creature: ${species}, capture ${serial}, issued by the Wildstate game account`,
+        });
       }),
     );
     const already = this.record.creatures[anchor];
