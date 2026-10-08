@@ -617,7 +617,11 @@ export function playerOfWallet(wallet: string): RpgPlayer | null {
 /** The lobby's records, kept in the game's own record (Web2 game data, never DSM evidence). */
 export async function lobbyRecord() {
   const w = await world();
-  return { dir: { players: w.economy.record.players, usernames: w.economy.record.usernames }, matches: w.economy.record.matches, save: () => w.economy.save() };
+  return {
+    dir: { players: w.economy.record.players, usernames: w.economy.record.usernames },
+    matches: w.economy.record.matches,
+    save: () => w.economy.save(),
+  };
 }
 
 let hudData: (player: RpgPlayer) => Record<string, unknown> = () => ({});

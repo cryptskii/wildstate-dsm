@@ -98,10 +98,10 @@ async function lobbyView(player: RpgPlayer) {
     notice: notices.get(wallet) ?? '',
     walletWaiting: walletWaiting(player),
     found: (() => { const f = founds.get(wallet); return f ? brief(f) : null; })(),
-    // Everyone this player found, challenged or played, and every contact their wallet shared who
-    // plays here (DSM Amendment A16): online first, each as the lobby sees them now.
+    // Everyone this player found, challenged or played, and every contact their wallet shared (DSM
+    // Amendment A16), whether or not they ever opened the game: online first, as the lobby sees them now.
     friends: (() => {
-      const contacts = walletContacts(wallet).filter((id) => id !== wallet && dir.players[id] !== undefined);
+      const contacts = walletContacts(wallet).filter((id) => id !== wallet);
       return [...new Set([...(me.friends ?? []), ...contacts])]
         .map((id) => ({ ...brief(id), playing: liveOf.has(id), contact: contacts.includes(id) }))
         .sort((x, y) => Number(y.online) - Number(x.online));
