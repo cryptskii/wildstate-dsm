@@ -364,8 +364,8 @@ describe('Bramble\'s board', () => {
     expect(failures(p).join('\n')).toMatch(/not-for-sale/);
   });
 
-  it('refuses a second Ranger\'s Map before the wallet pays for it, not after', async () => {
-    const { holder, connect } = await wallet((h) => ({ ...settled(h), inventory: { ...settled(h).inventory, map: 1 } }), true);
+  it('refuses the Ranger\'s Map, not sold for now, before the wallet pays for it, however much it holds', async () => {
+    const { holder, connect } = await wallet((h) => settled(h), true);
     const p = await connect(`${holder}/page`);
     await idle();
     const asked = payments();
@@ -373,7 +373,7 @@ describe('Bramble\'s board', () => {
     handlers.get(`${p.id} shop`)!({ action: 'buy', item: 'map', qty: 1 });
     await idle();
     expect(payments()).toBe(asked);
-    expect(failures(p).join('\n')).toMatch(/sold-out/);
+    expect(failures(p).join('\n')).toMatch(/unavailable/);
   });
 
   it('pays for a creature it took even when the game state refuses the sale while the player was approving it', async () => {

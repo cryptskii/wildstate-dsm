@@ -27,7 +27,7 @@ export default {
     'game.error.look-picked': 'Your trainer is already chosen.',
     'game.error.no-rod': 'You need a fishing rod to cast.', 'game.error.unknown-creature': 'That creature is not in your party.',
     'game.error.no-item': 'You have none of that item. Bramble sells them.', 'game.error.not-wild': 'You cannot capture a trainer’s creature.',
-    'game.error.already-beaten': 'You already beat this trainer. Rest at camp for a rematch.', 'game.error.sold-out': 'Bramble has no more of that.', 'game.error.not-for-sale': 'Bramble won’t buy your lead or your last creature.', 'game.error.unknown-trainer': 'There is no such trainer.',
+    'game.error.already-beaten': 'You already beat this trainer. Rest at camp for a rematch.', 'game.error.sold-out': 'Bramble has no more of that.', 'game.error.unavailable': 'Bramble isn’t selling that for now.', 'game.error.not-for-sale': 'Bramble won’t buy your lead or your last creature.', 'game.error.unknown-trainer': 'There is no such trainer.',
     'game.species.embercub': 'Embercub', 'game.species.mossling': 'Mossling', 'game.species.tidefin': 'Tidefin', 'game.species.voltusk': 'Voltusk', 'game.species.leon': 'Leon', 'game.species.rattlefin': 'Rattlefin', 'game.species.brineback': 'Brineback',
     'game.branch.unselected': 'Undecided', 'game.branch.sanctuary': 'Sanctuary', 'game.branch.rangers': 'Rangers',
     'game.outcome.victory': 'Victory', 'game.outcome.defeat': 'Defeat', 'game.outcome.captured': 'Captured', 'game.outcome.escaped': 'Escaped',
