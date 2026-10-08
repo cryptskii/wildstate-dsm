@@ -15,12 +15,20 @@ const onTile = (p: { x: number; y: number }) => ({ x: p.x - 16, y: p.y - 16 });
  * the next one later still, until the game held both cores and starved everything beside it.
  * Walking is the client's own, so a dropped step costs nothing a player sees.
  */
+/**
+ * How long a disconnected player's character stays on the map for them to come back to. RPGJS keeps
+ * it five minutes; every phone simulates its body all that time, hidden or not (phones, 2026-10-08:
+ * the bodies left behind froze walking). A page away longer takes its login back when it returns.
+ */
+const DISCONNECTED_GRACE_MS = 30_000;
+
 const caught = new WeakSet<object>();
 function boundCatchUp(map: RpgMap): void {
   if (caught.has(map)) return;
-  const tick = map as unknown as { maxFixedStepsPerTick: number; maxTickDeltaMs: number };
+  const tick = map as unknown as { maxFixedStepsPerTick: number; maxTickDeltaMs: number; sessionExpiryTime: number };
   tick.maxFixedStepsPerTick = 2;
   tick.maxTickDeltaMs = 50;
+  tick.sessionExpiryTime = DISCONNECTED_GRACE_MS;
   caught.add(map);
 }
 
