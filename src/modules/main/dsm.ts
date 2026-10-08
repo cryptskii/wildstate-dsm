@@ -124,6 +124,8 @@ interface Seat {
   resumeToken: string | null;
   /** What the wallet is holding for the player's approval: every later request waits behind it. */
   waiting: string | null;
+  /** The panel's next update, while one is due. */
+  panelDue?: ReturnType<typeof setTimeout>;
 }
 
 const seats = new Map<string, Seat>();
@@ -190,7 +192,7 @@ function panel(seat: Seat): PanelData {
   const meta = worldMeta;
   return {
     resumeToken: seat.resumeToken,
-    entries: seat.feed.slice(-120),
+    entries: seat.feed.slice(-PANEL_ENTRIES),
     account: meta
       ? { device: b32(meta.deviceId), storageSet: b32(meta.storageSetId), signatureBytes: meta.signatureBytes }
       : null,
@@ -201,10 +203,30 @@ function panel(seat: Seat): PanelData {
   };
 }
 
-function pushEntries(seat: Seat, entries: OverlayEntry[]): void {
+/** How many of the newest entries the panel shows. */
+const PANEL_ENTRIES = 60;
+/** The account's own activity reaches the panel at most this often: a busy account adds some every second. */
+const PANEL_EVERY_MS = 2000;
+
+/**
+ * Entries into the panel. What the game did for this player shows at once; the account's activity
+ * stream (`soon`) shows with the next update due, so a busy account never sends every phone the
+ * whole panel every second.
+ */
+function pushEntries(seat: Seat, entries: OverlayEntry[], soon?: 'soon'): void {
   seat.feed.push(...entries);
   if (seat.feed.length > 400) seat.feed.splice(0, seat.feed.length - 400);
-  seat.player.getGui('dsm-panel')?.update(panel(seat));
+  if (soon === undefined) {
+    if (seat.panelDue !== undefined) { clearTimeout(seat.panelDue); seat.panelDue = undefined; }
+    seat.player.getGui('dsm-panel')?.update(panel(seat));
+    return;
+  }
+  if (seat.panelDue !== undefined) return;
+  seat.panelDue = setTimeout(() => {
+    seat.panelDue = undefined;
+    seat.player.getGui('dsm-panel')?.update(panel(seat));
+  }, PANEL_EVERY_MS);
+  seat.panelDue.unref?.();
 }
 
 /** A Web2 event: something the game server did on its own. */
@@ -235,7 +257,24 @@ let worldMeta: pb.AppHostActivityV1 | null = null;
 /** Whether the game's account answered the last read, and since when it has not. */
 let hostDownSince: number | null = null;
 
+/**
+ * Log every time the server's one thread was blocked long enough for players to feel it: what
+ * moves players stops while it is (phones, 2026-10-08: walking paused, then went on).
+ */
+function watchForStalls(): void {
+  const EVERY_MS = 500;
+  let expected = performance.now() + EVERY_MS;
+  const timer = setInterval(() => {
+    const now = performance.now();
+    const late = Math.round(now - expected);
+    if (late >= 250) console.warn(`[stall] the server was blocked for ${late} ms`);
+    expected = now + EVERY_MS;
+  }, EVERY_MS);
+  timer.unref?.();
+}
+
 function startActivityPump(host: DsmHost): void {
+  watchForStalls();
   let after = 0n;
   const tick = async () => {
     try {
@@ -249,7 +288,7 @@ function startActivityPump(host: DsmHost): void {
       if (feed.entries.length > 0) {
         after = feed.entries[feed.entries.length - 1].seq;
         const entries = feed.entries.map(dsmEntry);
-        for (const seat of allSeats()) pushEntries(seat, entries);
+        for (const seat of allSeats()) pushEntries(seat, entries, 'soon');
       }
     } catch (e) {
       // One line per outage, not one per read.
