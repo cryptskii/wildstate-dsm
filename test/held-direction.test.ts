@@ -39,3 +39,23 @@ it('stops when controls disappear instead of replaying movement after reconnecti
 it('does not queue movement before controls are ready', () => {
  const hold = heldDirection(() => null); hold.start('up'); hold.stop();
 });
+it('steps every displayed frame where frames exist, since phones starve timers', () => {
+ vi.useFakeTimers(); let frames = 0;
+ vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => setTimeout(() => { frames++; cb(performance.now()); }, 24));
+ vi.stubGlobal('cancelAnimationFrame', (id: number) => clearTimeout(id));
+ try {
+  const control = directive(), hold = heldDirection(() => control);
+  hold.start('down'); vi.advanceTimersByTime(240);
+  expect(control.down).toHaveBeenCalledTimes(1 + frames);
+  hold.stop(); const count = control.down.mock.calls.length;
+  vi.advanceTimersByTime(240); expect(control.down).toHaveBeenCalledTimes(count);
+ } finally { vi.unstubAllGlobals(); }
+});
+it('holds a direction through repeated set() and stops on set(null)', () => {
+ vi.useFakeTimers(); const control = directive(), hold = heldDirection(() => control);
+ hold.set('left'); vi.advanceTimersByTime(100); hold.set('left'); vi.advanceTimersByTime(100);
+ expect(control.up).not.toHaveBeenCalled();
+ hold.set('up'); expect(control.up).toHaveBeenCalledWith('left');
+ hold.set(null); expect(control.up).toHaveBeenLastCalledWith('up');
+ const count = control.down.mock.calls.length; vi.advanceTimersByTime(200); expect(control.down).toHaveBeenCalledTimes(count);
+});

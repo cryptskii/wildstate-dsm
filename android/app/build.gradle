@@ -1,11 +1,27 @@
 apply plugin: 'com.android.application'
-def gameUrl = providers.environmentVariable('WILDSTATE_GAME_URL').getOrElse('http://192.168.4.46:5173/')
 def releaseRequested = gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }
-def endpoint = new URI(gameUrl)
-if (!(endpoint.scheme in ['http','https']) || !endpoint.host || endpoint.userInfo || endpoint.fragment || endpoint.query) throw new GradleException('WILDSTATE_GAME_URL must be an HTTP(S) game URL without credentials, query or fragment.')
-if (releaseRequested && (endpoint.scheme != 'https' || endpoint.host == 'localhost' || endpoint.host.endsWith('.local') || endpoint.host ==~ /(?:\d+\.){3}\d+/ || endpoint.host.contains(':'))) throw new GradleException('Release builds require a public HTTPS hostname in WILDSTATE_GAME_URL.')
 def signingPath = System.getenv('WILDSTATE_KEYSTORE_PATH')
 if (releaseRequested && (!signingPath || !System.getenv('WILDSTATE_KEYSTORE_PASSWORD') || !System.getenv('WILDSTATE_KEY_ALIAS') || !System.getenv('WILDSTATE_KEY_PASSWORD'))) throw new GradleException('Release signing requires all four WILDSTATE_KEYSTORE/KEY environment variables. See docs/android-app.md.')
+
+// The game's client ships in the APK: the web build (npm run build) is packaged as assets/game/.
+def gameBuild = rootProject.file('../dist/client')
+def bundledGame = layout.buildDirectory.dir('generated/wildstate-assets').get().asFile
+def bundleGame = tasks.register('bundleGame', Sync) {
+    from gameBuild
+    into new File(bundledGame, 'game')
+    doFirst {
+        def index = new File(gameBuild, 'index.html')
+        if (!index.isFile()) throw new GradleException('No game build to package. Run VITE_GAME_HOST=<game server> npm run build first; see docs/android-app.md.')
+        def named = index.text =~ /<meta name="wildstate-game-host" content="([^"]*)"/
+        def host = named.find() ? named.group(1) : ''
+        if (!host || host.startsWith('%')) throw new GradleException('The game build names no game server. Rebuild it with VITE_GAME_HOST set; see docs/android-app.md.')
+        def server = new URI(host ==~ /^https?:\/\/.*/ ? host : "https://${host}")
+        if (!server.host || server.userInfo || server.query || server.fragment || (server.path && server.path != '/')) throw new GradleException("VITE_GAME_HOST must be a host, optionally with http:// and a port: ${host}")
+        if (releaseRequested && (server.scheme != 'https' || server.host == 'localhost' || server.host.endsWith('.local') || server.host ==~ /(?:\d+\.){3}\d+/ || server.host.contains(':'))) throw new GradleException("Release builds require a public HTTPS game server hostname in VITE_GAME_HOST, not ${host}.")
+    }
+}
+tasks.named('preBuild') { dependsOn bundleGame }
+
 android {
     namespace 'org.deterministicstatemachine.wildstate'
     compileSdk 35
@@ -15,9 +31,9 @@ android {
         targetSdk 35
         versionCode Integer.parseInt(System.getenv('WILDSTATE_VERSION_CODE') ?: '1')
         versionName System.getenv('WILDSTATE_VERSION_NAME') ?: '0.1.0'
-        buildConfigField 'String', 'GAME_URL', groovy.json.JsonOutput.toJson(gameUrl)
         resValue 'string', 'app_name', 'Wildstate'
     }
+    sourceSets { main { assets.srcDir bundledGame } }
     buildFeatures { buildConfig true }
     signingConfigs {
         if (signingPath) {
@@ -30,8 +46,9 @@ android {
         }
     }
     buildTypes {
-        debug { applicationIdSuffix '.preview'; versionNameSuffix '-preview'; resValue 'string', 'app_name', 'Wildstate Preview' }
+        debug { applicationIdSuffix '.preview'; versionNameSuffix '-preview'; resValue 'string', 'app_name', 'Wildstate' }
         release { if (signingPath) signingConfig signingConfigs.release; minifyEnabled false }
     }
     compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }
+dependencies { implementation 'androidx.webkit:webkit:1.12.1' }

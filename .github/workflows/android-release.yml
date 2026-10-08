@@ -2,8 +2,8 @@ name: Android APK
 on:
   workflow_dispatch:
     inputs:
-      game_url:
-        description: Public Vercel HTTPS game URL
+      game_host:
+        description: Public HTTPS game server hostname the app connects to
         required: true
         type: string
       version_name:
@@ -21,7 +21,7 @@ jobs:
     permissions:
       contents: write
     env:
-      WILDSTATE_GAME_URL: ${{ inputs.game_url || vars.WILDSTATE_GAME_URL }}
+      VITE_GAME_HOST: ${{ inputs.game_host || vars.VITE_GAME_HOST }}
       WILDSTATE_VERSION_NAME: ${{ inputs.version_name || github.ref_name }}
       WILDSTATE_VERSION_CODE: ${{ github.run_number }}
       WILDSTATE_KEYSTORE_PATH: ${{ runner.temp }}/wildstate-release.jks
@@ -49,8 +49,8 @@ jobs:
           python3 - <<'PY'
           import os, base64
           from pathlib import Path
-          if not os.environ.get('WILDSTATE_GAME_URL') or not os.environ.get('KEYSTORE_BASE64'):
-              raise SystemExit('Configure the public game URL and signing secrets first; see docs/android-app.md.')
+          if not os.environ.get('VITE_GAME_HOST') or not os.environ.get('KEYSTORE_BASE64'):
+              raise SystemExit('Configure the public game server host and signing secrets first; see docs/android-app.md.')
           p = Path(os.environ['WILDSTATE_KEYSTORE_PATH'])
           p.write_bytes(base64.b64decode(os.environ['KEYSTORE_BASE64'], validate=True))
           p.chmod(0o600)
@@ -72,7 +72,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" release/wildstate.apk release/SHA256SUMS --draft --title "Wildstate $GITHUB_REF_NAME" --notes 'Install wildstate.apk on Android 8 or newer. This online game requires an internet connection and the DSM wallet. Verify SHA256SUMS before installing. Publish this draft only after testing the hosted game and wallet connection.'
+          gh release create "$GITHUB_REF_NAME" release/wildstate.apk release/SHA256SUMS --draft --title "Wildstate $GITHUB_REF_NAME" --notes 'Install wildstate.apk on Android 8 or newer. This online game requires an internet connection and the DSM wallet. Verify SHA256SUMS before installing. Publish this draft only after testing the app against the game server and the wallet connection.'
       - name: Remove temporary signing key
         if: always()
         run: rm -f "$WILDSTATE_KEYSTORE_PATH"

@@ -2,8 +2,8 @@ import http from 'node:http';
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { WebSocketServer } from 'ws';
-import { createRpgServerTransport, createSqliteNodeRoomStorage } from '@rpgjs/server/node';
-import ServerModule from '../dist/server/server.js';
+import { createRpgServerTransport, createMemoryNodeRoomStorage } from '@rpgjs/server/node';
+import ServerModule, { PROTOCOL } from '../dist/server/server.js';
 
 const required = name => {
   const value = process.env[name];
@@ -22,11 +22,16 @@ process.env.DSM_GAME_RECORD ??= resolve(dataDir, 'dsm-game.json');
 mkdirSync(dataDir, { recursive: true, mode: 0o700 });
 const port = Number(process.env.PORT ?? 3000);
 if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('PORT is invalid');
+// RPGJS's room state lives in memory, never on disk (phones, 2026-10-08). On disk, every player still
+// connected when the server stopped came back as connected, so it was never cleaned up: the map kept
+// five invisible players, and every phone collided them about 150 times a second until walking froze.
+// What the game keeps lives in its own record (DSM_GAME_RECORD); a page that reconnects after a
+// restart takes its login back with its resume token.
 const transport = createRpgServerTransport(ServerModule, {
   initializeMaps: false,
   mapUpdateToken,
   tiledBasePaths: ['src/tiled'],
-  storage: createSqliteNodeRoomStorage({ databasePath: resolve(dataDir, 'rooms.sqlite') }),
+  storage: createMemoryNodeRoomStorage(),
 });
 let ready = false;
 const server = http.createServer((request, response) => {
@@ -47,6 +52,12 @@ const server = http.createServer((request, response) => {
   }
   if (request.url === '/healthz') {
     response.writeHead(ready ? 200 : 503, { 'Content-Type': 'text/plain' }).end(ready ? 'ok' : 'starting');
+    return;
+  }
+  // Clients ask before connecting; installed apps keep their client, so they need to know when to update.
+  if (request.url === '/version') {
+    if (!ready) response.writeHead(503, { 'Content-Type': 'text/plain' }).end('starting');
+    else response.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }).end(JSON.stringify({ protocol: PROTOCOL }));
     return;
   }
   void transport.handleNodeRequest(request, response, () => response.writeHead(404).end()).catch(error => {

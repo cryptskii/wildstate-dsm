@@ -2,6 +2,17 @@
 export const COIN = { ticker: 'WILD', alias: 'Wildstate coin', supply: 1_000_000n };
 /** What the game's account puts in the market: WILD and ERA (ERA has two decimals). */
 export const MARKET = { wild: '50000', era: '1000', feeBps: 30 };
+/**
+ * How many vaults the market's liquidity is divided across, in equal slices (owner direction
+ * 2026-10-07): trades through different vaults never race for one vault's key.
+ */
+export const MARKET_VAULTS = 5;
+/** `base` units of a token with `decimals` decimals, as the amount a person enters ("12.34"). */
+export function entered(base: bigint, decimals: number): string {
+  if (decimals === 0) return base.toString();
+  const unit = 10n ** BigInt(decimals);
+  return `${base / unit}.${(base % unit).toString().padStart(decimals, '0')}`;
+}
 /** Bramble's board (the design's Shop page): what each item costs, in WILD, paid from the wallet. */
 export const ITEM_PRICES = { capsule: 3n, poultice: 4n, tonic: 5n, map: 12n } as const;
 export type ShopItem = keyof typeof ITEM_PRICES;

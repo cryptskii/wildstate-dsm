@@ -7,7 +7,7 @@
  * price or a balance: the reserves are the vault's own reading, the balances are
  * proven holdings, the quote is the wallet's.
  */
-import { inject, ref } from 'vue';
+import { inject, ref, watch } from 'vue';
 import type { MarketData } from '../modules/main/dsm';
 
 const props = defineProps<MarketData>();
@@ -15,8 +15,20 @@ const interact = inject<(id: string, event: string, data: unknown) => void>('rpg
 const side = ref<'buy' | 'sell'>('buy');
 const amount = ref('');
 
-const send = (action: 'quote' | 'swap' | 'close') =>
+/** The button just pressed stays down until the game answers: at once, before the server's first word. */
+const pressed = ref<'quote' | 'swap' | null>(null);
+const send = (action: 'quote' | 'swap' | 'close') => {
+  if (action !== 'close') {
+    if (props.busy || pressed.value) return;
+    pressed.value = action;
+    // A tap the game turns down at once (no amount) may not change a word on screen: let go anyway.
+    setTimeout(() => { if (!props.busy && pressed.value === action) pressed.value = null; }, 3000);
+  }
   interact('dsm-market', 'market', { action, side: side.value, amount: amount.value });
+};
+// Released once the market is waiting on nothing: an answer, a refusal or a failure.
+watch(() => [props.busy, props.status] as const, ([busy]) => { if (!busy && pressed.value) pressed.value = null; });
+const held = (action: 'quote' | 'swap') => (props.busy ?? pressed.value) === action;
 </script>
 
 <template>
@@ -26,8 +38,8 @@ const send = (action: 'quote' | 'swap' | 'close') =>
         <h1>Market · WILD / ERA</h1>
         <button class="x" @click="send('close')">CLOSE</button>
       </div>
-      <p class="vault" v-if="vault">The game's vault holds {{ vault.wild }} WILD · {{ vault.era }} ERA · {{ vault.generation }} trade(s) so far</p>
-      <p class="vault" v-else>Reading the vault…</p>
+      <p class="vault" v-if="vault">The game's {{ vault.vaults }} vaults hold {{ vault.wild }} WILD · {{ vault.era }} ERA · {{ vault.generation }} trade(s) so far</p>
+      <p class="vault" v-else>Reading the market's vaults…</p>
       <p class="mine">You hold {{ coins ?? '…' }} and {{ era ?? '…' }} (proven).</p>
       <div class="sides">
         <button :class="{ sel: side === 'buy' }" @click="side = 'buy'">BUY WILD with ERA</button>
@@ -38,11 +50,14 @@ const send = (action: 'quote' | 'swap' | 'close') =>
         <input v-model="amount" inputmode="decimal" :placeholder="side === 'buy' ? '1.00' : '50'" @keydown.stop />
       </label>
       <div class="actions">
-        <button @click="send('quote')">QUOTE</button>
-        <button class="go" :disabled="!quote" @click="send('swap')">SWAP</button>
+        <button :class="{ held: held('quote') }" :disabled="!!(busy || pressed) && !held('quote')" @click="send('quote')">{{ held('quote') ? 'QUOTING…' : 'QUOTE' }}</button>
+        <button class="go" :class="{ held: held('swap') }" :disabled="!quote || (!!(busy || pressed) && !held('swap'))" @click="send('swap')">{{ held('swap') ? 'SWAPPING…' : 'SWAP' }}</button>
       </div>
       <p v-if="quote" class="quote">{{ quote.amountIn }} → {{ quote.amountOut }} ({{ quote.hops }} hop{{ quote.hops === 1 ? '' : 's' }})</p>
       <p class="status" aria-live="polite">{{ status }}</p>
+      <div v-if="waiting" class="waiting"><span>Waiting for you in your DSM wallet: {{ waiting }}</span><a href="dsm:wallet">OPEN WALLET ▶</a></div>
+      <!-- Turning while the wallet works on a quote or a swap: it has not frozen. -->
+      <i v-if="busy || pressed" class="spinner" role="progressbar" aria-label="Working"></i>
     </section>
   </div>
 </template>
@@ -52,7 +67,7 @@ const send = (action: 'quote' | 'swap' | 'close') =>
 .overlay{position:fixed;inset:0;z-index:105;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;background:#06100cb3;pointer-events:auto;color:#f3f3df;font-family:'VT323',ui-monospace,monospace}
 /* Beside the DSM panel (right, 460px) on a wide screen, so both stay in reach. */
 @media (min-width:1000px){.overlay{justify-content:flex-start;padding-left:24px}}
-.card{width:min(520px,100%);padding:16px 18px;background:#10261f;box-shadow:0 0 0 2px #0b1a15,0 0 0 4px #e2c35a,0 0 0 6px #0b1a15}
+.card{position:relative;width:min(520px,100%);padding:16px 18px;background:#10261f;box-shadow:0 0 0 2px #0b1a15,0 0 0 4px #e2c35a,0 0 0 6px #0b1a15}
 .head{display:flex;justify-content:space-between;align-items:center}
 h1{font-family:'Silkscreen',monospace;font-size:14px;color:#f3d77a;margin:0}
 .x{font:inherit;font-size:16px;border:0;background:none;color:#cfe3cb;cursor:pointer}
@@ -65,6 +80,11 @@ input{display:block;width:100%;box-sizing:border-box;margin-top:4px;font:inherit
 .actions{display:flex;gap:8px;margin-top:8px}
 .actions .go{background:#e2c35a;color:#10261f}
 .actions button:disabled{opacity:.4}
+/* Waiting on the wallet: greyed and pressed in, as if held down. */
+.actions button.held{background:#5d6b62;color:#d8e2d3;transform:translateY(2px);box-shadow:inset 0 3px 0 #0b1a1599;cursor:progress;opacity:1}
 .quote{font-size:22px;color:#f3d77a;margin:8px 0 0}
-.status{font-family:'Silkscreen',monospace;font-size:10px;color:#e7f6c9;min-height:14px;margin-top:8px}
+.status{font-family:'Silkscreen',monospace;font-size:10px;color:#e7f6c9;min-height:14px;margin-top:8px;padding-right:30px}
+.waiting{display:flex;gap:10px;align-items:center;justify-content:space-between;margin-top:10px;padding:8px 10px;background:#e2c35a;color:#10261f;font-size:17px}.waiting a{flex:none;font-family:'Silkscreen',monospace;font-size:10px;color:#f6efd2;background:#3f6e2a;padding:8px 10px;text-decoration:none}
+.spinner{position:absolute;right:12px;bottom:12px;width:20px;height:20px;border-radius:50%;border:3px solid #24402f;border-top-color:#e2c35a;border-right-color:#e2c35a;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 </style>
