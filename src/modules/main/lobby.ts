@@ -14,7 +14,7 @@ import { deliverUnissued, lobbyRecord, playerOfWallet, walletIdentity, walletOf,
 import { commit, isFighting, setFighting } from './field';
 import { isSpeaking } from './dialogue';
 import { SPECIES, GameError, displayName, fieldedTeam, level, maxCharges, maxHp, type Command, type Creature, type GameState } from '../../domain/game';
-import { claimUsername, freshProfile, resolvePlayer, shownName, HISTORY_MAX, RENAME_COOLDOWN_MS, type Directory, type MatchSummary } from '../../domain/username';
+import { befriend, claimUsername, freshProfile, resolvePlayer, shownName, unfriend, HISTORY_MAX, RENAME_COOLDOWN_MS, type Directory, type MatchSummary } from '../../domain/username';
 import { pair, window, validStake, STAKE_TIERS, MAX_STAKE, type Ticket } from '../../domain/matchmaker';
 import { choose, expire, forfeit, loadSetup, lockingMatch, other, TURN_MS, type Match, type Side } from '../../domain/match';
 import { creatureState, encodeSetup } from '../../domain/program';
@@ -98,6 +98,10 @@ async function lobbyView(player: RpgPlayer) {
     notice: notices.get(wallet) ?? '',
     walletWaiting: walletWaiting(player),
     found: (() => { const f = founds.get(wallet); return f ? brief(f) : null; })(),
+    // Everyone this player found, challenged or played: online first, each as the lobby sees them now.
+    friends: (me.friends ?? [])
+      .map((id) => ({ ...brief(id), playing: liveOf.has(id) }))
+      .sort((x, y) => Number(y.online) - Number(x.online)),
     team: teamView(session(player).read()),
   };
 }
@@ -168,7 +172,7 @@ export async function openLobby(player: RpgPlayer): Promise<void> {
         // The result is its own card, with the challenge on it; only a miss needs words.
         if (!found) say('No player by that name or ID.');
         else if (found === wallet) say('That is you.');
-        else founds.set(wallet, found);
+        else { founds.set(wallet, found); befriend(dir, wallet, found); save(); }
         break;
       }
       case 'challenge': {
@@ -178,7 +182,7 @@ export async function openLobby(player: RpgPlayer): Promise<void> {
         else if (to === wallet || !playerOfWallet(to)) say('That player is not online.');
         else if (pvpTeam(session(player).read()).length === 0) say('Heal a creature first: your team has none standing.');
         else if (liveOf.has(to) || liveOf.has(wallet)) say('One of you is already in a match.');
-        else { const id = `ch/${Date.now().toString(36)}/${serial++}`; challenges.set(id, { id, from: wallet, to, stake, at: Date.now() }); founds.delete(wallet); say(`Challenge sent to @${shownName(dir, to)}.`); void refreshLobby(to); }
+        else { const id = `ch/${Date.now().toString(36)}/${serial++}`; challenges.set(id, { id, from: wallet, to, stake, at: Date.now() }); founds.delete(wallet); befriend(dir, wallet, to); befriend(dir, to, wallet); save(); say(`Challenge sent to @${shownName(dir, to)}.`); void refreshLobby(to); }
         break;
       }
       case 'accept': {
@@ -204,6 +208,7 @@ export async function openLobby(player: RpgPlayer): Promise<void> {
         break;
       }
       case 'leave-queue': queue.delete(wallet); break;
+      case 'unfriend': unfriend(dir, wallet, String(d.id ?? '')); save(); break;
       // The team step: pick up to three, and heal or recharge them with bag items.
       case 'set-team':
       case 'use-item': {
@@ -334,6 +339,7 @@ async function begin(aWallet: string, bWallet: string, stake: number) {
   const entrant = (p: RpgPlayer, wallet: string) => ({ wallet, name: shownName(dir, wallet), team: pvpTeam(session(p).read()), items: session(p).read().inventory });
   const m = lockingMatch(id, stake, entrant(pa, aWallet), entrant(pb, bWallet));
   matches[id] = m;
+  befriend(dir, aWallet, bWallet); befriend(dir, bWallet, aWallet);
   liveOf.set(aWallet, id); liveOf.set(bWallet, id);
   save();
   // A staked match starts once both stakes are locked and both wallets readied; the players wait in the lobby.

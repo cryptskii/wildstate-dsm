@@ -17,6 +17,8 @@ const props = defineProps<{
   history: { matchId: string; opponentName: string; stake: number; result: 'win' | 'loss' | 'void'; ratingDelta: number; at: number }[];
   liveMatch: { id: string; stake: number; opponent: Brief; locking: { keys: boolean; mine: boolean; theirs: boolean; ready: { mine: boolean; theirs: boolean }; started: boolean } | null } | null;
   found?: Brief | null;
+  /** Everyone this player found, challenged or played, online first. */
+  friends?: (Brief & { playing: boolean })[];
   notice: string;
   walletWaiting?: string | null;
   team: {
@@ -154,6 +156,14 @@ async function copyId() { await navigator.clipboard.writeText(props.me.id); copi
           <small class="px lbl">FIND A FRIEND</small>
           <div class="row"><input v-model="query" placeholder="username or DSM ID" autocapitalize="off" autocomplete="off" /><button class="px go">FIND</button></div>
         </form>
+        <div class="card">
+          <small class="px lbl">FRIENDS</small>
+          <small v-if="!friends?.length">Players you find, challenge or play stay here.</small>
+          <button v-for="f in friends" :key="f.id" type="button" class="friendrow" @click="send('find', { query: f.id })">
+            <i class="dot" :class="{ on: f.online }"></i><b>@{{ f.name }}</b>
+            <small>{{ f.playing ? 'in a match' : f.online ? 'online' : 'offline' }} · {{ f.rating }}</small>
+          </button>
+        </div>
         <div v-if="found" class="card friend">
           <small class="px lbl">PLAYER FOUND</small>
           <div class="who"><i class="dot" :class="{ on: found.online }"></i><b>@{{ found.name }}</b><small>rating {{ found.rating }}</small></div>
@@ -162,6 +172,7 @@ async function copyId() { await navigator.clipboard.writeText(props.me.id); copi
           <div class="row"><input v-model.number="friendStake" type="number" min="0" :max="maxStake" step="1" inputmode="numeric" /><span>WILD</span></div>
           <div class="stakes"><button v-for="s in stakes" :key="s" type="button" class="px stake" :class="{ on: friendStake === s }" :disabled="!open(s)" @click="friendStake = s">{{ wild(s) }}</button></div>
           <button class="px go wide" :disabled="!found.online || !friendStakeOk" @click="send('challenge', { to: found.id, stake: friendStake })">CHALLENGE @{{ found.name.toUpperCase() }}{{ friendStake ? ` FOR ${friendStake.toLocaleString()} WILD` : '' }} ▶</button>
+          <button v-if="friends?.some((f) => f.id === found!.id)" type="button" class="px cancel" @click="send('unfriend', { id: found!.id })">REMOVE FRIEND</button>
         </div>
         <div v-for="c in outgoing" :key="c.id" class="card">
           <small>Waiting for @{{ c.to.name }} to accept…</small>
@@ -209,6 +220,7 @@ input,select{font:inherit;font-size:19px;color:#26443a;background:#f6efd2;border
 /* A found player reads as a player card, with the challenge as its button. */
 .friend{box-shadow:0 0 0 2px #0b1a15,0 0 0 4px #9ccf6e}.friend .who{display:flex;align-items:baseline;gap:8px}.friend .who b{font-size:30px;line-height:1}
 .dot{width:10px;height:10px;border-radius:50%;background:#6b6b5e;align-self:center;flex:none}.dot.on{background:#9ccf6e;box-shadow:0 0 6px #9ccf6e}
+.friendrow{display:flex;align-items:center;gap:8px;width:100%;padding:6px 2px;background:none;border:0;border-top:1px solid #1d3a2c;color:inherit;text-align:left;font:inherit}.friendrow b{color:#c4ec79}.friendrow small{margin-left:auto;color:#cfe3cb}
 .cancel{background:#7a3b1e;padding:8px 12px;font-size:10px;justify-self:start}
 .row{display:flex;gap:8px;align-items:center}.row input{flex:1}
 .notice{margin:0;padding:8px 10px;background:#e9dcb4;color:#2b1a10;box-shadow:0 0 0 2px #2b1a10}

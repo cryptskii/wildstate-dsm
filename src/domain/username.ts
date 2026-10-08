@@ -28,6 +28,11 @@ export interface PlayerProfile {
   wins: number;
   losses: number;
   history: MatchSummary[];
+  /**
+   * The players this one keeps in FRIENDS, by identity, newest first: everyone they found,
+   * challenged or played, so they never search for them again. Absent from records made before.
+   */
+  friends?: string[];
 }
 /** The lobby's directory: profiles by identity, and the username index into them. */
 export interface Directory {
@@ -37,7 +42,23 @@ export interface Directory {
 
 export type UsernameError = 'invalid-username' | 'reserved-username' | 'username-taken' | 'rename-cooldown';
 
-export const freshProfile = (): PlayerProfile => ({ username: null, renamedAt: 0, rating: 1200, games: 0, wins: 0, losses: 0, history: [] });
+export const freshProfile = (): PlayerProfile => ({ username: null, renamedAt: 0, rating: 1200, games: 0, wins: 0, losses: 0, history: [], friends: [] });
+
+/** The most friends one player keeps; past it the one they met longest ago drops off. */
+export const FRIENDS_MAX = 200;
+
+/** `wallet` keeps `friend` in FRIENDS, at the top. Never themselves. */
+export function befriend(dir: Directory, wallet: string, friend: string): void {
+  if (wallet === friend) return;
+  const p = (dir.players[wallet] ??= freshProfile());
+  p.friends = [friend, ...(p.friends ?? []).filter((f) => f !== friend)].slice(0, FRIENDS_MAX);
+}
+
+/** `wallet` drops `friend` from FRIENDS. */
+export function unfriend(dir: Directory, wallet: string, friend: string): void {
+  const p = dir.players[wallet];
+  if (p) p.friends = (p.friends ?? []).filter((f) => f !== friend);
+}
 
 /** Usernames compare case-insensitively; this is the stored form. */
 export const normalize = (name: string) => name.trim().toLowerCase();

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { claimUsername, resolvePlayer, validateUsername, freshProfile, RENAME_COOLDOWN_MS, type Directory } from '../src/domain/username';
+import { befriend, claimUsername, resolvePlayer, unfriend, validateUsername, freshProfile, FRIENDS_MAX, RENAME_COOLDOWN_MS, type Directory } from '../src/domain/username';
 import { rate, expected, START_RATING } from '../src/domain/rating';
 import { pair, window } from '../src/domain/matchmaker';
 import { createHash } from 'node:crypto';
@@ -9,6 +9,29 @@ import { newCreature, type Creature } from '../src/domain/game';
 
 const A = 'MJPG8P38E3AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', B = '4BKF028R0BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB';
 const dir = (): Directory => ({ players: {}, usernames: {} });
+
+describe('friends kept between visits', () => {
+  it('keeps each friend once, newest first, never yourself, and drops one on request', () => {
+    const dir: Directory = { players: {}, usernames: {} };
+    befriend(dir, 'ME', 'ANN');
+    befriend(dir, 'ME', 'BOB');
+    befriend(dir, 'ME', 'ANN');
+    befriend(dir, 'ME', 'ME');
+    expect(dir.players.ME.friends).toEqual(['ANN', 'BOB']);
+    unfriend(dir, 'ME', 'ANN');
+    expect(dir.players.ME.friends).toEqual(['BOB']);
+  });
+
+  it('befriends on a record made before friends were kept, and keeps at most FRIENDS_MAX', () => {
+    const old = freshProfile();
+    delete old.friends;
+    const dir: Directory = { players: { ME: old }, usernames: {} };
+    for (let i = 0; i <= FRIENDS_MAX; i++) befriend(dir, 'ME', `P${i}`);
+    expect(dir.players.ME.friends).toHaveLength(FRIENDS_MAX);
+    expect(dir.players.ME.friends![0]).toBe(`P${FRIENDS_MAX}`);
+    expect(dir.players.ME.friends).not.toContain('P0');
+  });
+});
 
 describe('usernames bound to the DSM identity', () => {
   it('accepts 3-16 lowercase letters, digits and underscores, and refuses the game\'s own names', () => {
