@@ -234,13 +234,16 @@ export function web2(player: RpgPlayer, title: string, detail: string, tone: Ton
   pushEntries(seatOf(player), [entry('web2', title, detail, tone)]);
 }
 
-/** Walking is Web2: say so now and then, not every step. */
+/**
+ * Walking is Web2: said once a session. Every entry sends the phone the whole panel to draw again,
+ * and one every six seconds of walking was a full panel on the phone that moves the player
+ * (phones, 2026-10-08).
+ */
 export function walked(player: RpgPlayer): void {
   const seat = seatOf(player);
-  const now = Date.now();
-  if (now - seat.lastWalk < 6000) return;
-  seat.lastWalk = now;
-  web2(player, 'Walking', `(${Math.round(player.x())}, ${Math.round(player.y())}): movement runs on the game server and never touches DSM`);
+  if (seat.lastWalk !== 0) return;
+  seat.lastWalk = Date.now();
+  web2(player, 'Walking', 'Movement runs on the phone and the game server, and never touches DSM');
 }
 
 /** The panel, open beside the game. Its toggle is the player's, on the client. */
