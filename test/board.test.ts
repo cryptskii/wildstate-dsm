@@ -5,14 +5,22 @@ import { BOARD_WELCOME, boardView, readMissionBoard, weekOnBoard } from '../src/
 const shipped = readMissionBoard(JSON.parse(readFileSync('data/beta-missions.json', 'utf8')));
 
 describe('the camp bulletin board', () => {
-  it('reads the missions file the game server ships, a week posted each Monday', () => {
+  it('reads the missions file the game server ships: week 1 up on release day, then a week each Monday', () => {
     expect(shipped.weeks.map((w) => w.week)).toEqual([1, 2, 3]);
-    for (const w of shipped.weeks) expect(new Date(`${w.posted}T00:00:00Z`).getUTCDay()).toBe(1);
+    expect(shipped.weeks[0].posted).toBe('2026-10-10');
+    for (const w of shipped.weeks.slice(1)) expect(new Date(`${w.posted}T00:00:00Z`).getUTCDay()).toBe(1);
+  });
+
+  it('pins week 1 on release day with every week-1 mission after the board itself (G3 on)', () => {
+    const view = boardView(shipped, '2026-10-10');
+    expect(view.week?.week).toBe(1);
+    expect(view.missions.map((m) => m.id)).toEqual(['G3', 'G4']);
+    for (const m of view.missions) expect(view.copyText).toContain(`${m.id} · ${m.title}\n${m.task}`);
   });
 
   it('shows the latest week posted by today, and nothing before the first', () => {
-    expect(weekOnBoard(shipped, '2026-10-11')).toBeNull();
-    expect(weekOnBoard(shipped, '2026-10-12')?.week).toBe(1);
+    expect(weekOnBoard(shipped, '2026-10-09')).toBeNull();
+    expect(weekOnBoard(shipped, '2026-10-10')?.week).toBe(1);
     expect(weekOnBoard(shipped, '2026-10-18')?.week).toBe(1);
     expect(weekOnBoard(shipped, '2026-10-19')?.week).toBe(2);
     expect(weekOnBoard(shipped, '2026-12-01')?.week).toBe(3);
