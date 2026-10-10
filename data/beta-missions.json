@@ -62,6 +62,11 @@
           "id": "G4",
           "title": "Fish",
           "task": "Cast at the pond's edge and catch a water creature."
+        },
+        {
+          "id": "G5",
+          "title": "A Halloween look",
+          "task": "Buy a Halloween skin on Bramble's SKINS board, paid with WILD from your wallet. Open BAG → ITEMS, wear it, and check your character changes on the map. Switch to another skin you own or take it off, and ask a friend whether they see your new look too."
         }
       ]
     },
@@ -76,7 +81,7 @@
           "task": "Force-close the app the moment you tap Send now. Nothing may be lost or doubled."
         },
         {
-          "id": "G5",
+          "id": "G6",
           "title": "Buy from Bramble",
           "task": "Buy capsules paid from your wallet. Then buy again and force-close the game the moment you pay: paid once, given once."
         },
@@ -86,7 +91,7 @@
           "task": "Airplane mode right after Send now. You should see a clear message or a finished payment, never a half state."
         },
         {
-          "id": "G6",
+          "id": "G7",
           "title": "Sell a creature",
           "task": "Sell one to Bramble. It leaves your wallet's Objects and the WILD arrives."
         },
@@ -96,7 +101,7 @@
           "task": "Restart the phone during and after payments, and leave the app in the background for an hour."
         },
         {
-          "id": "G7",
+          "id": "G8",
           "title": "Beat a trainer",
           "task": "Win against Kade or Nessa. The WILD bounty should land in your wallet."
         },
@@ -106,7 +111,7 @@
           "task": "On a spare phone, leave the app while setup secures the phone. It should start cleanly again."
         },
         {
-          "id": "G8",
+          "id": "G9",
           "title": "Pick up where you left off",
           "task": "Close the game mid-way and reopen it, then open it on another phone with the same wallet."
         },
@@ -133,7 +138,7 @@
           "task": "Create a token, send it out, have contacts pass it on. The total must never change."
         },
         {
-          "id": "G9",
+          "id": "G10",
           "title": "Trade WILD",
           "task": "In the market, swap WILD for ERA and back. Both settle in your wallet as quoted."
         },
@@ -143,7 +148,7 @@
           "task": "A contact adds your token with Tokens → Add Token, using its policy anchor."
         },
         {
-          "id": "G10",
+          "id": "G11",
           "title": "Gift a creature",
           "task": "Send a creature from your wallet's Objects to a friend who plays. It should appear in their BAG."
         },
@@ -153,7 +158,7 @@
           "task": "Flip the Objects switch and send a one-of-a-kind object, like a creature, to a contact."
         },
         {
-          "id": "G11",
+          "id": "G12",
           "title": "Play a friend",
           "task": "In the lobby, play a free match, then a staked one: each wallet locks its stake, the winner collects both."
         },
@@ -163,7 +168,7 @@
           "task": "In Trade, swap one token for another, then open and close a small liquidity position."
         },
         {
-          "id": "G12",
+          "id": "G13",
           "title": "See what is DSM",
           "task": "Press DSM during play and check what ran on DSM and what only on the game server."
         },

@@ -8,8 +8,8 @@
  * creature's state object moving to the game's account, paid for after.
  */
 import { computed, inject, onMounted, onUnmounted, ref, watch } from 'vue';
-import { SPECIES, displayName, level, maxHp, salePrice, SHOP_QTY_MAX, type GameState, type ShopItemId } from '../domain/game';
-import { ITEM_PRICES } from '../integrations/dsm/terms';
+import { SKINS, SKIN_NAMES, SPECIES, displayName, level, maxHp, salePrice, skinPicture, SHOP_QTY_MAX, type GameState, type ShopItemId, type Skin } from '../domain/game';
+import { ITEM_PRICES, SKIN_PRICE } from '../integrations/dsm/terms';
 
 const props = defineProps<{ state: GameState; coins: number | null; busy: boolean; status: string; say: string; delta: string; deltaAt: number }>();
 const interact = inject<(id: string, event: string, data: unknown) => void>('rpgGuiInteraction')!;
@@ -27,7 +27,7 @@ const CATALOGUE: { id: ShopItemId; name: string; tag: string; desc: string; stoc
 const INTERIOR = 'shop/interior.png';
 const LINES = ['Welcome in, traveller. Everything on the board is for sale — Wild Coin only, no promises.', 'Capsules go fast after a meadow rush. Stock up.', 'Selling a creature transfers it for good. Think it over.'];
 
-const tab = ref<'buy' | 'sell'>('buy');
+const tab = ref<'buy' | 'sell' | 'skins'>('buy');
 const sel = ref<string | null>('capsule');
 const qty = ref(1);
 const line = ref(0);
@@ -42,7 +42,13 @@ const leadId = computed(() => props.state.creatures[props.state.lead]?.id);
 const keep = (c: GameState['creatures'][number]) =>
   c.id === leadId.value ? 'LEAD · KEEP' : props.state.creatures.length <= 1 ? 'LAST · KEEP' : c.anchor === null ? 'ON ITS WAY' : '';
 
-const rows = computed(() => tab.value === 'buy'
+/** The Halloween skins: one of each, worn from the Bag once bought. */
+const skinRows = () => SKINS.map((sk: Skin) => {
+  const have = (props.state.skins ?? []).includes(sk);
+  return { id: sk, name: SKIN_NAMES[sk], tag: 'HALLOWEEN SKIN', desc: have ? 'Yours. Wear it from your Bag.' : 'Changes how you look on the map. Wear it from your Bag.',
+    price: Number(SKIN_PRICE), icon: skinPicture(sk), stock: have ? 'owned' : 'one each', off: have, art: true };
+});
+const rows = computed(() => tab.value === 'skins' ? skinRows() : tab.value === 'buy'
   ? CATALOGUE.map((it) => ({ id: it.id, name: it.name, tag: it.tag, desc: it.desc, price: price(it.id), icon: `shop/icon-${it.id}.png`,
       stock: it.unavailable ? `unavailable ${it.unavailable}` : soldOut(it) ? 'sold' : it.stock !== undefined ? `${it.stock - owned(it.id)} left` : '∞',
       off: it.unavailable !== undefined || soldOut(it) }))
@@ -51,18 +57,21 @@ const rows = computed(() => tab.value === 'buy'
       stock: keep(c) ? 'not for sale' : 'offer', off: !!keep(c) })));
 const chosen = computed(() => rows.value.find((r) => r.id === sel.value && !r.off) ?? null);
 const total = computed(() => (chosen.value ? chosen.value.price * (tab.value === 'buy' ? qty.value : 1) : 0));
-const cant = computed(() => props.busy || !chosen.value || (tab.value === 'buy' && total.value > coins.value));
+const paying = computed(() => tab.value !== 'sell');
+const cant = computed(() => props.busy || !chosen.value || (paying.value && total.value > coins.value));
 const speech = computed(() => props.say && line.value === -1 ? props.say : LINES[Math.max(0, line.value)]);
 
 function pick(r: { id: string; off: boolean }) { if (!r.off && !props.busy) { sel.value = r.id; qty.value = 1; } }
 function bump(n: number) { if (tab.value === 'buy') qty.value = Math.max(1, Math.min(SHOP_QTY_MAX, qty.value + n)); }
-function setTab(t: 'buy' | 'sell') { tab.value = t; sel.value = t === 'buy' ? 'capsule' : null; qty.value = 1; }
+function setTab(t: 'buy' | 'sell' | 'skins') { tab.value = t; sel.value = t === 'buy' ? 'capsule' : t === 'skins' ? (skinRows().find((r) => !r.off)?.id ?? null) : null; qty.value = 1; }
 function confirm() {
   if (cant.value || !chosen.value) {
-    if (tab.value === 'buy' && chosen.value && total.value > coins.value) line.value = -2;
+    if (paying.value && chosen.value && total.value > coins.value) line.value = -2;
     return;
   }
-  send(tab.value === 'buy' ? { action: 'buy', item: chosen.value.id, qty: qty.value } : { action: 'sell', creatureId: chosen.value.id });
+  send(tab.value === 'buy' ? { action: 'buy', item: chosen.value.id, qty: qty.value }
+    : tab.value === 'skins' ? { action: 'buy-skin', skin: chosen.value.id }
+    : { action: 'sell', creatureId: chosen.value.id });
 }
 const nextLine = () => { line.value = (Math.max(0, line.value) + 1) % LINES.length; };
 
@@ -92,12 +101,13 @@ onUnmounted(() => window.removeEventListener('resize', fit));
       <div class="tabs">
         <button class="px" :class="{ on: tab === 'buy' }" @click="setTab('buy')">BUY</button>
         <button class="px" :class="{ on: tab === 'sell' }" @click="setTab('sell')">SELL</button>
-        <span class="px hint">{{ tab === 'buy' ? 'TAP AN ITEM' : 'TRADE A CREATURE FOR WILD' }}</span>
+        <button class="px skinsTab" :class="{ on: tab === 'skins' }" @click="setTab('skins')">SKINS</button>
+        <span class="px hint">{{ tab === 'buy' ? 'TAP AN ITEM' : tab === 'skins' ? 'HALLOWEEN LOOKS' : 'TRADE A CREATURE FOR WILD' }}</span>
       </div>
 
       <div class="board" :class="{ scroll: rows.length > 4 }">
         <button v-for="r in rows" :key="r.id" class="row" :class="{ on: sel === r.id && !r.off, off: r.off }" :disabled="r.off" @click="pick(r)">
-          <i class="icon" :style="{ backgroundImage: `url(${r.icon})` }"></i>
+          <i class="icon" :class="{ art: 'art' in r }" :style="{ backgroundImage: `url(${r.icon})` }"></i>
           <div class="mid"><div class="name"><b>{{ r.name }}</b><span class="px tag">{{ r.tag }}</span></div><small>{{ r.desc }}</small></div>
           <div class="cost"><div class="px price">✦ {{ r.price }}</div><small>{{ r.stock }}</small></div>
         </button>
@@ -105,9 +115,9 @@ onUnmounted(() => window.removeEventListener('resize', fit));
 
       <div class="actions">
         <button class="px leave" @click="send({ action: 'leave' })">◀ LEAVE</button>
-        <div class="pick"><span>{{ chosen ? chosen.name : tab === 'buy' ? 'Pick an item' : 'Pick a creature' }}</span>
-          <div class="qty"><button class="px" @click="bump(-1)">−</button><span class="px">{{ tab === 'buy' ? qty : 1 }}</span><button class="px" @click="bump(1)">+</button></div></div>
-        <button class="px confirm" :class="tab" :disabled="cant" @click="confirm"><span>{{ busy ? '…' : tab === 'buy' ? 'BUY' : 'SELL' }}</span><span class="total">{{ tab === 'buy' ? '−' : '+' }} ✦ {{ total }}</span></button>
+        <div class="pick"><span>{{ chosen ? chosen.name : tab === 'buy' ? 'Pick an item' : tab === 'skins' ? 'Pick a skin' : 'Pick a creature' }}</span>
+          <div v-if="tab !== 'skins'" class="qty"><button class="px" @click="bump(-1)">−</button><span class="px">{{ tab === 'buy' ? qty : 1 }}</span><button class="px" @click="bump(1)">+</button></div></div>
+        <button class="px confirm" :class="tab" :disabled="cant" @click="confirm"><span>{{ busy ? '…' : tab === 'sell' ? 'SELL' : 'BUY' }}</span><span class="total">{{ tab === 'sell' ? '+' : '−' }} ✦ {{ total }}</span></button>
       </div>
       <div class="px ledger"><span>REV {{ state.revision }} · {{ state.commandIds.at(-1)?.split('/').pop() ?? '—' }}</span><span class="note">{{ status }}</span></div>
     </div>
@@ -140,6 +150,9 @@ button:disabled{cursor:default}
 .row{text-align:left;color:#e8e2c8;background:transparent;padding:4px 8px;display:grid;grid-template-columns:44px 1fr auto;align-items:center;gap:10px;font-family:'VT323',ui-monospace,monospace}
 .row.on{background:#2f4a3e;box-shadow:0 0 0 2px #e8e2c8}.row.off{opacity:.45}.row:active:not(:disabled){translate:0 1px}
 .icon{width:44px;height:44px;background-size:contain;background-repeat:no-repeat;background-position:center;image-rendering:pixelated;filter:drop-shadow(0 0 2px #0008)}
+/* A skin's picture is large art shown small: scaled smoothly, and a little bigger than an item's icon. */
+.icon.art{width:52px;height:52px;margin:-4px;image-rendering:auto}
+.tabs .skinsTab{background:#8a3a12;color:#ffd7a8}.tabs .skinsTab.on{background:#ffb35c;color:#2b1a10}
 .mid{min-width:0}.name{display:flex;align-items:baseline;gap:8px}.name b{font-size:21px;font-weight:400;line-height:1;white-space:nowrap}
 .tag{font-size:7px;color:#bcc9a8;white-space:nowrap}.mid small{display:block;font-size:14px;line-height:1.15;color:#c9d4b8;margin-top:3px}
 .cost{text-align:right;white-space:nowrap}.price{font-size:12px;color:#ffe08a;text-shadow:1px 1px 0 #0008}.cost small{font-size:13px;color:#bcc9a8}

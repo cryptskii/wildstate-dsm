@@ -17,11 +17,11 @@
  * (Web2) and what DSM did underneath, as the game's account recorded it.
  */
 import type { RpgPlayer } from '@rpgjs/server';
-import { stateSchema, GameError, SCARECROW_CAPSULES, SPECIES, SHOP_QTY_MAX, TRAINERS, displayName, newCreature, initialState, salePrice, transition, type Command, type Creature, type GameState } from '../../domain/game';
+import { stateSchema, GameError, SCARECROW_CAPSULES, SKINS, SKIN_NAMES, SPECIES, SHOP_QTY_MAX, TRAINERS, type Skin, displayName, newCreature, initialState, salePrice, transition, type Command, type Creature, type GameState } from '../../domain/game';
 import { DsmHost, HostError, b32, fromB32, own, short, type Bytes } from '../../integrations/dsm/host';
 import { PROGRAM, anchorBytes, creatureState } from '../../domain/program';
 import type { Economy, Login, Species } from '../../integrations/dsm/economy';
-import { COIN, ITEM_PRICES, MARKET, MARKET_VAULTS, TRAINER_REWARD, VICTORY_REWARD, WELCOME_COINS, entered, type ShopItem } from '../../integrations/dsm/terms';
+import { COIN, ITEM_PRICES, SKIN_PRICE, MARKET, MARKET_VAULTS, TRAINER_REWARD, VICTORY_REWARD, WELCOME_COINS, entered, type ShopItem } from '../../integrations/dsm/terms';
 import * as pb from '../../integrations/dsm/proto/dsm_app_pb';
 
 /** The game's DSM account (`dsm-app-host`): the game does not run without it. */
@@ -812,7 +812,7 @@ async function payOwed(player: RpgPlayer, to: string): Promise<void> {
 
 const ITEM_NAMES: Record<ShopItem, string> = { capsule: 'Capture Capsule', poultice: 'Herb Poultice', tonic: 'Charge Tonic', map: 'Ranger’s Map' };
 /** Bramble's lines after a purchase and after a sale, as the design's Shop page has them. */
-const BRAMBLE = { bought: 'Capsules go fast after a meadow rush. Stock up.', sold: 'Selling a creature transfers it for good. Think it over.' };
+const BRAMBLE = { bought: 'Capsules go fast after a meadow rush. Stock up.', sold: 'Selling a creature transfers it for good. Think it over.', skin: 'Suits you. Wear it from your bag, and swap back whenever you like.' };
 
 /** `n` items from Bramble's board in one payment from the wallet, granted only once the game's account accepted it. */
 async function buyItem(player: RpgPlayer, item: ShopItem, n: number): Promise<void> {
@@ -833,6 +833,28 @@ async function buyItem(player: RpgPlayer, item: ShopItem, n: number): Promise<vo
   if (seat.coins !== null) seat.coins -= cost;
   pushEntries(seat, [entry('dsm', `${what} paid: ${wildText(cost)}`, 'Granted on the transfer the game account accepted, never on the wallet\'s word', 'ok', Date.now() - started)]);
   shopShow(player, { busy: false, status: `${what} in your bag · ${wildText(cost)} paid from your wallet`, say: BRAMBLE.bought, delta: `-${cost}`, deltaAt: Date.now() });
+  player.getGui('field-hud')?.update(hudData(player));
+  proveLater(player);
+}
+
+/** A Halloween skin from Bramble, in one payment from the wallet, granted only once the game's account accepted it. */
+async function buySkin(player: RpgPlayer, skin: Skin): Promise<void> {
+  const w = await world();
+  const seat = seatOf(player);
+  const started = Date.now();
+  const what = `the ${SKIN_NAMES[skin]} skin`;
+  // Owned already: refused here, before the wallet is asked for anything.
+  refusedBeforeDsm(player, { type: 'grant-skin', skin, fact: 'not yet paid' }, `Buying ${what}`);
+  const seq = await w.host.request(sessionOf(seat), {
+    case: 'pay',
+    value: new pb.ConnectPayV1({ policyCommit: w.economy.wild, amount: SKIN_PRICE, memo: `${SKIN_NAMES[skin].toLowerCase()} skin` }),
+  });
+  const paid = await settle(player, seq, (s) => s.fact === pb.ConnectFact.PAID, `Paying for ${what}`,
+    () => shopShow(player, { status: 'Approve the payment on your phone: Apps → Waiting' }), 'sync');
+  commit(player, { type: 'grant-skin', skin, fact: new TextDecoder().decode(paid.paidTx) });
+  if (seat.coins !== null) seat.coins -= SKIN_PRICE;
+  pushEntries(seat, [entry('dsm', `${SKIN_NAMES[skin]} skin paid: ${wildText(SKIN_PRICE)}`, 'Granted on the transfer the game account accepted, never on the wallet\'s word', 'ok', Date.now() - started)]);
+  shopShow(player, { busy: false, status: `${SKIN_NAMES[skin]} skin in your bag · ${wildText(SKIN_PRICE)} paid from your wallet`, say: BRAMBLE.skin, delta: `-${SKIN_PRICE}`, deltaAt: Date.now() });
   player.getGui('field-hud')?.update(hudData(player));
   proveLater(player);
 }
@@ -915,7 +937,7 @@ export async function openShop(player: RpgPlayer): Promise<void> {
   if (!seatOf(player).session) return;
   shopViews.set(player.id, { ...quietShop(), status: 'Prices in WILD, paid from your DSM wallet' });
   const gui = player.gui('bramble-shop');
-  gui.on<{ action: string; item?: string; qty?: number; creatureId?: string }>('shop', ({ action, item, qty, creatureId }) => {
+  gui.on<{ action: string; item?: string; qty?: number; creatureId?: string; skin?: string }>('shop', ({ action, item, qty, creatureId, skin }) => {
     if (action === 'leave') { gui.close(); return; }
     if (shopViews.get(player.id)?.busy) return;
     if (action === 'buy' && item !== undefined && item in ITEM_PRICES) {
@@ -924,6 +946,12 @@ export async function openShop(player: RpgPlayer): Promise<void> {
       shopShow(player, { busy: true, say: '', status: `Asking your wallet for ${wildText(ITEM_PRICES[it] * BigInt(n))}…` });
       web2(player, 'Bramble’s board', `${n} × ${ITEM_NAMES[it]}: the game asks your wallet for the payment`);
       shopTask(player, `Buying ${n} × ${ITEM_NAMES[it].toLowerCase()}`, () => buyItem(player, it, n));
+    }
+    if (action === 'buy-skin' && skin !== undefined && (SKINS as readonly string[]).includes(skin)) {
+      const sk = skin as Skin;
+      shopShow(player, { busy: true, say: '', status: `Asking your wallet for ${wildText(SKIN_PRICE)}…` });
+      web2(player, 'Bramble’s board', `The ${SKIN_NAMES[sk]} skin: the game asks your wallet for the payment`);
+      shopTask(player, `Buying the ${SKIN_NAMES[sk].toLowerCase()} skin`, () => buySkin(player, sk));
     }
     if (action === 'sell' && creatureId) {
       shopShow(player, { busy: true, say: '', status: 'Asking your wallet to hand the creature to Bramble…' });

@@ -16,11 +16,11 @@ describe('the game missions a tester reports on', () => {
   it('are week 1 with the starter set\'s game missions on release day, and never the wallet\'s', () => {
     const l = reportList(shipped, '2026-10-10');
     expect(l.week).toBe(1);
-    expect(l.missions.map((m) => m.id)).toEqual(['G1', 'G2', 'G3', 'G4']);
+    expect(l.missions.map((m) => m.id)).toEqual(['G1', 'G2', 'G3', 'G4', 'G5']);
   });
   it('are that week\'s own game missions from week 2 on', () => {
-    expect(reportList(shipped, '2026-10-20').missions.map((m) => m.id)).toEqual(['G5', 'G6', 'G7', 'G8']);
-    expect(reportList(shipped, '2026-10-27').missions.map((m) => m.id)).toEqual(['G9', 'G10', 'G11', 'G12']);
+    expect(reportList(shipped, '2026-10-20').missions.map((m) => m.id)).toEqual(['G6', 'G7', 'G8', 'G9']);
+    expect(reportList(shipped, '2026-10-27').missions.map((m) => m.id)).toEqual(['G10', 'G11', 'G12', 'G13']);
   });
   it('are the starter set\'s before any week is up, and none when the file cannot be read', () => {
     expect(reportList(shipped, '2026-10-01')).toEqual({ week: null, title: 'Starter missions', missions: shipped.starter.filter((m) => m.id.startsWith('G')) });
@@ -54,7 +54,7 @@ describe('a week\'s game missions report', () => {
   it('lists each mission\'s result, checks, explanation and its bug reports, and says how the week is split', () => {
     const body = missionsBody(report, details);
     expect(missionsTitle(report)).toBe('[MISSIONS] Week 1 game missions');
-    expect(body).toContain('1 of 4 game missions done');
+    expect(body).toContain('1 of 5 game missions done');
     expect(body).toContain('### G1 · Connect Wildstate: Done');
     expect(body).toContain("### G2 · Find the bulletin board: Couldn't finish");
     expect(body).toContain('- [x] Worked the first time');
