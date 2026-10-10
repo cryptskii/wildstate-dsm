@@ -7,6 +7,7 @@ import { provideVueGui, vueGui } from '@rpgjs/vue';
 import Dialogue from '../gui/Dialogue.vue';
 import Play from '../gui/Play.vue';
 import Shop from '../gui/Shop.vue';
+import Board from '../gui/Board.vue';
 import DsmPanel from '../gui/DsmPanel.vue';
 import DsmConnect from '../gui/DsmConnect.vue';
 import Market from '../gui/Market.vue';
@@ -54,7 +55,7 @@ export default {
         gui: [
           vueGui({id: 'portrait-dialogue', component: Dialogue}), vueGui({id: 'field-hud', component: Play}), vueGui({id: 'creature-battle', component: Play}),
           // DSM mode: the wallet connect code, the market, and the overlay of what runs underneath.
-          vueGui({id: 'dsm-connect', component: DsmConnect}), vueGui({id: 'dsm-market', component: Market}), vueGui({id: 'bramble-shop', component: Shop}), vueGui({id: 'dsm-panel', component: DsmPanel}), vueGui({id: 'lobby', component: Lobby}),
+          vueGui({id: 'dsm-connect', component: DsmConnect}), vueGui({id: 'dsm-market', component: Market}), vueGui({id: 'bramble-shop', component: Shop}), vueGui({id: 'mission-board', component: Board}), vueGui({id: 'dsm-panel', component: DsmPanel}), vueGui({id: 'lobby', component: Lobby}),
         ],
         spritesheets: [
           { id: 'ranger', image: 'spritesheets/rowan-walk-v4.png', ...walker() },

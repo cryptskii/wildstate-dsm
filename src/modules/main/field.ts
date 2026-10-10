@@ -5,6 +5,7 @@ import { type RpgPlayer } from '@rpgjs/server';
 import { GameError, LOOKS, SCARECROW_CAPSULES, SPECIES, TRAINERS, displayName, type Command, type Look } from '../../domain/game';
 import { session } from './journey';
 import { portraitDialogue, talkToRowan, readWayfindingSign, isSpeaking } from './dialogue';
+import { readBulletinBoard } from './board';
 import { claimScarecrowGift, onCommitted, openMarket, openShop, useCommit, useHudData, useReadState, walked, walletCoins, walletWaiting, web2 } from './dsm';
 const inside = new WeakSet<RpgPlayer>();
 const proximity = new WeakMap<RpgPlayer, string>();
@@ -24,12 +25,14 @@ const taps = new WeakMap<RpgPlayer, () => void>();
 /** The card a new fight waits on: every HUD refresh carries it, so it never goes missing while the battle waits for its tap. */
 const cards = new WeakMap<RpgPlayer, { title: string; line: string }>();
 /** NPC anchors match server.ts event positions and the camp layout in simplemap.tmx (fieldmap-v10). */
-export const MIRA = { x: 304, y: 432 }, ROWAN = { x: 240, y: 240 };
+export const MIRA = { x: 272, y: 496 }, ROWAN = { x: 240, y: 240 };
 /** Trainers: Kade by the meadow's west edge, Nessa on the far northeast shore. */
 export const TRAINER_SPOTS: Record<string, { x: number; y: number }> = { kade: { x: 464, y: 240 }, nessa: { x: 720, y: 368 } };
 /** The painted scarecrow in the camp garden. */
 export const WAY_SIGN = { x: 432, y: 272 };
 export const SCARECROW = { x: 112, y: 432 };
+/** The painted notice board in the camp garden: the beta's weekly missions are read off it. */
+export const BULLETIN_BOARD = { x: 256, y: 368 };
 /** Bramble's door tile; stepping on it opens the trading post. */
 export const SHOP_DOOR = { tx: 18, ty: 4 };
 /** Wild meadow bounds (tiles 14..19 × 6..10); the bottom row is plain lawn so the pond is reachable without an encounter. */
@@ -46,7 +49,7 @@ export function nearPond(player: RpgPlayer): boolean {
   return pondSide(player) !== undefined;
 }
 function nearNpc(player: RpgPlayer): string | undefined {
-  const spots: [string, { x: number; y: number }][] = [['Wayfinding sign', WAY_SIGN], ['Scarecrow', SCARECROW], ['Mira', npcPosition(player, 'mira', MIRA)], ['Rowan', npcPosition(player, 'rowan', ROWAN)], ...Object.entries(TRAINER_SPOTS).map(([id, p]) => [TRAINERS[id].name, npcPosition(player, id, p)] as [string, { x: number; y: number }])];
+  const spots: [string, { x: number; y: number }][] = [['Wayfinding sign', WAY_SIGN], ['Bulletin board', BULLETIN_BOARD], ['Scarecrow', SCARECROW], ['Mira', npcPosition(player, 'mira', MIRA)], ['Rowan', npcPosition(player, 'rowan', ROWAN)], ...Object.entries(TRAINER_SPOTS).map(([id, p]) => [TRAINERS[id].name, npcPosition(player, id, p)] as [string, { x: number; y: number }])];
   const near = spots.map(([name, p]) => [name, Math.hypot(player.x() - p.x, player.y() - p.y)] as const).filter(([, d]) => d <= 72).sort((a, b) => a[1] - b[1]);
   return near[0]?.[0];
 }
@@ -97,6 +100,7 @@ export function fieldHud(player: RpgPlayer) {
       if (who) web2(player, 'Talking', 'Dialogue runs on the game server: no DSM');
       const trainer = trainerByName(who);
       if (who === 'Wayfinding sign') await readWayfindingSign(player);
+      else if (who === 'Bulletin board') await readBulletinBoard(player);
       else if (who === 'Scarecrow') await talkToScarecrow(player);
       else if (who === 'Rowan') await talkToRowan(player);
       else if (who === 'Mira') await restAtCamp(player);
