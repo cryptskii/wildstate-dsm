@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Wallet bugs and wallet missions (M)
+    url: https://github.com/deterministicstatemachine/dsm/issues/new/choose
+    about: Report them from the DSM wallet, Settings → Report a problem. They are filed on the DSM repository, not here.

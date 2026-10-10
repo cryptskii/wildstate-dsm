@@ -11,6 +11,8 @@ export default defineConfig(({ command }) => {
     throw new Error('Wildstate runs on DSM: set DSM_APP_HOST to the game account host (dsm-app-host), e.g. http://127.0.0.1:8787');
   }
   return {
+    // The version a game report quotes: the release build's (scripts set WILDSTATE_VERSION_NAME), else "dev".
+    define: { __WILDSTATE_VERSION__: JSON.stringify(process.env.WILDSTATE_VERSION_NAME ?? 'dev') },
     optimizeDeps: {
       include: ['pixi.js > @xmldom/xmldom']
     },

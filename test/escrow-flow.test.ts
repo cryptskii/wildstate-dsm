@@ -58,7 +58,7 @@ vi.mock('../src/modules/main/dsm', () => ({
 }));
 vi.mock('@rpgjs/server', () => ({ Components: { text: () => ({}) } }));
 vi.mock('../src/modules/main/journey', () => ({ session: vi.fn() }));
-vi.mock('../src/modules/main/field', () => ({ commit: vi.fn(), isFighting: () => false, setFighting: vi.fn(), setInArena: vi.fn() }));
+vi.mock('../src/modules/main/field', () => ({ commit: vi.fn(), isFighting: () => false, setFighting: vi.fn(), setInArena: vi.fn(), setInMatch: vi.fn() }));
 vi.mock('../src/modules/main/dialogue', () => ({ isSpeaking: () => false }));
 
 import { advance, chooseStaked, freshEscrow, lockMatch, matchNonce, passIfDue, READY_MS, resignStaked, type StakedEvents } from '../src/modules/main/staked';
