@@ -3,7 +3,8 @@ import { Direction } from '@rpgjs/common';
 type Stop = { dx: number; dy: number; pause: number; face: Direction };
 const LOOPS: Record<string, Stop[]> = {
  // Patrols remain on grass away from the north/south path and fence opening.
- mira: [{dx:0,dy:0,pause:14,face:Direction.Down},{dx:0,dy:-32,pause:10,face:Direction.Down}],
+ // Mira keeps the camp from just below the fire, facing it, and stays put: the bulletin board's front stays clear.
+ mira: [{dx:0,dy:0,pause:20,face:Direction.Up}],
  rowan: [{dx:0,dy:0,pause:12,face:Direction.Right},{dx:-32,dy:0,pause:18,face:Direction.Up}],
  kade: [{dx:0,dy:0,pause:16,face:Direction.Down},{dx:32,dy:0,pause:18,face:Direction.Left}],
  nessa: [{dx:0,dy:0,pause:20,face:Direction.Left},{dx:0,dy:-32,pause:14,face:Direction.Down}],

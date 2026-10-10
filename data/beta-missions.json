@@ -1,0 +1,136 @@
+{
+  "footer": "Report every mission, pass or fail, on GitHub, and send the wallet's report from Settings → Report a problem with every bug. New missions every Monday morning; weekly call on Fridays.",
+  "weeks": [
+    {
+      "week": 1,
+      "title": "Your first catches",
+      "posted": "2026-10-12",
+      "missions": [
+        {
+          "id": "G3",
+          "title": "A first catch",
+          "task": "Get three free capsules from the scarecrow, then catch and name a creature in the meadow. It should show in the wallet's Objects."
+        },
+        {
+          "id": "G4",
+          "title": "Fish",
+          "task": "Cast at the pond's edge and catch a water creature."
+        }
+      ]
+    },
+    {
+      "week": 2,
+      "title": "Interrupt and recover",
+      "posted": "2026-10-19",
+      "missions": [
+        {
+          "id": "M8",
+          "title": "Kill it mid-payment",
+          "task": "Force-close the app the moment you tap Send now. Nothing may be lost or doubled."
+        },
+        {
+          "id": "G5",
+          "title": "Buy from Bramble",
+          "task": "Buy capsules paid from your wallet. Then buy again and force-close the game the moment you pay: paid once, given once."
+        },
+        {
+          "id": "M9",
+          "title": "Cut the network",
+          "task": "Airplane mode right after Send now. You should see a clear message or a finished payment, never a half state."
+        },
+        {
+          "id": "G6",
+          "title": "Sell a creature",
+          "task": "Sell one to Bramble. It leaves your wallet's Objects and the WILD arrives."
+        },
+        {
+          "id": "M10",
+          "title": "Restart and walk away",
+          "task": "Restart the phone during and after payments, and leave the app in the background for an hour."
+        },
+        {
+          "id": "G7",
+          "title": "Beat a trainer",
+          "task": "Win against Kade or Nessa. The WILD bounty should land in your wallet."
+        },
+        {
+          "id": "M11",
+          "title": "Interrupt setup",
+          "task": "On a spare phone, leave the app while setup secures the phone. It should start cleanly again."
+        },
+        {
+          "id": "G8",
+          "title": "Pick up where you left off",
+          "task": "Close the game mid-way and reopen it, then open it on another phone with the same wallet."
+        },
+        {
+          "id": "M12",
+          "title": "Lock your wallet",
+          "task": "Set a PIN, leave and come back. Careful: after three wrong tries only your recovery phrase opens it."
+        },
+        {
+          "id": "M13",
+          "title": "Recover onto a new phone",
+          "task": "If you have a DSM recovery ring: back up to it, then restore on a second phone. The old phone must stop paying."
+        }
+      ]
+    },
+    {
+      "week": 3,
+      "title": "Bigger flows",
+      "posted": "2026-10-26",
+      "missions": [
+        {
+          "id": "M14",
+          "title": "Create your own token",
+          "task": "Create a token, send it out, have contacts pass it on. The total must never change."
+        },
+        {
+          "id": "G9",
+          "title": "Trade WILD",
+          "task": "In the market, swap WILD for ERA and back. Both settle in your wallet as quoted."
+        },
+        {
+          "id": "M15",
+          "title": "Adopt a token",
+          "task": "A contact adds your token with Tokens → Add Token, using its policy anchor."
+        },
+        {
+          "id": "G10",
+          "title": "Gift a creature",
+          "task": "Send a creature from your wallet's Objects to a friend who plays. It should appear in their BAG."
+        },
+        {
+          "id": "M16",
+          "title": "Collectibles",
+          "task": "Flip the Objects switch and send a one-of-a-kind object, like a creature, to a contact."
+        },
+        {
+          "id": "G11",
+          "title": "Play a friend",
+          "task": "In the lobby, play a free match, then a staked one: each wallet locks its stake, the winner collects both."
+        },
+        {
+          "id": "M17",
+          "title": "Trade",
+          "task": "In Trade, swap one token for another, then open and close a small liquidity position."
+        },
+        {
+          "id": "G12",
+          "title": "See what is DSM",
+          "task": "Press DSM during play and check what ran on DSM and what only on the game server."
+        },
+        {
+          "id": "M18",
+          "title": "Escrow vault",
+          "task": "Lock a small stake with a contact, set two outcomes, decide one and release it."
+        },
+        {
+          "id": "M19",
+          "title": "Connect an app",
+          "task": "In Apps, scan an app's connect code, approve it, and use it. Anything you didn't approve must wait."
+        }
+      ]
+    }
+  ]
+}
