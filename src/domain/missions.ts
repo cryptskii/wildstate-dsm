@@ -6,7 +6,8 @@
  */
 export type Mission = { id: string; title: string; task: string };
 export type MissionWeek = { week: number; title: string; posted: string; missions: Mission[] };
-export type MissionBoard = { weeks: MissionWeek[]; footer: string };
+/** `starter`: the set handed out before the board (in the Telegram channel), reported with week 1. */
+export type MissionBoard = { weeks: MissionWeek[]; footer: string; starter: Mission[] };
 
 /** What the board screen shows: the welcome, this week (if one is up), its missions, and the list to copy. */
 export type BoardView = {
@@ -39,18 +40,17 @@ export function readMissionBoard(json: unknown): MissionBoard {
     const posted = text(wk.posted, `week ${wk.week} "posted"`);
     if (!DATE.test(posted)) throw new Error(`week ${wk.week} "posted" must be a date like 2026-10-12`);
     if (!Array.isArray(wk.missions) || wk.missions.length === 0) throw new Error(`week ${wk.week} needs at least one mission`);
-    const missions = wk.missions.map((m, j): Mission => {
-      if (typeof m !== 'object' || m === null) throw new Error(`week ${wk.week} mission ${j + 1} must be an object`);
-      const mm = m as Record<string, unknown>;
-      return {
-        id: text(mm.id, `week ${wk.week} mission ${j + 1} "id"`),
-        title: text(mm.title, `week ${wk.week} mission ${j + 1} "title"`),
-        task: text(mm.task, `week ${wk.week} mission ${j + 1} "task"`),
-      };
-    });
-    return { week: wk.week, title: text(wk.title, `week ${wk.week} "title"`), posted, missions };
+    return { week: wk.week, title: text(wk.title, `week ${wk.week} "title"`), posted, missions: wk.missions.map((m, j) => mission(m, `week ${wk.week} mission ${j + 1}`)) };
   });
-  return { weeks, footer: typeof o.footer === 'string' ? o.footer.trim() : '' };
+  if (o.starter !== undefined && !Array.isArray(o.starter)) throw new Error('"starter" must list missions');
+  const starter = ((o.starter ?? []) as unknown[]).map((m, j) => mission(m, `starter mission ${j + 1}`));
+  return { weeks, footer: typeof o.footer === 'string' ? o.footer.trim() : '', starter };
+}
+
+function mission(m: unknown, where: string): Mission {
+  if (typeof m !== 'object' || m === null) throw new Error(`${where} must be an object`);
+  const mm = m as Record<string, unknown>;
+  return { id: text(mm.id, `${where} "id"`), title: text(mm.title, `${where} "title"`), task: text(mm.task, `${where} "task"`) };
 }
 
 /** The week on the board on `today` (YYYY-MM-DD): the latest one posted by then, or none yet. */
@@ -70,4 +70,21 @@ export function boardView(board: MissionBoard | null, today: string): BoardView 
     ...(footer.length > 0 ? [footer] : []),
   ].join('\n\n');
   return { welcome: BOARD_WELCOME, week: { week: week.week, title: week.title, posted: week.posted }, missions: week.missions, footer, copyText };
+}
+
+/** Game missions, as a game report lists them: Wildstate's (G), never the wallet's (M). */
+const isGame = (m: Mission) => m.id.startsWith('G');
+
+/**
+ * The game missions a tester reports on `today`: the week on the board, with the starter set's
+ * game missions in week 1 (they are done before the board is reached); the starter set's alone
+ * before any week is up.
+ */
+export function reportList(board: MissionBoard | null, today: string): { week: number | null; title: string; missions: Mission[] } {
+  if (board === null) return { week: null, title: 'Starter missions', missions: [] };
+  const week = weekOnBoard(board, today);
+  const first = Math.min(...board.weeks.map((w) => w.week));
+  if (week === null) return { week: null, title: 'Starter missions', missions: board.starter.filter(isGame) };
+  const missions = [...(week.week === first ? board.starter : []), ...week.missions].filter(isGame);
+  return { week: week.week, title: week.title, missions };
 }

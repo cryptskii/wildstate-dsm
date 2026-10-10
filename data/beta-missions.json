@@ -1,5 +1,52 @@
 {
   "footer": "Report every mission, pass or fail, on GitHub, and send the wallet's report from Settings → Report a problem with every bug. New missions every Monday morning; weekly call on Fridays.",
+  "starter": [
+    {
+      "id": "M1",
+      "title": "Create your wallet",
+      "task": "Accept the beta agreement, pick a look (Modern or DGen), and create a wallet. Write your 24 recovery words on paper (never a photo) and pass the word check. Stay on the screen while it secures your phone."
+    },
+    {
+      "id": "M2",
+      "title": "Make your card",
+      "task": "Add your name, email and phone to your contact card. In Modern, add a photo and a banner and frame them. Check that Receive shows your code as a QR and written out in full."
+    },
+    {
+      "id": "M3",
+      "title": "Add three testers",
+      "task": "Add each other: each person scans the other's code from Receive, or pastes the code they were sent. Link one contact to someone in your phone's contacts."
+    },
+    {
+      "id": "M4",
+      "title": "Pair over Bluetooth",
+      "task": "Phones close together, Bluetooth on, app open on People (Modern) or Contacts (DGen). Each contact should show \"Paired\". Note how long it took."
+    },
+    {
+      "id": "M5",
+      "title": "Get test ERA",
+      "task": "Claim from Tokens → Faucet, then make your second claim. Time both, from tap to balance. Was the second faster, and by how much? Any glitches?"
+    },
+    {
+      "id": "M6",
+      "title": "Send and receive",
+      "task": "Five payments with your contacts, both directions, each with a note. Each one should leave once and arrive once, with the same amount and note on both phones."
+    },
+    {
+      "id": "M7",
+      "title": "Switch looks",
+      "task": "In Settings, try Modern and DGen, dark and light, and Simple mode on and off. Balances, contacts and history must match in every look."
+    },
+    {
+      "id": "G1",
+      "title": "Connect Wildstate",
+      "task": "Install and open Wildstate, then connect it to your DSM wallet: scan the game's code from the wallet, or tap OPEN DSM WALLET on the same phone. Approve it. Time how long it took."
+    },
+    {
+      "id": "G2",
+      "title": "Find the bulletin board",
+      "task": "Walk to the notice board in the camp garden by the scarecrow and read it. Every week's missions are pinned there, with a COPY ALL button."
+    }
+  ],
   "weeks": [
     {
       "week": 1,
