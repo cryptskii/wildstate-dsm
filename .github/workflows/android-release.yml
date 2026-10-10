@@ -24,7 +24,6 @@ jobs:
       VITE_GAME_HOST: ${{ inputs.game_host || vars.VITE_GAME_HOST }}
       WILDSTATE_VERSION_NAME: ${{ inputs.version_name || github.ref_name }}
       WILDSTATE_VERSION_CODE: ${{ github.run_number }}
-      WILDSTATE_KEYSTORE_PATH: ${{ runner.temp }}/wildstate-release.jks
       WILDSTATE_KEYSTORE_PASSWORD: ${{ secrets.WILDSTATE_KEYSTORE_PASSWORD }}
       WILDSTATE_KEY_ALIAS: ${{ secrets.WILDSTATE_KEY_ALIAS }}
       WILDSTATE_KEY_PASSWORD: ${{ secrets.WILDSTATE_KEY_PASSWORD }}
@@ -51,9 +50,13 @@ jobs:
           from pathlib import Path
           if not os.environ.get('VITE_GAME_HOST') or not os.environ.get('KEYSTORE_BASE64'):
               raise SystemExit('Configure the public game server host and signing secrets first; see docs/android-app.md.')
-          p = Path(os.environ['WILDSTATE_KEYSTORE_PATH'])
+          # The runner's temp folder is only known inside a step, so the key's
+          # path is set here and handed to the steps after it.
+          p = Path(os.environ['RUNNER_TEMP']) / 'wildstate-release.jks'
           p.write_bytes(base64.b64decode(os.environ['KEYSTORE_BASE64'], validate=True))
           p.chmod(0o600)
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write(f'WILDSTATE_KEYSTORE_PATH={p}\n')
           PY
       - run: ./gradlew assembleRelease lintRelease
         working-directory: android
