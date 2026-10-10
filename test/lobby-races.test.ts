@@ -43,7 +43,7 @@ vi.mock('../src/modules/main/dsm', () => ({
 }));
 vi.mock('@rpgjs/server', () => ({ Components: { text: () => ({}) } }));
 vi.mock('../src/modules/main/journey', () => ({ session: (p: { id: string }) => ({ read: () => states.get(p.id)! }) }));
-vi.mock('../src/modules/main/field', () => ({ commit: vi.fn(), isFighting: () => false, setFighting: vi.fn(), setInArena: vi.fn() }));
+vi.mock('../src/modules/main/field', () => ({ commit: vi.fn(), isFighting: () => false, setFighting: vi.fn(), setInArena: vi.fn(), setInMatch: vi.fn() }));
 vi.mock('../src/modules/main/dialogue', () => ({ isSpeaking: () => false }));
 
 import { openLobby } from '../src/modules/main/lobby';

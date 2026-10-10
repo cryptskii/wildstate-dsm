@@ -148,6 +148,27 @@ describe('player-vs-player match, resolved by the program', () => {
     expect(loser.team.every(c => c.hp === 0)).toBe(true);
     expect(seen).toContain(`${m.winner === 'a' ? 'b' : 'a'}:switch`);
   });
+  it('plays a short team as it is: a fainted creature never stands again, HP only falls, and the last knockout ends it', () => {
+    for (const size of [1, 2]) {
+      const m = match(`short-${size}`, { wallet: A, name: 'kai', team: team(A, (['embercub', 'mossling'] as const).slice(0, size)) }, { wallet: B, name: 'ren', team: team(B, ['voltusk', 'leon', 'brineback']) });
+      expect(m.a.team).toHaveLength(size);
+      let hp = m.a.team.map((c) => c.hp);
+      const down = new Set<number>();
+      for (let i = 0; i < 80 && m.phase === 'battle'; i++) {
+        choose(m, 'a', 'strike', i); choose(m, 'b', 'strike', i);
+        m.a.team.forEach((c, k) => {
+          expect(c.hp).toBeLessThanOrEqual(hp[k]); // nobody heals: HP never goes back up
+          if (down.has(k)) expect(c.hp).toBe(0); // a fainted creature stays down
+          if (c.hp === 0) down.add(k);
+        });
+        if (m.phase === 'battle') expect(m.a.team[m.a.active].hp).toBeGreaterThan(0); // the creature out is always one standing
+        hp = m.a.team.map((c) => c.hp);
+      }
+      expect(m.phase).toBe('done');
+      expect(m.winner).toBe('b');
+      expect(m.a.ko).toBe(size);
+    }
+  });
   it('passes a missed turn in a free match, doing nothing, and resigns the player after three misses', () => {
     const m = fresh();
     const hpA = m.a.team[0].hp;

@@ -11,7 +11,7 @@
 import { Components, type RpgPlayer } from '@rpgjs/server';
 import { session } from './journey';
 import { deliverUnissued, lobbyRecord, playerOfWallet, refreshContacts, walletContacts, walletIdentity, walletOf, walletWaiting, web2 } from './dsm';
-import { commit, isFighting, setFighting, setInArena } from './field';
+import { commit, isFighting, setFighting, setInArena, setInMatch } from './field';
 import { isSpeaking } from './dialogue';
 import { SPECIES, GameError, displayName, fieldedTeam, level, maxCharges, maxHp, type Command, type Creature, type GameState } from '../../domain/game';
 import { befriend, claimUsername, freshProfile, resolvePlayer, shownName, unfriend, HISTORY_MAX, RENAME_COOLDOWN_MS, type Directory, type MatchSummary } from '../../domain/username';
@@ -432,6 +432,7 @@ export async function collectWhatIsOwed(wallet: string) {
 
 function openMatch(player: RpgPlayer, m: Match, side: Side) {
   setFighting(player, true);
+  setInMatch(player, true);
   const gui = player.gui('creature-battle');
   gui.on<{ action: string }>('battle', async ({ action }) => {
     const { matches, save } = await lobbyRecord();
@@ -442,6 +443,7 @@ function openMatch(player: RpgPlayer, m: Match, side: Side) {
       if (live.phase === 'battle') return;
       gui.close();
       setFighting(player, false);
+      setInMatch(player, false);
       await openLobby(player);
       return;
     }
@@ -467,7 +469,7 @@ function openMatch(player: RpgPlayer, m: Match, side: Side) {
     save();
     await publish(live);
   });
-  void gui.open(battleView(m, side), { waitingAction: true, blockPlayerInput: true }).finally(() => setFighting(player, false));
+  void gui.open(battleView(m, side), { waitingAction: true, blockPlayerInput: true }).finally(() => { setFighting(player, false); setInMatch(player, false); });
 }
 
 /** Sends both sides the match as it stands; rates it once it is over. */

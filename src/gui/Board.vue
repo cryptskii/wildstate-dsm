@@ -7,6 +7,7 @@
  */
 import { inject, onMounted, onUnmounted, ref } from 'vue';
 import type { Mission } from '../domain/missions';
+import { copyText } from './clipboard';
 
 const props = defineProps<{
   welcome: string;
@@ -24,32 +25,8 @@ const ART = 'beta-mission-board/board.png';
 const copied = ref<'idle' | 'copied' | 'failed'>('idle');
 let reset: ReturnType<typeof setTimeout> | undefined;
 
-/** Copies with the old select-and-copy where the clipboard API is not offered (some WebViews). */
-function copyBySelection(text: string): boolean {
-  const area = document.createElement('textarea');
-  area.value = text;
-  area.setAttribute('readonly', '');
-  area.style.position = 'fixed';
-  area.style.opacity = '0';
-  document.body.appendChild(area);
-  area.select();
-  const ok = document.execCommand('copy');
-  document.body.removeChild(area);
-  return ok;
-}
-
 async function copyAll() {
-  let ok: boolean;
-  try {
-    if (navigator.clipboard && window.isSecureContext) {
-      await navigator.clipboard.writeText(props.copyText);
-      ok = true;
-    } else {
-      ok = copyBySelection(props.copyText);
-    }
-  } catch {
-    ok = copyBySelection(props.copyText);
-  }
+  const ok = await copyText(props.copyText);
   copied.value = ok ? 'copied' : 'failed';
   clearTimeout(reset);
   reset = setTimeout(() => { copied.value = 'idle'; }, 2500);

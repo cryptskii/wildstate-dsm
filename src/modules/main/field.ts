@@ -5,7 +5,7 @@ import { type RpgPlayer } from '@rpgjs/server';
 import { GameError, LOOKS, SCARECROW_CAPSULES, SPECIES, TRAINERS, displayName, type Command, type Look } from '../../domain/game';
 import { session } from './journey';
 import { portraitDialogue, talkToRowan, readWayfindingSign, isSpeaking } from './dialogue';
-import { readBulletinBoard } from './board';
+import { gameReportList, readBulletinBoard } from './board';
 import { claimScarecrowGift, onCommitted, openMarket, openShop, useCommit, useHudData, useReadState, walked, walletCoins, walletWaiting, web2 } from './dsm';
 const inside = new WeakSet<RpgPlayer>();
 const proximity = new WeakMap<RpgPlayer, string>();
@@ -20,6 +20,13 @@ const inArena = new WeakSet<RpgPlayer>();
  * creature appeared while the lobby was still on screen).
  */
 export function setInArena(player: RpgPlayer, on: boolean) { if (on) inArena.add(player); else inArena.delete(player); }
+const inMatch = new WeakSet<RpgPlayer>();
+/**
+ * A player in a player-vs-player match. Its screen shows the match's own snapshot of both teams
+ * (lobby.ts), never the player's game state: phones, 2026-10-10, a DSM task committing mid-match
+ * handed the screen the player's own creatures, so HP jumped back up and fainted creatures stood again.
+ */
+export function setInMatch(player: RpgPlayer, on: boolean) { if (on) inMatch.add(player); else inMatch.delete(player); }
 /** A card the player taps through (the encounter card, Bramble's door), waiting for its tap. */
 const taps = new WeakMap<RpgPlayer, () => void>();
 /** The card a new fight waits on: every HUD refresh carries it, so it never goes missing while the battle waits for its tap. */
@@ -83,7 +90,7 @@ export function commit(player: RpgPlayer, command: Command, revision: number) {
 // revision it holds with every action, so it is handed the new one.
 useCommit((player, command) => {
   const next = commit(player, command, session(player).read().revision);
-  player.getGui('creature-battle')?.update({ state: next, mode: 'battle', lastAction: 'sync', error: '' });
+  if (!inMatch.has(player)) player.getGui('creature-battle')?.update({ state: next, mode: 'battle', lastAction: 'sync', error: '' });
   return next;
 });
 useReadState((player) => session(player).read());
@@ -118,6 +125,7 @@ export function fieldHud(player: RpgPlayer) {
       player.setGraphic(graphicOf(player));
       return;
     }
+    if (action === 'report-missions') { hud.update(hudData(player, { reportList: await gameReportList() })); return; }
     if (action === 'lobby') { await openLobby(player); return; }
     if (action === 'shop' || action === 'enter-shop') {
       hud.update(hudData(player));

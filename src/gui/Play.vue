@@ -3,6 +3,9 @@ import { computed, inject, ref, watch, onUnmounted, onMounted } from 'vue';
 import { Direction } from '@rpgjs/common';
 import { heldDirection, type MovementControls } from './held-direction';
 import Joystick from './Joystick.vue';
+import ReportTab from './ReportTab.vue';
+import { BattleFx, type Stage } from './battle-fx';
+import type { ReportList } from '../domain/reports';
 import { rodPixels } from './fishing-rod';
 import { SPECIES, TRAINERS, LOOKS, lookPortrait, ITEMS as ITEM_EFFECTS, TEAM_SIZE, NICK_MAX, XP_PER_LEVEL, LEVEL_CAP, multiplier, displayName, level, maxHp, maxCharges, damageBonus, type GameState, type Element, type MoveFx } from '../domain/game';
 const xpLabel = (c: { xp: number }) => level(c) >= LEVEL_CAP ? 'MAX' : `${c.xp % XP_PER_LEVEL}/${XP_PER_LEVEL} XP`;
@@ -10,7 +13,7 @@ const xpPct = (c: { xp: number }) => (level(c) >= LEVEL_CAP ? 1 : (c.xp % XP_PER
 const growth = computed(() => { const g = props.state.battle?.growth; return g && g.to > g.from ? g : null; });
 const growthSeen = ref('');
 import { TRAINER_REWARD, VICTORY_REWARD } from '../integrations/dsm/terms';
-const props = defineProps<{ state: GameState; mode: string; lastAction?: string; error?: string; notice?: string; nearPond?: boolean; nearNpc?: string; atShop?: boolean; door?: boolean; encounter?: { title: string; line: string } | null; fishing?: { phase: 'cast' | 'bite'; dx: number; dy: number } | null; walletCoins?: number | null; walletWaiting?: string | null; trainerBeaten?: boolean;
+const props = defineProps<{ state: GameState; mode: string; lastAction?: string; error?: string; notice?: string; nearPond?: boolean; nearNpc?: string; atShop?: boolean; door?: boolean; encounter?: { title: string; line: string } | null; fishing?: { phase: 'cast' | 'bite'; dx: number; dy: number } | null; walletCoins?: number | null; walletWaiting?: string | null; trainerBeaten?: boolean; reportList?: ReportList | null;
   /** Player-vs-player: the opponent, the stake, this turn's deadline, and whether we wait on them. */
   pvp?: {
     opponent: string; stake: number; deadline: number; waiting: boolean; chosen?: boolean; foeReady?: boolean; reason: string | null;
@@ -84,7 +87,7 @@ const flip = (sp: string, side: 'own' | 'wild') => (ART[sp]?.faces ?? 'right') =
 
 const view = ref<GameState>(JSON.parse(JSON.stringify(props.state)));
 const inBattle = () => props.mode === 'battle' || props.mode === 'pvp';
-const busy = ref(inBattle()), message = ref(props.pvp && props.state.battle ? `@${props.pvp.opponent} sends out ${displayName(props.state.battle.wild)}!` : trainer.value && props.state.battle ? `${trainer.value.name} sends out ${displayName(props.state.battle.wild)}!` : 'A wild creature appeared!'), party = ref(false), tab = ref<'creatures' | 'items' | 'wallet'>('creatures');
+const busy = ref(inBattle()), message = ref(props.pvp && props.state.battle ? `@${props.pvp.opponent} sends out ${displayName(props.state.battle.wild)}!` : trainer.value && props.state.battle ? `${trainer.value.name} sends out ${displayName(props.state.battle.wild)}!` : 'A wild creature appeared!'), party = ref(false), tab = ref<'creatures' | 'items' | 'wallet' | 'report'>('creatures');
 /** The creature just caught, waiting for the player to name it (or not). */
 const naming = ref<string | null>(null), nick = ref('');
 const renaming = ref<string | null>(null), newNick = ref('');
@@ -120,6 +123,25 @@ const canCapture = computed(() => !busy.value && view.value.inventory.capsules >
 const statuses = (c: { guard: boolean; statuses: { id: string; turns: number }[] }) => [...(c.guard ? [{ id: 'GUARD', turns: '' }] : []), ...c.statuses.map(x => ({ id: x.id.toUpperCase(), turns: String(x.turns) }))];
 
 const wait = (ms: number) => new Promise(r => setTimeout(r, ms));
+/** The arena's effects canvas (src/gui/battle-fx.ts), and where its creatures stand. */
+const arenaEl = ref<HTMLDivElement>(), fxCanvas = ref<HTMLCanvasElement>(), ownImg = ref<HTMLImageElement>(), wildImg = ref<HTMLImageElement>();
+let effects: BattleFx | null = null;
+function stage(): Stage | null {
+  if (!arenaEl.value || !ownImg.value || !wildImg.value) return null;
+  const a = arenaEl.value.getBoundingClientRect(), o = ownImg.value.getBoundingClientRect(), w = wildImg.value.getBoundingClientRect();
+  const centre = (r: DOMRect) => ({ x: r.left - a.left + r.width / 2, y: r.top - a.top + r.height * 0.55 });
+  return {
+    own: centre(o), wild: centre(w), ownSize: o.width, wildSize: w.width,
+    capsuleRest: { x: w.left - a.left + w.width / 2, y: w.bottom - a.top - w.height * 0.12 },
+    ownRest: { x: o.left - a.left + o.width / 2, y: o.bottom - a.top - o.height * 0.1 },
+  };
+}
+watch(fxCanvas, (c) => { effects?.destroy(); effects = c ? new BattleFx(c, stage) : null; effects?.rest(recalled.value ? 'own' : 'none'); });
+// A creature called back stays in its capsule on its pad.
+watch(() => recalled.value, (r) => effects?.rest(r ? 'own' : 'none'));
+onUnmounted(() => effects?.destroy());
+/** Which side's creature is fainting on screen, between its knockout and the next creature coming out. */
+const fainting = ref<'own' | 'wild' | null>(null);
 let pending: ReturnType<typeof setTimeout> | undefined, entrance: ReturnType<typeof setTimeout> | undefined;
 onMounted(() => { if (inBattle()) entrance = setTimeout(() => { busy.value = false; }, 650); });
 onUnmounted(() => { clearTimeout(pending); clearTimeout(entrance); });
@@ -228,7 +250,7 @@ function confirmName() {
   if (naming.value && nickname) interact('creature-battle', 'battle', { action: 'rename', creatureId: naming.value, nick: nickname, revision: props.state.revision });
   naming.value = null;
 }
-const set = async (kind: string, extra: Partial<typeof fx.value> = {}, ms = 0) => { fx.value = { ...fx.value, ...extra, kind }; if (ms) await wait(ms); };
+const set = async (kind: string, extra: Partial<typeof fx.value> = {}, ms = 0) => { fx.value = { ...fx.value, ...extra, kind }; if (kind) effects?.play(fx.value); if (ms) await wait(ms); };
 
 watch(() => [props.state.revision, props.error], async () => {
   // Background DSM work moved the revision; the battle itself did not change, so nothing animates.
@@ -302,7 +324,7 @@ watch(() => [props.state.revision, props.error], async () => {
     else { if (mine) await ownTurn(mine); if (theirs && wild.value!.hp > 0) await foeTurn(theirs); }
   } else if (props.lastAction === 'capture') {
     message.value = 'Capsule away!'; await set('cap-throw', { dir: 'own' }, 600); await set('cap-open', {}, 650);
-    message.value = '…'; await set('cap-shake', {}, 1400); message.value = 'Gotcha!'; await set('cap-catch', {}, 500);
+    message.value = '…'; await set('cap-shake', {}, 1400); message.value = 'Gotcha!'; await set('cap-catch', {}, 900);
   } else if (props.lastAction === 'escape') {
     // Run or forfeit: the creature is called back into its capsule, and stays there.
     message.value = props.pvp || trainer.value ? `${displayName(own.value)}, come back!` : 'You slipped away safely.';
@@ -313,8 +335,17 @@ watch(() => [props.state.revision, props.error], async () => {
     const who = e.side === 'own' ? next.creatures.find(c => c.id === e.creature) : (e.creature === next.battle!.wild.id ? next.battle!.wild : undefined);
     const name = who ? displayName(who) : e.side === 'own' ? ownName : wildName;
     message.value = e.kind === 'faint' ? `${e.side === 'own' ? name : wildName} fainted!` : e.side === 'own' ? `Go, ${name}!` : `${foeTrainer.value} sends out ${name}!`;
+    const side = e.side === 'own' ? 'own' : 'wild';
+    if (e.kind === 'faint') { fainting.value = side; effects?.play({ kind: 'faint', el: 'none', dir: side }); }
+    else {
+      // The next creature comes out at once, so the switch is seen, not only read.
+      if (side === 'own') { view.value.creatures = JSON.parse(JSON.stringify(next.creatures)); view.value.battle!.creatureId = e.creature; }
+      else if (next.battle && e.creature === next.battle.wild.id) view.value.battle!.wild = JSON.parse(JSON.stringify(next.battle.wild));
+      fainting.value = null; effects?.play({ kind: 'send-out', el: 'none', dir: side });
+    }
     await wait(900);
   }
+  fainting.value = null;
   view.value = next; await set('');
   const outcome = next.battle?.outcome;
   // Named only once it is caught: the capsule is thrown first.
@@ -334,8 +365,8 @@ watch(() => [props.state.revision, props.error], async () => {
   <!-- FIELD HUD (over the engine canvas) -->
   <div v-if="mode === 'field'" class="field">
     <header class="win dark"><div><!-- Static during play: its animation cost the phone half its frame rate. --><img class="hudLogo" src="/brand/logo.png" alt="Wildstate"/><small>{{ `Meadow camp · wallet ${state.holder.slice(0, 8)}… on DSM` }}</small></div><div class="res"><span title="Capture capsules"><span aria-hidden="true">◉</span> {{ state.inventory.capsules }} <small class="px">Capsules</small></span><span class="gold">✦ {{ wallet }} <small class="px">WILD</small></span><button class="px small" :disabled="state.battle?.outcome === 'active'" @click="field('shop')" title="Bramble’s trading post: buy with WILD from your wallet, or sell a creature">SHOP</button><button class="px small" :disabled="state.battle?.outcome === 'active'" @click="field('market')" title="Swap WILD and ERA through SoFi">MARKET</button><button class="px small" :disabled="state.battle?.outcome === 'active'" @click="party = !party">BAG</button><button class="px small arenaBtn" :disabled="state.battle?.outcome === 'active'" @click="field('lobby')" title="Battle other players">ARENA</button></div></header>
-    <aside v-if="party" class="win cream party"><div class="row between"><span class="h">{{ tab === 'creatures' ? 'Your creatures' : tab === 'items' ? 'Your bag' : 'Wallet' }}</span><button class="px tiny" @click="party = false">CLOSE</button></div>
-      <div class="tabs"><button v-for="t in (['creatures','items','wallet'] as const)" :key="t" class="px tab" :class="{ on: tab === t }" @click="tab = t">{{ t.toUpperCase() }}</button></div>
+    <aside v-if="party" class="win cream party"><div class="row between"><span class="h">{{ tab === 'creatures' ? 'Your creatures' : tab === 'items' ? 'Your bag' : tab === 'report' ? 'Report' : 'Wallet' }}</span><button class="px tiny" @click="party = false">CLOSE</button></div>
+      <div class="tabs"><button v-for="t in (['creatures','items','wallet','report'] as const)" :key="t" class="px tab" :class="{ on: tab === t }" @click="tab = t">{{ t.toUpperCase() }}</button></div>
       <template v-if="tab === 'creatures'">
       <div v-for="(c, i) in state.creatures" :key="c.id" class="prow" :class="{ lead: i === state.lead }"><div class="thumb" :style="{ backgroundImage: `url(creatures/${c.species}.png)` }"></div><div class="grow"><div class="row between"><span class="row"><b>{{ displayName(c) }}</b><small v-if="c.nick" class="muted">{{ SPECIES[c.species].name }}</small></span><span class="row"><span class="chip px" :style="{ background: EL[SPECIES[c.species].el].color }">{{ EL[SPECIES[c.species].el].label }}</span><span v-if="i === state.lead" class="chip px lead">LEAD</span><button v-else class="px tiny swap" @click="field('set-lead', { creatureId: c.id })">SWAP IN</button><button class="px tiny swap teamBtn" :class="{ on: teamSlot(c.id) >= 0 }" :disabled="teamSlot(c.id) < 0 && state.team.length >= TEAM_SIZE" @click="toggleTeam(c.id)" :title="'Trainer battles field up to ' + TEAM_SIZE">{{ teamSlot(c.id) >= 0 ? 'TEAM ' + (teamSlot(c.id) + 1) : 'TEAM +' }}</button></span></div>
         <div class="row hp"><span class="px lbl">HP</span><div class="bar"><i :style="{ width: c.hp / maxHp(c) * 100 + '%', background: hpColor(c.hp) }"></i></div><small>{{ c.hp }}/{{ maxHp(c) }}</small></div>
@@ -350,6 +381,7 @@ watch(() => [props.state.revision, props.error], async () => {
       <div class="row between coins"><span>Wild Coin</span><span class="gold">✦ {{ wallet }} WILD</span></div>
       <button class="px tiny" @click="field('shop'); party = false">VISIT BRAMBLE’S TRADING POST</button>
       </template>
+      <template v-else-if="tab === 'report'"><ReportTab :state="state" :report-list="reportList" /></template>
       <template v-else-if="tab === 'wallet'">
       <div class="walletOn">
         <section class="wallet-connection">
@@ -405,28 +437,13 @@ watch(() => [props.state.revision, props.error], async () => {
   <div v-else class="battle">
     <div class="card win dark">
       <div class="head px"><span>{{ pvp ? `MATCH · VS @${pvp.opponent.toUpperCase()}` : trainer ? `TRAINER BATTLE · ${trainer.name.toUpperCase()}` : 'WILD ENCOUNTER' }}</span><span class="meta"><span>{{ pvp ? (active ? `${secondsLeft}s` : 'Over') : trainer ? trainer.title : view.battle?.source === 'pond' ? 'Pond' : 'Meadow' }}</span><i>·</i><span>Turn {{ (view.battle?.turn || 0) + 1 }}</span><template v-if="teamView"><i>·</i><span class="koCount">KO {{ teamView.ko.foe }}/{{ teamView.foe.length }}</span></template></span></div>
-      <div class="arena" :class="[arenaKind, { shake: fx.kind === 'impact' }]">
+      <div ref="arenaEl" class="arena" :class="[arenaKind, { shake: fx.kind === 'impact' }]">
         <div class="flash" v-if="fx.kind === 'impact' && fx.crit"></div>
-        <img class="sprite wild" :class="{ flinch: fx.kind === 'impact' && fx.dir === 'own', windupR: fx.kind === 'windup' && fx.dir === 'wild', suck: fx.kind === 'cap-open', gone: ['cap-shake','cap-catch'].includes(fx.kind) || view.battle?.outcome === 'victory' || view.battle?.outcome === 'captured', counter: fx.kind === 'counter' }" :style="pose(wild?.species || 'mossling', 'wild')" :src="`creatures/${wild?.species || 'mossling'}.png`" :alt="wildSp.name"/>
-        <img class="sprite own" :class="{ flinchL: fx.kind === 'impact' && fx.dir === 'wild', windup: fx.kind === 'windup' && fx.dir === 'own', lunge: fx.kind === 'lunge', recall: fx.kind === 'recall', gone: recalled, camo: fx.kind === 'camo' }" :style="pose(own.species, 'own')" :src="`creatures/${own.species}.png`" :alt="ownSp.name"/>
-        <!-- effects -->
-        <template v-if="fx.kind === 'proj' && PROJ[fx.el]"><i v-for="n in 6" :key="n" class="fx proj" :class="[fx.el, fx.dir, { fire: fx.el === 'fire' }]" :style="{ backgroundImage: `url(/fx/${PROJ[fx.el]}.png)`, animationDelay: `${(n-1)*.045}s, 0s`, opacity: n === 1 ? 1 : .6 - n * .08, scale: n === 1 ? 1 : 1 - n * .12 }"></i></template>
-        <template v-if="fx.kind === 'impact'"><i class="fx burst" :class="[fx.dir, fx.el]" :style="{ backgroundImage: fx.el === 'fire' ? 'url(/fx/fireburst.png)' : 'url(/fx/burst.png)' }"></i><i v-for="n in 3" :key="'b'+n" class="fx burst small" :class="[fx.dir, fx.el, 's'+n]" :style="{ backgroundImage: fx.el === 'fire' ? 'url(/fx/fireburst.png)' : 'url(/fx/burst.png)', animationDelay: `${n*.06}s` }"></i><i v-if="fx.melee && fx.el === 'fire'" class="fx bite" :class="fx.dir"></i><b class="dmg px" :class="[fx.dir, { crit: fx.crit }]">{{ fx.crit ? '!' : '' }}-{{ fx.dmg }}</b></template>
-        <template v-if="fx.kind === 'tongue'"><i class="fx tongueLine" :class="fx.dir"></i><i class="fx tongueTip" :class="fx.dir" style="background-image:url(/fx/tongue.png)"></i><b class="fx slap px" :class="fx.dir">SLAP!</b></template>
-        <template v-if="fx.kind === 'chain'"><i class="fx tongueLine chainLine" :class="fx.dir"></i><i class="fx tongueTip chainTip" :class="fx.dir" style="background-image:url(/fx/chain.png)"></i></template>
-        <template v-if="fx.kind === 'lure'"><i class="fx lure" :class="fx.dir" style="background-image:url(/fx/lure.png)"></i><i class="lureFlash" :class="fx.dir"></i></template>
-        <template v-if="fx.kind === 'jet'"><i class="fx jetLine" :class="fx.dir"></i><i v-for="n in 6" :key="'j'+n" class="fx drop" :class="fx.dir" :style="{ '--k': (0.3 + n * 0.12), animationDelay: `${.15 + n * .05}s` }"></i></template>
-        <template v-if="fx.kind === 'impact' && fx.fxKind === 'snare'"><i class="fx vine" :class="fx.dir" style="background-image:url(/fx/vine.png)"></i></template>
-        <template v-if="fx.kind === 'impact' && (fx.fxKind === 'bash' || fx.fxKind === 'jet')"><i class="fx splashHit" :class="fx.dir" :style="{ backgroundImage: fx.fxKind === 'bash' ? 'url(/fx/shell.png)' : 'url(/fx/splash.png)' }"></i><i v-for="n in 3" :key="'w'+n" class="fx splashHit small" :class="[fx.dir, 'k'+n]" style="background-image:url(/fx/splash.png)" :style="{ animationDelay: `${.05 + n*.06}s` }"></i></template>
-        <template v-if="fx.kind === 'impact' && fx.fxKind === 'tusk'"><i v-for="n in 3" :key="'s'+n" class="fx spark" :class="[fx.dir, 'k'+n]" style="background-image:url(/fx/spark.png)" :style="{ animationDelay: `${n*.06}s` }"></i></template>
-        <template v-if="fx.kind === 'camo'"><i v-for="n in 5" :key="'c'+n" class="fx heal camoLeaf" style="background-image:url(/fx/leaf.png)" :style="{ left: `${22 + n * 4}%`, animationDelay: `0s, ${n*.07}s` }"></i></template>
-        <i v-if="fx.kind === 'guard'" class="fx shield"></i>
-        <template v-if="fx.kind === 'heal'"><i v-for="n in 5" :key="'h'+n" class="fx heal" :style="{ left: `${22 + n * 4}%`, animationDelay: `0s, ${n*.08}s` }"></i></template>
-        <i v-if="fx.kind === 'cap-throw'" class="fx capsule throw"></i>
-        <i v-if="fx.kind === 'recall' || recalled" class="fx capsule home" :class="{ pop: fx.kind === 'recall' }"></i>
-        <template v-if="fx.kind === 'cap-open'"><i class="fx capsule open"></i><i class="fx beam"></i></template>
-        <i v-if="fx.kind === 'cap-shake'" class="fx capsule wobble"></i>
-        <template v-if="fx.kind === 'cap-catch'"><i class="fx capsule glow"></i><i class="fx burst own catch" style="background-image:url(/fx/burst.png)"></i></template>
+        <img ref="wildImg" class="sprite wild" :class="{ faint: fainting === 'wild', flinch: fx.kind === 'impact' && fx.dir === 'own', windupR: fx.kind === 'windup' && fx.dir === 'wild', suck: fx.kind === 'cap-open', gone: ['cap-shake','cap-catch'].includes(fx.kind) || view.battle?.outcome === 'victory' || view.battle?.outcome === 'captured', counter: fx.kind === 'counter' }" :style="pose(wild?.species || 'mossling', 'wild')" :src="`creatures/${wild?.species || 'mossling'}.png`" :alt="wildSp.name"/>
+        <img ref="ownImg" class="sprite own" :class="{ faint: fainting === 'own', flinchL: fx.kind === 'impact' && fx.dir === 'wild', windup: fx.kind === 'windup' && fx.dir === 'own', lunge: fx.kind === 'lunge', recall: fx.kind === 'recall', gone: recalled, camo: fx.kind === 'camo' }" :style="pose(own.species, 'own')" :src="`creatures/${own.species}.png`" :alt="ownSp.name"/>
+        <!-- Every effect is drawn on this canvas (src/gui/battle-fx.ts). -->
+        <canvas ref="fxCanvas" class="fxCanvas" aria-hidden="true"></canvas>
+        <b v-if="fx.kind === 'impact'" class="dmg px" :class="[fx.dir, { crit: fx.crit }]">{{ fx.crit ? '!' : '' }}-{{ fx.dmg }}</b>
         <!-- status windows -->
         <div class="status win cream wildS"><div v-if="teamView" class="pips team" aria-label="Opponent team"><i v-for="f in teamView.foe" :key="f.id" :class="{ down: f.down, on: f.active }"></i></div><div class="row between"><b class="name">{{ wild ? displayName(wild) : wildSp.name }}</b><span class="muted">{{ trainer ? `${trainer.name}’s · Lv ${wild ? level(wild) : 1}` : `Wild · Lv ${wild ? level(wild) : 1}` }}</span></div><div class="chips"><span class="chip px" :style="{ background: EL[wildSp.el].color }">{{ EL[wildSp.el].label }}</span><span v-for="st in statuses(wild || { guard: false, statuses: [] })" :key="st.id" class="chip px ink">{{ st.id }} {{ st.turns }}</span></div><div class="row hp"><span class="px lbl">HP</span><div class="bar"><i :style="{ width: (wild ? wild.hp / maxHp(wild) : 0) * 100 + '%', background: hpColor(wild?.hp || 0) }"></i></div><small><b>{{ wild?.hp }}</b><span class="muted">/{{ wild ? maxHp(wild) : 0 }}</span></small></div></div>
         <div class="status win cream ownS"><div v-if="teamView" class="pips team" aria-label="Your team"><i v-for="f in teamView.own" :key="f.id" :class="{ down: f.down, on: f.active }"></i></div><div class="row between"><b class="name">{{ displayName(own) }}</b><span class="muted">Lv {{ level(own) }} · {{ xpLabel(own) }}</span></div><div class="chips"><span class="chip px" :style="{ background: EL[ownSp.el].color }">{{ EL[ownSp.el].label }}</span><span v-for="st in statuses(own)" :key="st.id" class="chip px ink">{{ st.id }} {{ st.turns }}</span></div><div class="row hp"><span class="px lbl">HP</span><div class="bar"><i :style="{ width: own.hp / maxHp(own) * 100 + '%', background: hpColor(own.hp) }"></i></div><small><b>{{ own.hp }}</b><span class="muted">/{{ maxHp(own) }}</span></small></div></div>
@@ -505,7 +522,7 @@ header{position:absolute;top:16px;left:16px;right:16px;display:flex;justify-cont
 .lookBox{width:min(440px,100%);padding:14px;display:grid;gap:10px;text-align:center}.lookBox .t{font-size:14px;color:#26443a}.lookBox p{margin:0;font-size:18px;line-height:1.15;color:#26443a}
 .lookBox .cmd{justify-self:stretch}.lookBox .cmd:disabled{opacity:.5}
 .looks{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.look{padding:0;border:0;background:#ece4c3;box-shadow:0 0 0 2px #26443a;cursor:pointer;aspect-ratio:1145/1374;overflow:hidden}.look img{display:block;width:100%;height:100%;object-fit:cover}.look.on{box-shadow:0 0 0 2px #26443a,0 0 0 5px #e2c35a}.party .h{font-size:22px}.prow{display:flex;align-items:center;gap:10px;padding:8px;background:#ece4c3;box-shadow:0 0 0 2px #26443a}.thumb{width:52px;height:52px;flex:none;background:center/contain no-repeat;image-rendering:pixelated}.prow b{font-size:20px}.prow small.muted{font-size:14px}
-.tabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}.tab{padding:7px 4px;color:#26443a;background:#ece4c3;box-shadow:0 0 0 2px #26443a;font-size:9px}.tab.on{background:#26443a;color:#f6efd2}.prow.lead{background:#f3ecc9}.prow.dim{opacity:.45}.prow.col{display:grid;gap:2px}.chip.lead{background:#e9d86b;color:#26443a}.swap{background:#26503c;padding:2px 6px;font-size:8px}.owner{font-size:7px;color:#6c8a7c;display:block;margin-top:3px}.thumb.icon{width:40px;height:40px}.coins{padding:6px 8px;font-size:16px}.walletOn{display:grid;gap:8px}.dot{width:10px;height:10px;background:#4da96c;box-shadow:0 0 0 2px #26443a;flex:none}
+.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.tab{padding:7px 4px;color:#26443a;background:#ece4c3;box-shadow:0 0 0 2px #26443a;font-size:9px}.tab.on{background:#26443a;color:#f6efd2}.prow.lead{background:#f3ecc9}.prow.dim{opacity:.45}.prow.col{display:grid;gap:2px}.chip.lead{background:#e9d86b;color:#26443a}.swap{background:#26503c;padding:2px 6px;font-size:8px}.owner{font-size:7px;color:#6c8a7c;display:block;margin-top:3px}.thumb.icon{width:40px;height:40px}.coins{padding:6px 8px;font-size:16px}.walletOn{display:grid;gap:8px}.dot{width:10px;height:10px;background:#4da96c;box-shadow:0 0 0 2px #26443a;flex:none}
 .rename input{font:inherit;font-size:18px;color:#26443a;background:#ece4c3;border:0;box-shadow:0 0 0 2px #26443a;padding:3px 8px;outline:none;flex:1;min-width:0}
 .naming{padding:10px 12px;margin:0 6px;display:grid;gap:10px}.naming input{font:inherit;font-size:24px;color:#26443a;background:#ece4c3;border:0;box-shadow:0 0 0 2px #26443a;padding:6px 10px;outline:none;width:100%}
 .tapCard{position:absolute;inset:0;z-index:20;display:grid;place-items:center;border:0;padding:0;font:inherit;color:#f3f3df;background:#081c1ad9;cursor:pointer;pointer-events:auto;animation:reveal .35s}.tapBox{text-align:center;display:grid;gap:14px;padding:22px 28px;background:#1b3a2e;box-shadow:0 0 0 2px #0b1a15,0 0 0 4px #9ccf6e,0 0 0 6px #0b1a15}.tapBox .t{font-size:12px;color:#c4ec79}.tapBox .l{font-size:26px;line-height:1.1}.tapBox .tap{font-size:9px;color:#d7e6cf;animation:blink 1s steps(1) infinite}.useOn{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px}.talk.fight{background:radial-gradient(circle at 40% 30%,#ffffff40,transparent 60%),#b5522a}
@@ -532,25 +549,23 @@ header{position:absolute;top:16px;left:16px;right:16px;display:flex;justify-cont
 .sprite.wild{width:var(--ww);left:calc(var(--padWX) - var(--ww) / 2 + var(--spread) * .6);bottom:calc(100% - var(--padWY) - var(--sink))}.sprite.own{width:var(--ow);left:calc(var(--padOX) - var(--ow) / 2 - var(--spread));bottom:calc(100% - var(--padOY) - var(--sink))}
 .gone{opacity:0!important}.counter{animation:counter .5s!important}.camo{animation:camoFade 1s ease-in-out!important}.flinch{animation:flinch .5s!important}.flinchL{animation:flinchL .5s!important}.windup{animation:windup .38s ease-in-out!important}.windupR{animation:windupR .38s ease-in-out!important}.lunge{animation:lunge .3s!important}.run{animation:run .65s forwards!important}.suck{animation:suckIn .6s ease-in forwards!important}
 .status{position:absolute;z-index:2;width:232px;padding:9px 12px 10px}.wildS{left:30px;top:28px;scale:.9;transform-origin:top left}.ownS{right:30px;bottom:28px}.status .name{font-size:30px;line-height:1}.status .muted{font-size:16px;white-space:nowrap}.chips{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap;min-height:18px}
-/* x0/y0: our creature (left-anchored); x1/y1: the wild one, anchored to the arena's right edge, so measured from it. */
-.fx{position:absolute;z-index:6;width:32px;height:32px;background-size:128px 32px;image-rendering:pixelated;pointer-events:none;--x0:calc(var(--padOX) - 16px);--y0:calc(var(--padOY) - 120px);--x1:calc(var(--padWX) - 16px);--y1:calc(var(--padWY) - 100px);--len:calc(var(--x1) - var(--x0) - 10px);--capY:calc(var(--padWY) - 30px)}
-.proj{scale:2.6;animation:projOwn .42s cubic-bezier(.3,0,.8,1) forwards,frames4 .22s steps(4) infinite;rotate:-22deg}.proj.wild{animation-name:projWild,frames4;rotate:158deg}.proj.fire{filter:drop-shadow(0 0 6px #ff7a2b)}
-.burst{left:var(--x1);top:var(--y1);scale:3.6;animation:frames4 .45s steps(4) forwards,burstPop .5s ease-out forwards}.burst.wild{left:var(--x0);top:var(--y0)}.burst.small{scale:1.8}.burst.s1{margin:-14px 0 0 -30px}.burst.s2{margin:-22px 0 0 26px}.burst.s3{margin:26px 0 0 12px}.burst.fire{scale:4.4}.burst.grass{filter:sepia(1) saturate(2) hue-rotate(60deg)}.burst.water{filter:sepia(1) saturate(2) hue-rotate(170deg)}.burst.catch{top:var(--capY);scale:2}
-.bite{left:calc(var(--x1) - 6px);top:calc(var(--y1) - 10px);scale:4.6;background-image:url(/fx/bite.png);animation:frames4 .45s steps(4) forwards,slash .5s ease-out forwards}.bite.wild{left:var(--x0);top:var(--y0);rotate:180deg}
+
+
+
 .dmg{position:absolute;z-index:7;left:calc(100% - 208px);top:60px;font-size:26px;color:#fff8d6;text-shadow:2px 2px 0 #0b1a15,-2px 2px 0 #0b1a15,2px -2px 0 #0b1a15,-2px -2px 0 #0b1a15;animation:dmgPop .9s ease-out forwards}.dmg.wild{left:240px;top:160px}.dmg.crit{color:#ffe66b}
-.tongueLine{left:calc(var(--x0) + 60px);top:calc(var(--y0) - 20px);width:var(--len);height:14px;border-radius:7px;background:linear-gradient(#f3a6bd,#d9557a 55%,#8a2a48);box-shadow:0 0 0 3px #3a0f1e,inset 0 3px 0 #ffffff55;transform-origin:0 50%;rotate:-10deg;animation:tongueOut .55s cubic-bezier(.2,.9,.3,1) forwards;z-index:5}.chainLine{height:12px;background:url(/fx/chain.png) 0 0/96px 12px repeat-x;box-shadow:0 0 0 3px #2a1a0a;image-rendering:pixelated;animation:tongueOut .55s cubic-bezier(.2,.9,.3,1) forwards,jetFlow .12s linear infinite}.chainTip{scale:2.6;animation:tongueTip .55s cubic-bezier(.2,.9,.3,1) forwards}.slap{left:calc(var(--x1) - 10px);top:calc(var(--y1) - 30px);font-size:14px;color:#fff;text-shadow:2px 2px 0 #3a0f1e,-2px 2px 0 #3a0f1e,2px -2px 0 #3a0f1e,-2px -2px 0 #3a0f1e;animation:dmgPop .5s ease-out .22s forwards;opacity:0;width:auto;height:auto;background:none}.slap.wild{left:calc(var(--x0) + 30px);top:calc(var(--y0) - 40px)}.lure{left:calc(var(--x0) + 50px);top:calc(var(--y0) - 70px);scale:4.8;animation:frames4 .3s steps(4) infinite,lurePulse .9s ease-out forwards;filter:drop-shadow(0 0 10px #2fb5c7)}.lure.wild{left:calc(var(--x1) + 20px);top:calc(var(--y1) - 20px)}.lureFlash{position:absolute;inset:0;z-index:4;background:radial-gradient(circle at 30% 60%,#bfffff 0,#2fb5c799 18%,transparent 55%);animation:flash .9s ease-out forwards;pointer-events:none}.lureFlash.wild{background:radial-gradient(circle at 75% 35%,#bfffff 0,#2fb5c799 18%,transparent 55%)}.splashHit.small{scale:2}.splashHit.k1{margin:-24px 0 0 -24px}.splashHit.k2{margin:-16px 0 0 22px}.splashHit.k3{margin:22px 0 0 6px}.tongueLine.wild{left:var(--x1);top:calc(var(--y1) + 20px);rotate:170deg}.tongueTip{scale:2.2;--tx0:calc(var(--x0) + 46px);--ty0:calc(var(--y0) - 32px);--tx1:var(--x1);--ty1:var(--y1);animation:tongueTip .5s ease-in-out forwards,frames4 .2s steps(4) infinite}.tongueTip.wild{--tx0:var(--x1);--ty0:calc(var(--y1) + 8px);--tx1:calc(var(--x0) + 30px);--ty1:calc(var(--y0) - 10px)}
-.jetLine{left:calc(var(--x0) + 50px);top:var(--y0);width:var(--len);height:22px;border-radius:11px;box-shadow:0 0 0 3px #163a5a,inset 0 4px 0 #ffffff66;background:repeating-linear-gradient(90deg,#e9f7ff 0 8px,#5aa9d6 8px 20px,#2f6f9e 20px 24px);transform-origin:0 50%;rotate:-10deg;animation:jetOut .5s ease-out forwards,jetFlow .25s linear infinite;filter:drop-shadow(0 0 4px #5aa9d6);z-index:5}.jetLine.wild{left:var(--x1);top:calc(var(--y1) + 30px);rotate:170deg}.drop{width:4px;height:4px;background:#e9f7ff;left:calc(var(--x0) + 50px + (var(--x1) - var(--x0)) * var(--k));top:calc(var(--y0) + (var(--y1) - var(--y0)) * var(--k));animation:dropFall .5s ease-in forwards}.drop.wild{left:calc(var(--x1) - (var(--x1) - var(--x0)) * var(--k))}
-.vine{left:calc(var(--x1) - 10px);top:calc(var(--y1) - 10px);scale:4.4;animation:frames4 .5s steps(4) infinite,snareHold .9s ease-out forwards}.vine.wild{left:var(--x0);top:var(--y0)}.splashHit{left:calc(var(--x1) - 6px);top:var(--y1);scale:3.6;animation:frames4 .45s steps(4) forwards,burstPop .5s ease-out forwards}.splashHit.wild{left:var(--x0);top:var(--y0)}.spark{left:var(--x1);top:var(--y1);scale:3;animation:frames4 .3s steps(4) forwards,burstPop .4s ease-out forwards}.spark.wild{left:var(--x0);top:var(--y0)}.spark.k1{margin:-16px 0 0 -20px}.spark.k2{margin:6px 0 0 0}.spark.k3{margin:-16px 0 0 18px}.camoLeaf{filter:hue-rotate(10deg)}
-.shield{left:var(--x0);top:var(--y0);scale:5.7;background-image:url(/fx/shield.png);animation:frames4 .5s steps(4) forwards,shieldUp .9s ease-out forwards}
-.heal{top:var(--y0);scale:2.3;background-image:url(/fx/heal.png);animation:frames4 .5s steps(4) infinite,healRise 1s ease-out forwards}
-/* Whole-number scales keep the 32px pixel art crisp. */
-.capsule{background-image:url(/fx/capsule.png);scale:2;z-index:8;left:var(--x1);top:var(--capY);filter:drop-shadow(0 3px 0 #0b1a1566)}.capsule.throw{animation:capThrow .6s cubic-bezier(.4,0,.6,1) forwards}
-/* Called back: the capsule waits on the creature's own pad, and the creature goes into it. */
-.capsule.home{left:var(--x0);top:calc(var(--padOY) - 34px)}.capsule.home.pop{animation:capPop .9s ease-out}
+
+
+
+
+
 .sprite.own.recall{animation:recall .85s ease-in forwards}
+/* The effects canvas covers the arena; a fainted creature fades into the motes the canvas draws. */
+.fxCanvas{position:absolute;inset:0;width:100%;height:100%;z-index:6;pointer-events:none}
+.sprite.faint{animation:faintOut .8s ease-in forwards}
+@keyframes faintOut{0%{filter:none}35%{filter:brightness(2.2) grayscale(.6)}100%{filter:brightness(2.6) grayscale(1);opacity:0;translate:0 12%;scale:.9}}
 @keyframes recall{0%{filter:none}30%{filter:brightness(2.2) drop-shadow(0 0 10px #ff6a50);scale:1.05}100%{filter:brightness(3) drop-shadow(0 0 10px #ff6a50);scale:0;opacity:0;translate:0 30%}}
-@keyframes capPop{0%{scale:0;opacity:0}25%{scale:1.3;opacity:1}40%{scale:1}85%{background-position:-64px 0}100%{background-position:0 0}}.capsule.open{background-position:-64px 0}.capsule.wobble{animation:capWobble .45s ease-in-out 3}.capsule.glow{background-position:-96px 0;animation:capGlow .5s ease-out}
-.beam{left:var(--x1);top:var(--y1);scale:6.2;background-image:url(/fx/beam.png);animation:frames4 .5s steps(4) infinite,beamSpin 1.2s linear infinite;filter:drop-shadow(0 0 6px #fff)}
+
+
 .bottom{padding:18px 20px 16px;display:grid;gap:16px}
 .msg{display:flex;align-items:center;gap:12px;background:#10261f;padding:10px 14px;min-height:56px;margin:4px 6px 2px}.portrait{width:52px;height:52px;flex:none;object-fit:cover;object-position:50% 8%;image-rendering:pixelated;background:#f6efd2;box-shadow:0 0 0 2px #26443a,0 0 0 4px #9ccf6e}.msg p{font-size:24px;margin:0;flex:1;line-height:1.3}.msg .hint{color:#c4ec79;white-space:nowrap;background:none;box-shadow:none;padding:0;max-width:none}.cursor{color:#c4ec79;font-size:16px;animation:blink 1s steps(1) infinite}
 .moves{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding:6px}.move{min-width:0;text-align:left;padding:10px 12px;display:grid;grid-template-rows:auto 1fr auto;gap:6px;min-height:112px;border-left:5px solid}.move:hover:enabled{filter:brightness(1.15)}.move>.row{min-width:0;flex-wrap:wrap;gap:4px 8px}.move b{font-size:24px;letter-spacing:.5px;line-height:1;overflow-wrap:anywhere;min-width:0}.move small{font-size:18px;line-height:1.3}.pips{display:flex;gap:3px}.pips i{width:9px;height:9px;border:2px solid #0b1a15;display:block;box-shadow:inset 1px 1px 0 #ffffff55}.pips i.on{background:#edf5e8}
@@ -559,11 +574,11 @@ header{position:absolute;top:16px;left:16px;right:16px;display:flex;justify-cont
 @keyframes reveal{from{opacity:0;transform:scale(1.07)}}@keyframes breathe{50%{translate:0 -6px}}@keyframes blink{50%{opacity:0}}@keyframes shake{0%,100%{translate:0 0}20%{translate:-6px 2px}40%{translate:6px -2px}60%{translate:-4px 1px}80%{translate:4px -1px}}@keyframes flash{0%,100%{opacity:0}30%{opacity:.9}}
 @keyframes windup{0%{translate:0 0}40%{translate:-18px 4px}70%{translate:28px -10px}100%{translate:0 0}}@keyframes windupR{0%{translate:0 0}40%{translate:18px -4px}70%{translate:-28px 10px}100%{translate:0 0}}@keyframes lunge{50%{translate:75px -20px}}@keyframes run{to{translate:-280px 0;opacity:0}}
 @keyframes flinch{0%,100%{translate:0 0;filter:none}20%{translate:14px -4px;filter:brightness(3)}40%{translate:-8px 2px;filter:brightness(1)}60%{translate:6px 0;filter:brightness(2.5)}80%{translate:-3px 0;filter:none}}@keyframes flinchL{0%,100%{translate:0 0;filter:none}20%{translate:-14px 4px;filter:brightness(3)}40%{translate:8px -2px;filter:brightness(1)}60%{translate:-6px 0;filter:brightness(2.5)}80%{translate:3px 0;filter:none}}
-@keyframes projOwn{0%{left:var(--x0);top:var(--y0);opacity:0}15%{opacity:1}100%{left:var(--x1);top:var(--y1);opacity:1}}@keyframes projWild{0%{left:var(--x1);top:var(--y1);opacity:0}15%{opacity:1}100%{left:var(--x0);top:var(--y0);opacity:1}}@keyframes frames4{to{background-position:-128px 0}}@keyframes burstPop{0%{opacity:1}100%{opacity:0;scale:5}}@keyframes slash{0%{opacity:0}20%{opacity:1}100%{opacity:0;translate:0 10px}}@keyframes dmgPop{0%{opacity:0;translate:0 10px;scale:.6}25%{opacity:1;scale:1.25}50%{scale:1}100%{opacity:0;translate:0 -40px}}
-@keyframes counter{50%{translate:-65px 30px}}@keyframes tongueOut{0%{scale:0 .6}35%{scale:1.04 1.1}55%{scale:1 1}100%{scale:0 .6;opacity:.8}}@keyframes tongueTip{0%{left:var(--tx0);top:var(--ty0);scale:1.2}35%,55%{left:var(--tx1);top:var(--ty1)}100%{left:var(--tx0);top:var(--ty0);opacity:0}}@keyframes jetOut{0%{scale:0 .3;opacity:0}25%{scale:1 1.15;opacity:1}80%{scale:1 1;opacity:1}100%{scale:1 .15;opacity:0}}@keyframes lurePulse{0%{opacity:0;scale:.4}30%,60%{opacity:1;scale:1}100%{opacity:0;scale:1.6}}@keyframes jetFlow{to{background-position:22px 0}}@keyframes dropFall{to{translate:0 24px;opacity:0}}@keyframes snareHold{0%{opacity:0;scale:1.3}20%,80%{opacity:1}100%{opacity:0}}@keyframes camoFade{0%,100%{opacity:1}50%{opacity:.15;filter:saturate(.3)}}
-@keyframes shieldUp{0%{opacity:0;translate:0 10px}30%,70%{opacity:1;translate:0 0}100%{opacity:0}}@keyframes healRise{0%{opacity:0;translate:0 16px}30%{opacity:1}100%{opacity:0;translate:0 -36px}}
-@keyframes capThrow{0%{left:var(--x0);top:var(--y0);rotate:0deg}50%{top:calc((var(--y0) + var(--y1)) / 2 - 90px)}100%{left:var(--x1);top:var(--capY);rotate:720deg}}@keyframes capWobble{0%,100%{rotate:0deg;translate:0 0}15%{rotate:-18deg;translate:-5px 0}45%{rotate:18deg;translate:5px 0}75%{rotate:-12deg;translate:-3px 0}}@keyframes capGlow{50%{filter:brightness(2.2) drop-shadow(0 0 8px #fff)}}@keyframes suckIn{40%{opacity:.9;filter:brightness(2.5) saturate(0)}100%{opacity:0;scale:.05;translate:-30px 60px;filter:brightness(3) saturate(0)}}@keyframes beamSpin{to{rotate:360deg}}
-@media(max-width:650px){.arena{height:380px}.status{width:176px;padding:7px 10px 8px}.wildS{left:12px;top:12px}.ownS{right:12px;bottom:12px}.status .name{font-size:22px}.tongueTip{scale:1.6}.vine{scale:3}.splashHit{scale:2.6}.spark{scale:2.2}.proj{scale:2}.burst{scale:2.8}.burst.small{scale:1.4}.moves{grid-template-columns:1fr 1fr;gap:10px}.move{min-height:58px}.move b{font-size:20px}.move small{font-size:15px}.msg p{font-size:18px}.bottom{padding:10px 14px}.head{padding:10px 14px}header{top:8px;left:8px;right:8px}}
+@keyframes dmgPop{0%{opacity:0;translate:0 10px;scale:.6}25%{opacity:1;scale:1.25}50%{scale:1}100%{opacity:0;translate:0 -40px}}
+@keyframes counter{50%{translate:-65px 30px}}@keyframes camoFade{0%,100%{opacity:1}50%{opacity:.15;filter:saturate(.3)}}
+
+@keyframes suckIn{40%{opacity:.9;filter:brightness(2.5) saturate(0)}100%{opacity:0;scale:.05;translate:-30px 60px;filter:brightness(3) saturate(0)}}
+@media(max-width:650px){.arena{height:380px}.status{width:176px;padding:7px 10px 8px}.wildS{left:12px;top:12px}.ownS{right:12px;bottom:12px}.status .name{font-size:22px}.moves{grid-template-columns:1fr 1fr;gap:10px}.move{min-height:58px}.move b{font-size:20px}.move small{font-size:15px}.msg p{font-size:18px}.bottom{padding:10px 14px}.head{padding:10px 14px}header{top:8px;left:8px;right:8px}}
 /* Phones: the drop's layout as designed. Long move text wraps and the ledger clips inside the
    width instead of widening their columns past the screen; the capsule and run buttons put their
    line under their name, whole; the heading leaves room for the DSM button. */
@@ -607,9 +622,9 @@ header{position:absolute;top:16px;left:16px;right:16px;display:flex;justify-cont
 .arena.desert{background-image:url(/tiles/arena-desert-mobile.png);--padWX:68.3%;--padWY:49.4%;--padOX:31.2%;--padOY:78%}
 .arena.ring{background-image:url(/tiles/arena-ring-mobile.png);--padWX:68.6%;--padWY:47.4%;--padOX:32.1%;--padOY:79.1%}
 .status{width:43%;min-width:0;padding:5px 8px 6px}.status .row.between{flex-wrap:wrap;gap:0 6px}.status .name{font-size:20px}.status .muted{font-size:14px}.status .chips{margin-top:3px;min-height:0;gap:4px}.status .chip{font-size:8px;padding:2px 4px}.status .hp{margin-top:4px;gap:5px}.status .lbl{font-size:8px}.status .bar{height:8px}.status .hp small{font-size:15px}.wildS{left:6px;top:6px}.ownS{right:6px;bottom:6px}
-.fx{--y0:calc(var(--padOY) - 70px);--y1:calc(var(--padWY) - 66px);--capY:calc(var(--padWY) - 22px)}
+
 .dmg{left:68%;top:20%;font-size:20px}.dmg.wild{left:16%;top:56%}
-.capsule{scale:1}.beam{scale:2}.burst.catch{scale:1}.shield{scale:3.4}
+
 .bottom{padding:8px 10px 10px;gap:8px}.msg{min-height:44px;padding:6px 10px;gap:10px;margin:2px 4px 0}.portrait{width:38px;height:38px}.msg p{font-size:17px;line-height:1.15}.msg .hint{font-size:8px}
 .moves{gap:8px;padding:4px}.move{min-height:0;padding:6px 8px;gap:3px}.move b{font-size:19px}.move small{font-size:14px;line-height:1.1}.move .tiny{font-size:8px}
 .cmd{padding:6px 10px;margin:0 4px}.cmd b{font-size:18px}.cmd small{font-size:14px}.ledger{padding-top:6px}
