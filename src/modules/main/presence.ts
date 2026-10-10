@@ -1,5 +1,5 @@
 import type { RpgPlayer } from '@rpgjs/server';
-import { LOOKS, lookGraphic } from '../../domain/game';
+import { LOOKS, lookGraphic, SKINS, skinGraphic } from '../../domain/game';
 
 const owners = new Map<string, RpgPlayer>();
 const inactive = new WeakSet<RpgPlayer>();
@@ -35,11 +35,12 @@ export function releaseAvatar(player: RpgPlayer) {
   for (const [holder, owner] of owners) if (owner === player) owners.delete(holder);
 }
 
-/** The map sprite of the player's chosen look. */
+/** The map sprite of the player: the skin they wear, else their chosen look. */
 export function graphicOf(player: RpgPlayer): string {
   try {
-    const look = JSON.parse(saveOf(player) || '{}').look;
-    return lookGraphic(LOOKS.includes(look) ? look : 'classic');
+    const save = JSON.parse(saveOf(player) || '{}');
+    if (SKINS.includes(save.skin) && Array.isArray(save.skins) && save.skins.includes(save.skin)) return skinGraphic(save.skin);
+    return lookGraphic(LOOKS.includes(save.look) ? save.look : 'classic');
   } catch { return lookGraphic('classic'); }
 }
 

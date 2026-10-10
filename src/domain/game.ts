@@ -123,6 +123,19 @@ const battleSchema = z.object({
 /** How the player's trainer looks on the map, in battle and in dialogue: a game choice, no DSM. */
 export const LOOKS = ['classic', 'auburn', 'bearded', 'curly'] as const;
 export type Look = (typeof LOOKS)[number];
+/**
+ * Skins Bramble sells (the Halloween set): worn over the trainer's look, on the map. Game items,
+ * bought with WILD from the wallet and granted on the payment the game's account accepted.
+ */
+export const SKINS = ['pumpkin', 'reaper', 'witch', 'vampire', 'werewolf', 'mummy', 'ghost', 'frankenstein', 'demon_girl'] as const;
+export type Skin = (typeof SKINS)[number];
+export const SKIN_NAMES: Record<Skin, string> = {
+  pumpkin: 'Pumpkin', reaper: 'Reaper', witch: 'Witch', vampire: 'Vampire', werewolf: 'Werewolf',
+  mummy: 'Mummy', ghost: 'Ghost', frankenstein: 'Frankenstein', demon_girl: 'Demon Girl',
+};
+/** The map sprite of a skin (src/config/config.client.ts) and its picture (public/skins). */
+export const skinGraphic = (skin: Skin) => `skin-${skin}`;
+export const skinPicture = (skin: Skin) => `skins/${skin}.png`;
 /** The map sprite and the portrait of a look. */
 export const lookGraphic = (look: Look) => (look === 'classic' ? 'hero' : `hero-${look}`);
 export const lookPortrait = (look: Look) => (look === 'classic' ? 'player' : `player-${look}`);
@@ -143,11 +156,14 @@ export const stateSchema = z.object({
   /** The trainer's look, picked once when the game first opens; it does not change after. */
   look: z.enum(LOOKS).default('classic'),
   lookPicked: z.boolean().default(false),
+  /** Skins bought from Bramble, and the one worn on the map (none: the look shows). */
+  skins: z.array(z.enum(SKINS)).default([]),
+  skin: z.enum(SKINS).nullable().default(null),
 }).superRefine((s, ctx) => {
   const ids = s.creatures.map(c => c.id);
   if (new Set(ids).size !== ids.length || new Set(s.consumed).size !== s.consumed.length ||
       new Set(s.commandIds).size !== s.commandIds.length || (s.battle && !ids.includes(s.battle.creatureId)) || s.lead >= s.creatures.length ||
-      new Set(s.team).size !== s.team.length || (s.battle?.outcome === 'active' && s.battle.roster.some(id => !ids.includes(id)))) {
+      new Set(s.team).size !== s.team.length || new Set(s.skins).size !== s.skins.length || (s.skin !== null && !s.skins.includes(s.skin)) || (s.battle?.outcome === 'active' && s.battle.roster.some(id => !ids.includes(id)))) {
     ctx.addIssue({ code: 'custom', message: 'Invalid state references' });
   }
 });
@@ -171,6 +187,10 @@ export type Command =
   | { type: 'scarecrow-gift'; now: number }
   /** DSM ledger: `qty` items Bramble sold for one payment the game's account accepted. */
   | { type: 'grant-item'; item: ShopItemId; fact: string; qty?: number }
+  /** DSM ledger: a skin Bramble sold for one payment the game's account accepted (`fact` is that transfer's id). */
+  | { type: 'grant-skin'; skin: Skin; fact: string }
+  /** Wear an owned skin on the map, or none (`null`) to show the trainer's look again. */
+  | { type: 'wear-skin'; skin: Skin | null }
   /** DSM ledger: a creature Bramble bought; `fact` is the transfer of its object the game's account accepted. */
   | { type: 'sell'; creatureId: string; fact: string }
   /** Use a bag item on one party creature, outside battle. */
@@ -188,7 +208,7 @@ export type Command =
   | { type: 'receive-creature'; creature: Creature };
 export type ErrorCode = 'stale' | 'battle-active' | 'no-battle' | 'fainted' | 'no-charges' |
   'no-capsules' | 'not-weakened' | 'choice-consumed' | 'invalid-command' | 'look-picked' | 'no-rod' | 'unknown-creature' |
-  'no-item' | 'not-wild' | 'already-beaten' | 'unknown-trainer' | 'sold-out' | 'not-for-sale' | 'gift-cooldown' | 'unavailable';
+  'no-item' | 'not-wild' | 'already-beaten' | 'unknown-trainer' | 'sold-out' | 'not-for-sale' | 'gift-cooldown' | 'unavailable' | 'skin-owned' | 'skin-not-owned';
 /** What Bramble's board sells. The Map is a key item: one per player. */
 export type ShopItemId = 'capsule' | 'poultice' | 'tonic' | 'map';
 export const SHOP_QTY_MAX = 9;
@@ -253,7 +273,7 @@ export function transition(parent: GameState, expected: number, commandId: strin
   if (!commandId.trim()) fail('invalid-command');
   const s = structuredClone(stateSchema.parse(parent));
   const active = s.battle?.outcome === 'active';
-  if (['encounter', 'cast', 'challenge', 'heal', 'campaign', 'set-lead', 'set-team', 'use-item', 'scarecrow-gift'].includes(command.type) && active) fail('battle-active');
+  if (['encounter', 'cast', 'challenge', 'heal', 'campaign', 'set-lead', 'set-team', 'use-item', 'scarecrow-gift', 'wear-skin'].includes(command.type) && active) fail('battle-active');
   const lead = s.creatures[s.lead];
   const battle = s.battle;
   const combatant = battle ? s.creatures.find(c => c.id === battle.creatureId)! : lead;
@@ -414,6 +434,22 @@ export function transition(parent: GameState, expected: number, commandId: strin
       if (command.now < s.scarecrowReadyAt) fail('gift-cooldown');
       s.inventory.capsules += SCARECROW_CAPSULES;
       s.scarecrowReadyAt = command.now + SCARECROW_COOLDOWN_MS;
+      break;
+    }
+    case 'grant-skin': {
+      if (!(SKINS as readonly string[]).includes(command.skin)) fail('invalid-command');
+      // A skin is owned once: a second payment for it is refused before it is taken (dsm.ts).
+      if (s.skins.includes(command.skin)) fail('skin-owned');
+      const key = `payment/${command.fact}`;
+      if (!command.fact.trim() || s.consumed.includes(key)) fail('choice-consumed');
+      s.consumed.push(key);
+      s.skins.push(command.skin);
+      break;
+    }
+    case 'wear-skin': {
+      if (command.skin !== null && !(SKINS as readonly string[]).includes(command.skin)) fail('invalid-command');
+      if (command.skin !== null && !s.skins.includes(command.skin)) fail('skin-not-owned');
+      s.skin = command.skin;
       break;
     }
     case 'grant-capsule':

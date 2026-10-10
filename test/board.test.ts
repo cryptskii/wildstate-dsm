@@ -14,7 +14,7 @@ describe('the camp bulletin board', () => {
   it('pins week 1 on release day with every week-1 mission after the board itself (G3 on)', () => {
     const view = boardView(shipped, '2026-10-10');
     expect(view.week?.week).toBe(1);
-    expect(view.missions.map((m) => m.id)).toEqual(['G3', 'G4']);
+    expect(view.missions.map((m) => m.id)).toEqual(['G3', 'G4', 'G5']);
     for (const m of view.missions) expect(view.copyText).toContain(`${m.id} · ${m.title}\n${m.task}`);
   });
 
@@ -30,7 +30,7 @@ describe('the camp bulletin board', () => {
     const view = boardView(shipped, '2026-10-20');
     expect(view.welcome).toBe('Welcome to the board. This will be where you get your updated weekly beta test missions every Monday morning.');
     expect(view.week?.week).toBe(2);
-    expect(view.missions.map((m) => m.id)).toContain('G5');
+    expect(view.missions.map((m) => m.id)).toContain('G6');
     // Each week mixes wallet missions (M) and Wildstate missions (G).
     expect(view.missions.some((m) => m.id.startsWith('M'))).toBe(true);
     expect(view.missions.some((m) => m.id.startsWith('G'))).toBe(true);
