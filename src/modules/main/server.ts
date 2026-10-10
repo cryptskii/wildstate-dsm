@@ -3,8 +3,8 @@ import { RpgServer, type RpgMap } from "@rpgjs/server";
 import { reconcileAvatars } from './presence';
 import { followReportedPositions } from './walk';
 import { player } from './player'
-import { Npc, Ranger, Campfire, Trainer, Scarecrow, WayfindingSign } from "./event";
-import { MIRA, ROWAN, TRAINER_SPOTS, SCARECROW, WAY_SIGN } from './field';
+import { Npc, Ranger, Campfire, Trainer, Scarecrow, WayfindingSign, BulletinBoard } from "./event";
+import { MIRA, ROWAN, TRAINER_SPOTS, SCARECROW, WAY_SIGN, BULLETIN_BOARD } from './field';
 
 /** The prototype centres each character on its tile; RPGJS places an event by its hitbox's top-left. */
 const onTile = (p: { x: number; y: number }) => ({ x: p.x - 16, y: p.y - 16 });
@@ -48,6 +48,7 @@ export default defineModule<RpgServer>({
     events: [
       { id: 'npc', ...onTile(MIRA), event: Npc() },
       { id: 'wayfinding-sign', ...onTile(WAY_SIGN), event: WayfindingSign() },
+      { id: 'bulletin-board', ...onTile(BULLETIN_BOARD), event: BulletinBoard() },
       { id: 'scarecrow', ...onTile(SCARECROW), event: Scarecrow() },
       { id: 'rowan', ...onTile(ROWAN), event: Ranger() },
       // The `campfire` object in simplemap.tmx's Objects layer.
