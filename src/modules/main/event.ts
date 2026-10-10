@@ -2,6 +2,7 @@ import { startPatrol } from './patrol';
 import { type EventDefinition } from '@rpgjs/server';
 import { restAtCamp, talkToScarecrow } from './field';
 import { talkToRowan, readWayfindingSign } from './dialogue';
+import { readBulletinBoard } from './board';
 export function Npc(): EventDefinition {
   return {
     onInit() { this.setGraphic('female'); startPatrol(this, 'mira'); },
@@ -29,4 +30,9 @@ export function Scarecrow(): EventDefinition {
 /** Wooden sign is drawn by its Tiled layer, not a moving actor. */
 export function WayfindingSign(): EventDefinition {
   return { mass: 0, pushable: false, async onAction(player) { await readWayfindingSign(player); } };
+}
+
+/** The camp's bulletin board is drawn by its Tiled layer; its event reads out this week's missions. */
+export function BulletinBoard(): EventDefinition {
+  return { mass: 0, pushable: false, async onAction(player) { await readBulletinBoard(player); } };
 }
