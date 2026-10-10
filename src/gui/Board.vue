@@ -105,7 +105,7 @@ onUnmounted(() => { window.removeEventListener('resize', fit); clearTimeout(rese
 button{font:inherit;cursor:pointer;border:0}
 
 /* The slate inside the board's frame: everything pinned to it scrolls here. */
-.slate{position:absolute;left:58px;top:126px;width:296px;height:488px;overflow-y:auto;-webkit-overflow-scrolling:touch;
+.slate{position:absolute;left:55px;top:121px;width:299px;height:496px;overflow-y:auto;-webkit-overflow-scrolling:touch;
   padding:10px 10px 18px;box-sizing:border-box;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#9ccf6e55 transparent}
 .welcome{margin:0 0 12px;font-size:19px;line-height:1.15;color:#e9f1d8;text-align:center;text-shadow:1px 1px 0 #0008}
 .week{font-size:10px;color:#c4ec79;text-align:center;line-height:1.4}
