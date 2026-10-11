@@ -2,6 +2,8 @@ import { openLobby } from './lobby';
 import { graphicOf, isCurrentAvatar } from './presence';
 import { npcPosition, pauseNpc } from './patrol';
 import { type RpgPlayer } from '@rpgjs/server';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { GameError, LOOKS, SKINS, SCARECROW_CAPSULES, SPECIES, TRAINERS, displayName, type Command, type Look, type Skin } from '../../domain/game';
 import { session } from './journey';
 import { portraitDialogue, talkToRowan, readWayfindingSign, isSpeaking } from './dialogue';
@@ -44,6 +46,22 @@ export const BULLETIN_BOARD = { x: 256, y: 368 };
 export const SHOP_DOOR = { tx: 18, ty: 4 };
 /** Wild meadow bounds (tiles 14..19 × 6..10); the bottom row is plain lawn so the pond is reachable without an encounter. */
 export const MEADOW = { x0: 448, x1: 640, y0: 192, y1: 352 };
+/**
+ * Where wild creatures are met: exactly the tiles that show tall grass, read from the map's
+ * TallGrass layer (drawn by scripts/tall-grass.mjs): the meadow east of camp and Rowan's field in
+ * the north-west. MEADOW above is the original meadow's box, kept for the sparkles and tests.
+ */
+const WILD_TILES: Set<string> = (() => {
+  const tmx = readFileSync(join(process.cwd(), 'src/tiled/simplemap.tmx'), 'utf8');
+  const m = tmx.match(/name="TallGrass"[^>]*>\s*<data encoding="csv">\n([\s\S]*?)<\/data>/);
+  if (!m) throw new Error('simplemap.tmx has no TallGrass layer: the wild zones are gone');
+  const tiles = new Set<string>();
+  m[1].trim().split('\n').forEach((row, ty) => row.split(',').forEach((cell, tx) => { if (cell.trim() !== '' && Number(cell) !== 0) tiles.add(`${tx},${ty}`); }));
+  return tiles;
+})();
+/** Whether a creature can be met at map position (x, y): it stands on tall grass. */
+export const inTallGrass = (x: number, y: number): boolean => WILD_TILES.has(`${Math.floor(x / 32)},${Math.floor(y / 32)}`);
+export const wildTileCount = (): number => WILD_TILES.size;
 /** Pond water tiles (tx,ty); casting is allowed from any 4-neighbour of these. */
 export const POND = new Set(["17,12","18,12","19,12","20,12","21,12","17,13","18,13","19,13","20,13","21,13","22,13","16,14","17,14","18,14","19,14","20,14","21,14","22,14","16,15","17,15","18,15","19,15","20,15","21,15","22,15","16,16","17,16","18,16","19,16","20,16","21,16","22,16","17,17","18,17","19,17","20,17","21,17","17,18","18,18","19,18","20,18"]);
 const T = 32;
@@ -171,7 +189,7 @@ export async function checkEncounter(player: RpgPlayer) {
     player.getGui('field-hud')?.update(hudData(player, { door: atShopDoor(player) }));
   }
   const x = player.x(), y = player.y();
-  const inWild = x >= MEADOW.x0 && x < MEADOW.x1 && y >= MEADOW.y0 && y < MEADOW.y1;
+  const inWild = inTallGrass(x, y);
   if (!inWild) { inside.delete(player); return; }
   if (inside.has(player) || fighting.has(player) || inArena.has(player)) return;
   inside.add(player);
