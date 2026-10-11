@@ -17,7 +17,7 @@ const fixture = vi.hoisted(() => ({
   sends: [] as { ticker: string; amount: string; to: string; sent: boolean }[],
   requests: new Map<bigint, { case: string; value?: { policyCommit?: Uint8Array; amount?: bigint } }>(),
   seq: 0n,
-  sessions: [] as { sessionId: Uint8Array; peerDeviceId: Uint8Array }[],
+  sessions: [] as { sessionId: Uint8Array; peerDeviceId: Uint8Array; status?: number }[],
   /** How long the wallet takes to answer an accept, and the account to create a token, in ms. */
   acceptAfter: 5,
   createAfter: 5,
@@ -41,7 +41,7 @@ vi.mock('../src/integrations/dsm/host', async (original) => {
       { tokenId: 'ERA', policyAnchorB32: base32(new Uint8Array(32).fill(3)), available: 1_000_000n },
       ...[...fixture.held].map(([anchor, h]) => ({ tokenId: h.ticker, policyAnchorB32: anchor, available: h.amount })),
     ]);
-    sessions = () => later(() => fixture.sessions.map((s) => ({ ...s, offerDigest: new Uint8Array(), status: 1, granted: [], lastSeq: 0n, peerGenesis: new Uint8Array(32) })));
+    sessions = () => later(() => fixture.sessions.map((s) => ({ ...s, offerDigest: new Uint8Array(), status: s.status ?? 1, granted: [], lastSeq: 0n, peerGenesis: new Uint8Array(32) })));
     createToken = (p: { ticker: string; alias: string; supply: bigint; description: string }) => later(() => {
       fixture.created.push(p.ticker);
       const anchor = new Uint8Array(createHash('sha256').update(`${p.ticker}|${p.alias}|${p.supply}|${p.description}`).digest());
@@ -63,6 +63,9 @@ vi.mock('../src/integrations/dsm/host', async (original) => {
       if (object) object.amount -= BigInt(amount);
     });
     sync = () => later(() => ({}));
+    // A fresh connect offer (a page whose session is gone shows a new code).
+    offer = () => later(() => { fixture.seq += 1n; const d = bytes32(`offer ${fixture.seq}`); return { offerDigest: d, code: `CODE-${fixture.seq}` }; });
+    offerOf = (digest: Uint8Array) => later(() => ({ offerDigest: digest, code: 'CODE-AGAIN' }));
     request = (_session: Uint8Array, kind: { case: string; value?: { policyCommit?: Uint8Array; amount?: bigint } }) =>
       later(() => { fixture.seq += 1n; fixture.requests.set(fixture.seq, kind); return fixture.seq; });
     // The wallet carries out what it accepts, and a payment reaches the account once; a holdings
@@ -410,5 +413,40 @@ describe('Bramble\'s board', () => {
     expect(fixture.requests.size).toBe(asked);
     expect(fixture.routes).toEqual(['10.00']);
     expect(screens.get(p.id)).toMatchObject({ quote: { side: 'buy', amountIn: '10.00 ERA', amountOut: '97 WILD', hops: 1 }, busy: null });
+  });
+
+  describe('a wallet that ends its session with the game', () => {
+    it('sends that page back to the connect screen, once, and leaves other wallets playing', async () => {
+      const a = await wallet(settled, true), b = await wallet(settled, true);
+      const pa = await a.connect('page-gone'), pb = await b.connect('page-stays');
+      let kickedA = 0, kickedB = 0;
+      dsm.watchWallet(pa, () => { kickedA++; });
+      dsm.watchWallet(pb, () => { kickedB++; });
+      await dsm.checkSessions();
+      expect([kickedA, kickedB, dsm.walletConnected(pa), dsm.walletConnected(pb)]).toEqual([0, 0, true, true]);
+      // The wallet disconnects the game from its own side: the account reports the session DISCONNECTED.
+      fixture.sessions.find((s) => b32(s.peerDeviceId) === a.holder)!.status = 2;
+      await dsm.checkSessions();
+      expect([kickedA, kickedB, dsm.walletConnected(pa), dsm.walletConnected(pb)]).toEqual([1, 0, false, true]);
+      await dsm.checkSessions();
+      expect(kickedA).toBe(1);
+      expect((panels.get(pa.id)?.entries ?? []).some((e) => e.title === 'Wallet disconnected')).toBe(true);
+    });
+
+    it('does not resume a disconnected session when the page connects again: it shows a fresh code', async () => {
+      const w = await wallet(settled, true);
+      const p = await w.connect('page-dead');
+      const dead = fixture.sessions.find((s) => b32(s.peerDeviceId) === w.holder)!;
+      dead.status = 2;
+      dsm.watchWallet(p, () => {});
+      await dsm.checkSessions();
+      // The page connects again with the login it had: the dead session is not picked up, a new offer is shown.
+      const again = w.connect('page-dead', p);
+      await idle(2600);
+      const shown = screens.get(p.id) as { code?: string; status?: string } | undefined;
+      expect(dsm.walletConnected(p)).toBe(false);
+      expect(shown?.status ?? '').toContain('Scan this');
+      expect(await Promise.race([again.then(() => 'connected'), idle(300).then(() => 'still waiting')])).toBe('still waiting');
+    });
   });
 });

@@ -1,8 +1,8 @@
 import { type RpgPlayerHooks } from '@rpgjs/server';
 import { openJourney, session } from './journey';
-import { fieldHud, checkEncounter, commit } from './field';
+import { fieldHud, checkEncounter, commit, setFighting, setInArena } from './field';
 import { activateAvatar, isCurrentAvatar, releaseAvatar } from './presence';
-import { connectWallet, leave, openPanel, resumeWallet } from './dsm';
+import { connectWallet, leave, openPanel, resumeWallet, watchWallet } from './dsm';
 import { leaveLobby, rejoin } from './lobby';
 
 /** The player's walking pace; NPCs patrol at 1. */
@@ -36,14 +36,24 @@ export const player: RpgPlayerHooks = {
     }
     // The player's wallet first: its account keys the game profile.
     openPanel(player);
-    const connect = () => connectWallet(player, (state) => {
+    const connect = (reason = '') => connectWallet(player, (state) => {
       if (!player.isConnected()) return;
       player.creatureSave.set(JSON.stringify(state));
       activateAvatar(player, state.holder);
       fieldHud(player);
       void rejoin(player);
-    }).catch((e) => {
+    }, reason).catch((e) => {
       player.gui('dsm-connect').update({ code: '', status: `Connecting failed: ${e instanceof Error ? e.message : String(e)}` });
+    });
+    // No wallet, no game: a wallet that ends its session with the game (from its own Apps screen)
+    // sends the page back to the connect screen, whatever it was doing.
+    watchWallet(player, () => {
+      if (!player.isConnected()) return;
+      for (const id of ['dsm-market', 'bramble-shop', 'lobby', 'creature-battle', 'mission-board', 'portrait-dialogue', 'field-hud']) player.getGui(id)?.close();
+      leaveLobby(player);
+      setFighting(player, false);
+      setInArena(player, false);
+      void connect('Your wallet disconnected from the game.');
     });
     if (player.creatureSave()) {
       // The page came back with its game loaded (from the wallet app, or after a dropped
