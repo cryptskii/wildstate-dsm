@@ -55,11 +55,11 @@ describe('the map sprite', () => {
 });
 
 describe('every skin', () => {
-  it('has a packed 3x4 walking sheet of the map\'s frames (the ghost\'s 40 wide), and a shop picture', () => {
+  it('has a packed 3x4 walking sheet of the map\'s 32x40 frames, and a shop picture', () => {
     for (const skin of SKINS) {
       // A PNG's width and height are the first fields of its header chunk.
       const png = readFileSync(`public/spritesheets/${skinGraphic(skin)}-walk.png`);
-      expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual(skin === 'ghost' ? [120, 160] : [96, 160]);
+      expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([96, 160]);
       expect(existsSync(`public/skins/${skin}.png`)).toBe(true);
     }
   });
