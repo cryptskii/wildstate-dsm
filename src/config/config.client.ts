@@ -1,6 +1,7 @@
 import { provideI18n, provideClientGlobalConfig, provideClientModules } from "@rpgjs/client";
 import { Animation, Direction } from "@rpgjs/common";
 import i18n from "../i18n";
+import { SKINS, skinGraphic } from '../domain/game';
 import { provideTiledMap } from "@rpgjs/tiledmap/client";
 
 import { provideVueGui, vueGui } from '@rpgjs/vue';
@@ -74,7 +75,9 @@ export default {
           { id: 'hero-auburn', image: 'spritesheets/player-auburn-walk-v4.png', ...walker() },
           { id: 'hero-bearded', image: 'spritesheets/player-bearded-walk-v4.png', ...walker() },
           { id: 'hero-curly', image: 'spritesheets/player-curly-walk-v4.png', ...walker() },
-          { id: 'female', image: 'spritesheets/mira-walk-v4.png', ...walker() }
+          { id: 'female', image: 'spritesheets/mira-walk-v4.png', ...walker() },
+          // The Halloween skins Bramble sells (game.ts SKINS), packed to the same frames by scripts/pack-skin-walks.mjs.
+          ...SKINS.map((skin) => ({ id: skinGraphic(skin), image: `spritesheets/skin-${skin}-walk.png`, ...walker() })),
         ]
       }
     ])
