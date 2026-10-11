@@ -150,6 +150,51 @@ export function leave(player: RpgPlayer): void {
   const seat = seats.get(player.id);
   if (seat?.wallet) feeds.set(seat.wallet, seat.feed);
   seats.delete(player.id);
+  gone.delete(player.id);
+}
+
+// ------------------------- the wallet leaving the game -------------------------
+
+/** How often every connected wallet's session is checked on the game account. */
+const SESSION_CHECK_MS = 5000;
+/** What a page does when its wallet's session is gone, by page id (player.ts: back to the connect screen). */
+const gone = new Map<string, () => void>();
+let sessionWatch: ReturnType<typeof setInterval> | null = null;
+const sameBytes = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((x, i) => x === b[i]);
+
+/**
+ * A wallet can end its session with the game from its own side (Apps → Wildstate → disconnect).
+ * Nothing tells the game; its next request would wait on a session that no longer exists. So
+ * every connected wallet's session is checked on the game account, and a page whose session is
+ * disconnected, or no longer listed, is handed to `onGone`: there is no game without a wallet.
+ */
+export function watchWallet(player: RpgPlayer, onGone: () => void): void {
+  gone.set(player.id, onGone);
+  if (sessionWatch === null) {
+    sessionWatch = setInterval(() => { void checkSessions(); }, SESSION_CHECK_MS);
+    sessionWatch.unref?.();
+  }
+}
+
+/** Whether the page's wallet session is held (a request can go over it). */
+export const walletConnected = (player: RpgPlayer): boolean => seats.get(player.id)?.session !== null && seats.has(player.id);
+
+/** One read of the account's sessions, checked against every seat; a seat whose session is gone loses it. */
+export async function checkSessions(): Promise<void> {
+  const watched = allSeats().filter((seat) => seat.session !== null && gone.has(seat.player.id));
+  if (!watched.length) return;
+  let live: pb.ConnectSessionV1[];
+  try { live = (await (await world()).host.sessions()); } catch { return; } // the account unreachable: nothing is decided on that
+  for (const seat of watched) {
+    const mine = live.find((s) => sameBytes(s.sessionId, seat.session!));
+    if (mine && mine.status !== pb.ConnectSessionStatus.DISCONNECTED) continue;
+    // The session goes first, so nothing else is asked over it; the wallet's name stays for the
+    // page's own leaving (the lobby knows players by wallet), then goes too.
+    seat.session = null; seat.offerDigest = null; seat.waiting = null;
+    pushEntries(seat, [entry('dsm', 'Wallet disconnected', `Wallet ${seat.wallet ? short(seat.wallet) : '?'} ended its session with the game${mine ? '' : ' (the session is no longer on the game account)'}: back to the connect screen`, 'fail')]);
+    gone.get(seat.player.id)?.();
+    seat.wallet = null;
+  }
 }
 
 /** The wallet session a request goes over. A page that has just come back may not have it yet. */
@@ -399,7 +444,7 @@ function grantIsCurrent(session: pb.ConnectSessionV1, w: World): boolean {
 /** The login token each player's page was last shown, by player id: what a reloaded page goes on with. */
 const shownTo = new Map<string, string>();
 
-export async function connectWallet(player: RpgPlayer, bound: (state: GameState) => void): Promise<void> {
+export async function connectWallet(player: RpgPlayer, bound: (state: GameState) => void, reason = ''): Promise<void> {
   const seat = seatOf(player);
   openPanel(player);
   const gui = player.gui('dsm-connect');
@@ -420,7 +465,8 @@ export async function connectWallet(player: RpgPlayer, bound: (state: GameState)
 
   let sessions = await whenReachable(player, gui, () => shown, () => w.host.sessions());
   const held = (login: Login) =>
-    sessions.find((s) => ((login.session !== null && b32(s.sessionId) === login.session) || b32(s.offerDigest) === login.offer)
+    sessions.find((s) => s.status !== pb.ConnectSessionStatus.DISCONNECTED
+      && ((login.session !== null && b32(s.sessionId) === login.session) || b32(s.offerDigest) === login.offer)
       // An older grant does not resume: the page shows a fresh code for the current offer.
       && (s.offerDigest.length === 0 || grantIsCurrent(s, w) || (login.session === null && b32(s.offerDigest) === login.offer)));
 
@@ -452,7 +498,7 @@ export async function connectWallet(player: RpgPlayer, bound: (state: GameState)
   seat.offerDigest = login.offer;
   seat.resumeToken = token;
   shown.resumeToken = token;
-  shown.status = 'Scan this with your DSM wallet: Apps → SCAN CODE.';
+  shown.status = `${reason}${reason ? ' ' : ''}Scan this with your DSM wallet: Apps → SCAN CODE.`;
   gui.update(shown);
   const started = Date.now();
   for (;;) {

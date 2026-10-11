@@ -1,7 +1,7 @@
 import { beforeEach, expect, it, vi } from 'vitest';
 const wallet=vi.hoisted(()=>({bind:undefined as undefined|((state:any)=>void),resumes:true}));
-vi.mock('../src/modules/main/dsm',()=>({connectWallet:vi.fn(async(_p:any,b:any)=>{wallet.bind=b;}),leave:vi.fn(),openPanel:vi.fn(),resumeWallet:vi.fn(async()=>wallet.resumes)}));
-vi.mock('../src/modules/main/field',()=>({fieldHud:vi.fn(),checkEncounter:vi.fn(),commit:vi.fn()}));
+vi.mock('../src/modules/main/dsm',()=>({connectWallet:vi.fn(async(_p:any,b:any)=>{wallet.bind=b;}),leave:vi.fn(),openPanel:vi.fn(),resumeWallet:vi.fn(async()=>wallet.resumes),watchWallet:vi.fn()}));
+vi.mock('../src/modules/main/field',()=>({fieldHud:vi.fn(),checkEncounter:vi.fn(),commit:vi.fn(),setFighting:vi.fn(),setInArena:vi.fn()}));
 vi.mock('../src/modules/main/journey',()=>({openJourney:vi.fn(),session:vi.fn()}));
 vi.mock('../src/modules/main/lobby',()=>({leaveLobby:vi.fn(),rejoin:vi.fn(async()=>{})}));
 import { reconcileAvatars } from '../src/modules/main/presence';
