@@ -1,6 +1,9 @@
 // Packs the Halloween skins' walking sheets (design-drop/halloween-skins/<name>_walk_3x4.png: 3 poses
 // x 4 directions, 256px cells, rows front, left, right, back) to the map's 32x40 frames, as
-// public/spritesheets/skin-<name>-walk.png (96x160), the layout every character sheet uses.
+// public/spritesheets/skin-<name>-walk.png (96x160), the layout every character sheet uses. The
+// ghost is as wide as it is tall, so at the frame's width it would stand 27px tall; to stand at the
+// walkers' 34px it is stretched upward only, its width kept, and it hovers 3px above where their
+// feet go.
 //
 // Unlike pack-character-walks.mjs, nothing is cut away: a skin's held lantern or floating hem is
 // part of it. Every frame of a skin is drawn at one height on the map, the tallest (up to 34) at
@@ -20,10 +23,14 @@ import { PNG } from 'pngjs';
 import { readFileSync, writeFileSync } from 'node:fs';
 
 export const SKINS = ['pumpkin', 'reaper', 'witch', 'vampire', 'werewolf', 'mummy', 'ghost', 'frankenstein', 'demon_girl'];
-const CELL = 256, FW = 32, FH = 40, FIT_W = 30, FIT_H = 34, BASELINE = 38, COVER = 0.4;
+const CELL = 256, FH = 40, FIT_H = 34, COVER = 0.4;
+/** The width the figure may fill, the baseline its feet (or hem) sit on, and whether it is stretched upward to the full height. */
+const FRAME = { default: { fitW: 30, baseline: 38, stretch: false }, ghost: { fitW: 30, baseline: 35, stretch: true } };
+const FW = 32;
 const ROWS = ['front', 'left', 'right', 'back'];
 
 for (const name of SKINS) {
+  const { fitW: FIT_W, baseline: BASELINE, stretch } = FRAME[name] ?? FRAME.default;
   const image = PNG.sync.read(readFileSync(`design-drop/halloween-skins/${name}_walk_3x4.png`));
   if (image.width !== CELL * 3 || image.height !== CELL * 4) throw new Error(`${name}: expected a 768x1024 sheet`);
   const opaque = (x, y) => image.data[(y * image.width + x) * 4 + 3] > 128;
@@ -46,17 +53,19 @@ for (const name of SKINS) {
   const height = (r, c) => baselines[r] - boxes[r][c].y0 + 1;
   const width = (r, c) => boxes[r][c].x1 - boxes[r][c].x0 + 1;
   let H = FIT_H;
-  for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) H = Math.min(H, Math.floor(height(r, c) * FIT_W / width(r, c)));
+  if (!stretch) for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) H = Math.min(H, Math.floor(height(r, c) * FIT_W / width(r, c)));
+  // A stretched skin keeps one horizontal scale (its widest frame fills the width) and reaches the full height on its own vertical one.
+  let maxW = 0; for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) maxW = Math.max(maxW, width(r, c));
   const sizes = [];
   for (let r = 0; r < 4; r++) for (let c = 0; c < 3; c++) {
-    const { x0, y0, y1 } = boxes[r][c], cw = width(r, c), ch = y1 - y0 + 1, ratio = H / height(r, c);
-    const w = Math.round(cw * ratio), h = Math.round(ch * ratio), lift = Math.round((baselines[r] - y1) * ratio);
+    const { x0, y0, y1 } = boxes[r][c], cw = width(r, c), ch = y1 - y0 + 1, ry = H / height(r, c), rx = stretch ? FIT_W / maxW : ry;
+    const w = Math.round(cw * rx), h = Math.round(ch * ry), lift = Math.round((baselines[r] - y1) * ry);
     if (c === 1) sizes.push(`${ROWS[r]} ${w}x${h}${lift ? `+${lift}` : ''}`);
     const ox = c * FW + Math.floor((FW - w) / 2), oy = r * FH + BASELINE - lift - h;
     let filled = 0;
     for (let ty = 0; ty < h; ty++) for (let tx = 0; tx < w; tx++) {
-      const sx0 = Math.floor(tx / ratio), sx1 = Math.max(sx0 + 1, Math.floor((tx + 1) / ratio));
-      const sy0 = Math.floor(ty / ratio), sy1 = Math.max(sy0 + 1, Math.floor((ty + 1) / ratio));
+      const sx0 = Math.floor(tx / rx), sx1 = Math.max(sx0 + 1, Math.floor((tx + 1) / rx));
+      const sy0 = Math.floor(ty / ry), sy1 = Math.max(sy0 + 1, Math.floor((ty + 1) / ry));
       const cx = (sx0 + sx1 - 1) / 2, cy = (sy0 + sy1 - 1) / 2;
       let n = 0, on = 0, pick = -1, best = Infinity;
       for (let sy = sy0; sy < sy1; sy++) for (let sx = sx0; sx < sx1; sx++) {
