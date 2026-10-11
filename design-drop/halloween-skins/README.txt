@@ -8,3 +8,15 @@ Store art faces front. Transparent pixels are binary alpha; no semi-transparent 
 Each frame checked for dimensions, opacity, populated pixels, containment, and meaningful visual movement.
 Note: geometry/alpha checks are automated; visual game-engine motion QA is still required to approve polished animation.
 See animation_preview.gif and QA.json.
+
+Mummy update: assembled from individually selected opposite stride poses and
+neutral poses. Complete side sprites are mirrored for the opposite facing;
+no foot-region shifting. Review mummy-preview.html for the current mummy cycle.
+The older preview.png and animation_preview.gif still show the earlier mummy.
+Source frames and packing notes: art/mummy-walk/README.md.
+
+Current profile correction: all nine third rows are exact horizontal mirrors
+of the second row, frame by frame in the same column order. Verified from
+saved PNG pixels; other rows preserved. See profile-mirror-QA.json.
+Review creature-preview.html or the individual character preview pages.
+The older preview.png and animation_preview.gif are historical.

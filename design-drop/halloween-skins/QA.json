@@ -688,138 +688,120 @@
     "character": "mummy",
     "rows": [
       {
-        "direction": "front",
-        "occupancy": [
-          17984,
-          18017,
-          18122
-        ],
-        "changed_alpha_pixels": [
-          1725,
-          1671
-        ],
-        "bounds": [
-          [
-            67,
-            36,
-            185,
-            242
-          ],
-          [
-            69,
-            34,
-            185,
-            240
-          ],
-          [
-            69,
-            36,
-            187,
-            238
-          ]
-        ]
+        "row": 0,
+        "col": 0,
+        "width": 114,
+        "height": 211,
+        "headWidth": 114,
+        "occupied": 17371,
+        "mirrored": false
       },
       {
-        "direction": "left",
-        "occupancy": [
-          17179,
-          17216,
-          16821
-        ],
-        "changed_alpha_pixels": [
-          1633,
-          1177
-        ],
-        "bounds": [
-          [
-            70,
-            36,
-            183,
-            242
-          ],
-          [
-            71,
-            34,
-            184,
-            240
-          ],
-          [
-            72,
-            36,
-            185,
-            242
-          ]
-        ]
+        "row": 0,
+        "col": 1,
+        "width": 114,
+        "height": 196,
+        "headWidth": 114,
+        "occupied": 17590,
+        "mirrored": false
       },
       {
-        "direction": "right",
-        "occupancy": [
-          17179,
-          17216,
-          16821
-        ],
-        "changed_alpha_pixels": [
-          1633,
-          1177
-        ],
-        "bounds": [
-          [
-            72,
-            36,
-            185,
-            242
-          ],
-          [
-            71,
-            34,
-            184,
-            240
-          ],
-          [
-            70,
-            36,
-            183,
-            242
-          ]
-        ]
+        "row": 0,
+        "col": 2,
+        "width": 114,
+        "height": 210,
+        "headWidth": 114,
+        "occupied": 17294,
+        "mirrored": false
       },
       {
-        "direction": "back",
-        "occupancy": [
-          16774,
-          17563,
-          17418
-        ],
-        "changed_alpha_pixels": [
-          1327,
-          2171
-        ],
-        "bounds": [
-          [
-            69,
-            36,
-            183,
-            240
-          ],
-          [
-            69,
-            34,
-            185,
-            240
-          ],
-          [
-            72,
-            36,
-            185,
-            240
-          ]
-        ]
+        "row": 3,
+        "col": 0,
+        "width": 118,
+        "height": 211,
+        "headWidth": 114,
+        "occupied": 17914,
+        "mirrored": false
+      },
+      {
+        "row": 3,
+        "col": 1,
+        "width": 119,
+        "height": 196,
+        "headWidth": 114,
+        "occupied": 17571,
+        "mirrored": false
+      },
+      {
+        "row": 3,
+        "col": 2,
+        "width": 117,
+        "height": 211,
+        "headWidth": 113,
+        "occupied": 17556,
+        "mirrored": false
+      },
+      {
+        "row": 1,
+        "col": 0,
+        "width": 109,
+        "height": 211,
+        "headWidth": 109,
+        "occupied": 16248,
+        "mirrored": false
+      },
+      {
+        "row": 1,
+        "col": 1,
+        "width": 114,
+        "height": 205,
+        "headWidth": 114,
+        "occupied": 15351,
+        "mirrored": false
+      },
+      {
+        "row": 1,
+        "col": 2,
+        "width": 109,
+        "height": 211,
+        "headWidth": 109,
+        "occupied": 15868,
+        "mirrored": false
+      },
+      {
+        "row": 2,
+        "col": 0,
+        "width": 109,
+        "height": 211,
+        "headWidth": 109,
+        "occupied": 15877,
+        "mirrored": true
+      },
+      {
+        "row": 2,
+        "col": 1,
+        "width": 114,
+        "height": 205,
+        "headWidth": 114,
+        "occupied": 15360,
+        "mirrored": true
+      },
+      {
+        "row": 2,
+        "col": 2,
+        "width": 109,
+        "height": 211,
+        "headWidth": 109,
+        "occupied": 16253,
+        "mirrored": true
       }
     ],
     "store_size": [
       384,
       384
-    ]
+    ],
+    "method": "Individually selected opposite strides, neutral poses, whole-pose mirrored right profile; geometric packing checks.",
+    "preview": "mummy-preview.html"
   },
   {
     "character": "ghost",
