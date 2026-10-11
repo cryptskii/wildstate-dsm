@@ -1,0 +1,65 @@
+[
+  {
+    "character": "mummy",
+    "thirdRow": "exact horizontal mirrors of row two in the same columns",
+    "mirrorDifferences": 0,
+    "otherRowsUnchanged": true,
+    "changedBytes": 0
+  },
+  {
+    "character": "pumpkin",
+    "thirdRow": "exact horizontal mirrors of row two in the same columns",
+    "mirrorDifferences": 0,
+    "otherRowsUnchanged": true,
+    "changedBytes": 0
+  },
+  {
+    "character": "werewolf",
+    "thirdRow": "exact horizontal mirrors of row two in the same columns",
+    "mirrorDifferences": 0,
+    "otherRowsUnchanged": true,
+    "changedBytes": 0
+  },
+  {
+    "character": "demon_girl",
+    "thirdRow": "exact horizontal mirrors of row two in the same columns",
+    "mirrorDifferences": 0,
+    "otherRowsUnchanged": true,
+    "changedBytes": 0
+  },
+  {
+    "character": "frankenstein",
+    "thirdRow": "exact horizontal mirrors of row two in the same columns",
+    "mirrorDifferences": 0,
+    "otherRowsUnchanged": true,
+    "changedBytes": 0
+  },
+  {
+    "character": "witch",
+    "thirdRow": "exact horizontal mirrors of row two in the same columns",
+    "mirrorDifferences": 0,
+    "otherRowsUnchanged": true,
+    "changedBytes": 0
+  },
+  {
+    "character": "vampire",
+    "thirdRow": "exact horizontal mirrors of row two in the same columns",
+    "mirrorDifferences": 0,
+    "otherRowsUnchanged": true,
+    "changedBytes": 0
+  },
+  {
+    "character": "reaper",
+    "thirdRow": "exact horizontal mirrors of row two in the same columns",
+    "mirrorDifferences": 0,
+    "otherRowsUnchanged": true,
+    "changedBytes": 0
+  },
+  {
+    "character": "ghost",
+    "thirdRow": "exact horizontal mirrors of row two in the same columns",
+    "mirrorDifferences": 0,
+    "otherRowsUnchanged": true,
+    "changedBytes": 0
+  }
+]
