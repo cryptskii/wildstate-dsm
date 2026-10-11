@@ -22,7 +22,7 @@ Open Wildstate. It shows a connect code. Either tap **OPEN DSM WALLET** on the s
 ## Playing
 
 - **Walk** with the thumbstick. The camp is where you start.
-- **Meadow.** Walk east into the glowing grass for a wild encounter. Weaken a creature to 14 HP or less, throw a capsule and name it. It joins your BAG and appears in your wallet's Objects.
+- **Tall grass.** Walk into tall grass for a wild encounter: the meadow east of camp, and Rowan's field in the north-west. Weaken a creature to 14 HP or less, throw a capsule and name it. It joins your BAG and appears in your wallet's Objects.
 - **Pond.** CAST at the water's edge to fish. Water creatures come only from the pond.
 - **Battles.** Each species has four moves: an unlimited Strike and three with charges. Elements matter (fire beats grass; grass beats water and volt; water beats fire; volt beats water), and moves can burn, root, stun or soak. HP and charges carry into the next fight.
 - **Camp.** Mira, by the fire, rests your party. Rowan, north of her, gives guidance. The scarecrow in the garden hands out free capsules now and then.
