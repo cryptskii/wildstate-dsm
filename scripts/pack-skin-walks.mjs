@@ -1,6 +1,10 @@
 // Packs the Halloween skins' walking sheets (design-drop/halloween-skins/<name>_walk_3x4.png: 3 poses
 // x 4 directions, 256px cells, rows front, left, right, back) to the map's 32x40 frames, as
-// public/spritesheets/skin-<name>-walk.png (96x160), the layout every character sheet uses.
+// public/spritesheets/skin-<name>-walk.png (96x160), the layout every character sheet uses. The
+// ghost is as wide as it is tall, so it gets a 40x40 frame (120x160) to stand as tall as the
+// walkers, and hovers 3px above where their feet go: the engine centres a sprite on its hitbox
+// and sets its bottom on the hitbox's bottom whatever the frame size, so a wider frame needs no
+// offset of its own.
 //
 // Unlike pack-character-walks.mjs, nothing is cut away: a skin's held lantern or floating hem is
 // part of it. Every frame of a skin is drawn at one height on the map, the tallest (up to 34) at
@@ -20,10 +24,13 @@ import { PNG } from 'pngjs';
 import { readFileSync, writeFileSync } from 'node:fs';
 
 export const SKINS = ['pumpkin', 'reaper', 'witch', 'vampire', 'werewolf', 'mummy', 'ghost', 'frankenstein', 'demon_girl'];
-const CELL = 256, FW = 32, FH = 40, FIT_W = 30, FIT_H = 34, BASELINE = 38, COVER = 0.4;
+const CELL = 256, FH = 40, FIT_H = 34, COVER = 0.4;
+/** Frame width, the width the figure may fill, and the baseline its feet (or hem) sit on. */
+const FRAME = { default: { fw: 32, fitW: 30, baseline: 38 }, ghost: { fw: 40, fitW: 38, baseline: 35 } };
 const ROWS = ['front', 'left', 'right', 'back'];
 
 for (const name of SKINS) {
+  const { fw: FW, fitW: FIT_W, baseline: BASELINE } = FRAME[name] ?? FRAME.default;
   const image = PNG.sync.read(readFileSync(`design-drop/halloween-skins/${name}_walk_3x4.png`));
   if (image.width !== CELL * 3 || image.height !== CELL * 4) throw new Error(`${name}: expected a 768x1024 sheet`);
   const opaque = (x, y) => image.data[(y * image.width + x) * 4 + 3] > 128;
