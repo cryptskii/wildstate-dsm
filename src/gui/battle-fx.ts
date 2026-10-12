@@ -1,12 +1,10 @@
 /**
  * The battle screen's effects: particles and drawn shapes on a canvas over the arena, in place of
- * stretched 32px sprites and CSS lines. Every move is drawn as what its name says, in the flat,
- * outlined, few-toned style of the sprites it plays over: Flare is a stream of flame that sets the
- * target alight, Tide Lash a wave that breaks over it, Soak a see-through bubble of water with white
- * swirls that bursts, Leaf Cut spinning leaf blades, Strike three claw slashes, Volt Charge a bolt,
- * Shell Up a shell clamping shut, Rust Hide plates bolting on. Every hit lands with a shockwave and
- * debris of its element. The capture capsule is drawn here too: thrown on an arc with a spinning
- * trail, opened with a beam that draws the creature in as light, three wobbles, and the click.
+ * stretched 32px sprites and CSS lines. Fire throws a comet that sheds embers and smoke, water an
+ * orb or a pressure jet that splashes, electricity a forked bolt that flickers, grass a spiral of
+ * leaves and vines that wrap; every hit lands with a shockwave and debris of its element. The
+ * capture capsule is drawn here too: thrown on an arc with a spinning trail, opened with a beam
+ * that draws the creature in as light, three wobbles, and the click.
  *
  * The engine only animates while something is on screen and stops its frame loop otherwise; it
  * never touches the battle's numbers, which the reducer and the match program already settled.
@@ -16,16 +14,7 @@ import type { Element } from '../domain/game';
 export type Pt = { x: number; y: number };
 /** Where things are on the canvas, read from the sprites each time an effect starts. */
 export type Stage = { own: Pt; wild: Pt; ownSize: number; wildSize: number; capsuleRest: Pt; ownRest: Pt };
-/** `move` is the move's id (src/domain/game.ts), which picks its drawing; `fxKind` is the sprite choreography's hint. */
-export type FxCue = { kind: string; el: Element; dir: 'own' | 'wild'; fxKind?: string; crit?: boolean; move?: string };
-
-/** Every move, each with its own drawing. */
-export const MOVE_DRAWINGS = ['strike', 'flare', 'ember-bite', 'warm-coat', 'leaf-cut', 'root-bind', 'photosynth', 'tide-lash', 'soak', 'mist-veil', 'volt-charge', 'static-tusk', 'bristle', 'sticky-snare', 'camouflage', 'tongue-lash', 'chain-whip', 'lure-flash', 'brine-jet', 'barnacle-bash', 'shell-up', 'rust-hide'] as const;
-/** Flat fire, dark to light: outline, body, heart, core. */
-const FIRE = { line: '#6b1308', deep: '#e63d12', mid: '#ff8a1f', hot: '#ffd23a', core: '#fff8d6' };
-const SEA = { line: '#123f8a', deep: '#2a7fd6', mid: '#5db9ff', hot: '#a9e3ff', foam: '#ffffff' };
-const WOOD = { line: '#3b2412', deep: '#6b4423', mid: '#9a6a3a', hot: '#c99a63' };
-const IRON = { line: '#3a2a1a', deep: '#8a4a1f', mid: '#b8702e', hot: '#e0a35a', rivet: '#2b1d10' };
+export type FxCue = { kind: string; el: Element; dir: 'own' | 'wild'; fxKind?: string; crit?: boolean };
 
 type Palette = { core: string; hot: string; mid: string; deep: string; smoke: string };
 const PALETTE: Record<Element, Palette> = {
@@ -80,8 +69,6 @@ export class BattleFx {
     const from = cue.dir === 'own' ? s.own : s.wild, to = cue.dir === 'own' ? s.wild : s.own;
     const size = cue.dir === 'own' ? s.wildSize : s.ownSize;
     const p = PALETTE[cue.el] ?? PALETTE.none;
-    const self = cue.dir === 'own' ? s.ownSize : s.wildSize;
-    if (cue.move && cue.kind !== 'windup' && cue.kind !== 'impact' && this.byName(cue.move, from, to, size, self)) { this.run(); return; }
     switch (cue.kind) {
       case 'windup': this.windup(from, p, cue.dir === 'own' ? s.ownSize : s.wildSize); break;
       case 'proj': if (cue.fxKind === 'snare') this.snare(from, to, size); else this.projectile(cue.el, from, to, p); break;
@@ -145,16 +132,13 @@ export class BattleFx {
       const s = this.locate();
       if (s) { const at = this.resting === 'own' ? s.ownRest : s.capsuleRest; drawCapsule(g, at.x, at.y, (this.resting === 'own' ? s.ownSize : s.wildSize) * CAPSULE, 0, 0, 0.35 + 0.25 * Math.sin(now / 300)); }
     }
-    // A finished drawing's `done` may schedule more, so it runs once the list has been replaced.
-    const finished: Drawing[] = [];
     this.drawings = this.drawings.filter((d) => {
       const t = (now - d.start) / d.dur;
       if (t < 0) return true;
-      if (t >= 1) { finished.push(d); return false; }
+      if (t >= 1) { d.done?.(); return false; }
       g.save(); d.draw(g, t, now); g.restore();
       return true;
     });
-    for (const d of finished) d.done?.();
     const live: Particle[] = [];
     for (const p of this.particles) {
       p.age += dt;
@@ -240,380 +224,6 @@ export class BattleFx {
     g.restore();
   }
 
-  // ------------------------------------------------------------------ moves, by name
-
-  /** Draws the move named, if it has its own drawing: `at` the target, `self` the attacker's size. */
-  private byName(move: string, from: Pt, to: Pt, size: number, self: number): boolean {
-    switch (move) {
-      case 'strike': this.claws(to, size); return true;
-      case 'flare': this.flare(from, to, size); return true;
-      case 'ember-bite': this.melee('bite', 'fire', to, size, PALETTE.fire); this.alight(to, size, 120, 420, 0.7); return true;
-      case 'warm-coat': this.warmCoat(from, self); return true;
-      case 'leaf-cut': this.leafCut(from, to, size); return true;
-      case 'root-bind': this.rootBind(from, to, size); return true;
-      case 'photosynth': this.photosynth(from, self); return true;
-      case 'tide-lash': this.wave(from, to, size); return true;
-      case 'soak': this.bubble(from, to, size); return true;
-      case 'mist-veil': this.mist(from, self); return true;
-      case 'volt-charge': this.charge(from, self); this.at(260, () => this.bolt(from, to, PALETTE.electric)); return true;
-      case 'static-tusk': this.tusks(to, size); return true;
-      case 'bristle': this.bristle(from, self); return true;
-      case 'sticky-snare': this.goo(from, to, size); return true;
-      case 'camouflage': this.camo(from, self); return true;
-      case 'tongue-lash': this.tongue(from, to, size); return true;
-      case 'chain-whip': this.chain(from, to, size); return true;
-      case 'lure-flash': this.lure(from, to, size); return true;
-      case 'brine-jet': this.jet(from, to, size); return true;
-      case 'barnacle-bash': this.ram(from, to, size); return true;
-      case 'shell-up': this.shellUp(from, self); return true;
-      case 'rust-hide': this.rustHide(from, self); return true;
-      default: return false;
-    }
-  }
-
-  /** Three claw slashes rake across the target, one after another. */
-  private claws(at: Pt, size: number) {
-    for (let i = 0; i < 3; i++) {
-      const ang = -0.9 + i * 0.25, off = (i - 1) * size * 0.18, len = size * 0.75;
-      this.later(130 + i * 70, 360, (g, t) => {
-        const reveal = ease.out(Math.min(1, t / 0.3)), fade = t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4;
-        g.globalAlpha = fade; g.translate(at.x + off, at.y - off * 0.3); g.rotate(ang);
-        // A crescent: thick in the middle, drawn tip to tip as far as it has been swung.
-        g.beginPath(); g.moveTo(-len / 2, 0);
-        g.quadraticCurveTo(0, -size * 0.09, -len / 2 + len * reveal, -size * 0.02 * reveal);
-        g.quadraticCurveTo(0, size * 0.09, -len / 2, 0); g.closePath();
-        g.fillStyle = '#fff4df'; g.fill(); g.strokeStyle = '#3b2a20'; g.lineWidth = 2; g.lineJoin = 'round'; g.stroke();
-      });
-      this.at(130 + i * 70 + 90, () => this.burst({ x: at.x + off, y: at.y }, size * 0.3, PALETTE.none, 4, 'star'));
-    }
-  }
-
-  /** A stream of flame roars from the attacker to the target and sets it alight. */
-  private flare(a: Pt, b: Pt, size: number) {
-    const mouth = { x: a.x + (b.x - a.x) * 0.12, y: a.y - size * 0.08 }, side = Math.sign(b.x - mouth.x) || 1;
-    const dx = b.x - mouth.x, dy = b.y - mouth.y, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len, nx = -uy, ny = ux;
-    const tongues = 7, seeds = Array.from({ length: tongues }, () => rnd(0, Math.PI * 2));
-    this.later(0, 560, (g, t, now) => {
-      const reach = ease.out(Math.min(1, t / 0.4)), fade = t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3, L = len * reach;
-      g.globalAlpha = fade; g.lineJoin = 'round';
-      // The body of the stream: a tapered tongue of fire from the mouth, its edges rippling, in three tones.
-      const edge = (k: number, w: number, sgn: number) => { const q = { x: mouth.x + ux * L * k, y: mouth.y + uy * L * k }, r = w * (0.08 + 0.3 * k) * reach * (1 + 0.12 * Math.sin(k * 18 - now / 40)); return { x: q.x + nx * r * sgn, y: q.y + ny * r * sgn }; };
-      const body = (w: number) => { g.beginPath(); g.moveTo(mouth.x, mouth.y); for (let i = 1; i <= 12; i++) { const e = edge(i / 12, w, 1); g.lineTo(e.x, e.y); } for (let i = 12; i >= 1; i--) { const e = edge(i / 12, w, -1); g.lineTo(e.x, e.y); } g.closePath(); };
-      body(size); g.fillStyle = FIRE.deep; g.fill(); g.strokeStyle = FIRE.line; g.lineWidth = 2; g.stroke();
-      body(size * 0.68); g.fillStyle = FIRE.mid; g.fill();
-      body(size * 0.4); g.fillStyle = FIRE.hot; g.fill();
-      body(size * 0.16); g.fillStyle = FIRE.core; g.fill();
-      // Tongues lick up off the stream, bigger toward the target, leaning the way it flies.
-      for (let i = 0; i < tongues; i++) {
-        const k = (i + 0.6) / tongues; if (k > reach) break;
-        const q = { x: mouth.x + ux * len * k, y: mouth.y + uy * len * k - size * (0.05 + 0.2 * k) * reach };
-        const h = size * (0.18 + 0.4 * k) * (0.8 + 0.2 * Math.sin(now / 45 + seeds[i]));
-        g.save(); g.translate(q.x, q.y); g.rotate(side * 0.35); flame(g, size * (0.05 + 0.1 * k), h, now / 60 + seeds[i]); g.restore();
-      }
-      if (Math.random() < 0.7) { const k = rnd(0.2, reach), q = { x: mouth.x + ux * len * k, y: mouth.y + uy * len * k }; this.add({ x: q.x, y: q.y, vx: ux * 60 + rnd(-40, 40), vy: rnd(-130, -50), life: rnd(0.3, 0.6), size: rnd(1.5, 2.5), shape: 'spark', color: FIRE.hot }); }
-    });
-    this.alight(b, size, 230, 560, 1);
-  }
-  /** Flames rise off the target and die down; `scale` sizes them. */
-  private alight(at: Pt, size: number, delay: number, dur: number, scale: number) {
-    const n = 6, seeds = Array.from({ length: n }, () => rnd(0, Math.PI * 2)), xs = Array.from({ length: n }, (_, i) => (i / (n - 1) - 0.5) * size * 0.7 * scale);
-    this.later(delay, dur, (g, t, now) => {
-      const grow = ease.out(Math.min(1, t / 0.3)), fade = t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4;
-      g.globalAlpha = fade; g.lineJoin = 'round';
-      for (let i = 0; i < n; i++) {
-        const tall = 1 - Math.abs(xs[i]) / (size * 0.4 * scale), h = size * (0.25 + 0.35 * tall) * scale * grow * (0.8 + 0.2 * Math.sin(now / 50 + seeds[i]));
-        g.save(); g.translate(at.x + xs[i], at.y + size * 0.3); flame(g, size * 0.12 * scale * grow, h, now / 55 + seeds[i]); g.restore();
-      }
-      if (Math.random() < 0.5) this.add({ x: at.x + rnd(-size * 0.3, size * 0.3), y: at.y, vx: rnd(-20, 20), vy: rnd(-120, -50), life: rnd(0.3, 0.6), size: rnd(1.5, 2.5), shape: 'spark', color: FIRE.hot });
-      if (Math.random() < 0.15) this.add({ x: at.x + rnd(-size * 0.2, size * 0.2), y: at.y - size * 0.3, vx: rnd(-10, 10), vy: rnd(-50, -25), life: rnd(0.6, 0.9), size: rnd(5, 8), grow: 14, shape: 'smoke', glow: false, color: '#6b5a52' });
-    });
-  }
-
-  /** A coat of small flames stands up all round the user's body. */
-  private warmCoat(c: Pt, size: number) {
-    const n = 12, seeds = Array.from({ length: n }, () => rnd(0, Math.PI * 2));
-    this.later(0, 700, (g, t, now) => {
-      const grow = ease.out(Math.min(1, t / 0.3)), fade = t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3;
-      g.globalAlpha = fade; g.lineJoin = 'round';
-      for (let i = 0; i < n; i++) {
-        const a = (i / n) * Math.PI * 2, x = c.x + Math.cos(a) * size * 0.42, y = c.y + Math.sin(a) * size * 0.4;
-        g.save(); g.translate(x, y); g.rotate(a + Math.PI / 2); flame(g, size * 0.07 * grow, size * (0.16 + 0.06 * Math.sin(now / 60 + seeds[i])) * grow, now / 70 + seeds[i]); g.restore();
-      }
-    });
-    for (let i = 0; i < 10; i++) this.add({ x: c.x + rnd(-size * 0.4, size * 0.4), y: c.y + rnd(-size * 0.3, size * 0.3), vx: rnd(-10, 10), vy: rnd(-60, -30), life: rnd(0.5, 0.8), size: rnd(1.5, 2.5), shape: 'spark', color: FIRE.hot });
-  }
-
-  /** Three leaf blades spin across and slash the target. */
-  private leafCut(a: Pt, b: Pt, size: number) {
-    const p = PALETTE.grass;
-    for (let i = 0; i < 3; i++) {
-      const off = (i - 1) * size * 0.2, delay = i * 80;
-      this.later(delay, 400, (g, t) => {
-        const q = lerp({ x: a.x, y: a.y + off }, { x: b.x, y: b.y + off * 0.6 }, ease.in(t)), r = size * 0.2;
-        g.translate(q.x, q.y); g.rotate(t * 28 + i);
-        // A blade of a leaf: pointed both ends, a midrib, a lighter half.
-        g.beginPath(); g.moveTo(-r, 0); g.quadraticCurveTo(0, -r * 0.55, r, 0); g.quadraticCurveTo(0, r * 0.55, -r, 0); g.closePath();
-        g.fillStyle = p.mid; g.fill(); g.strokeStyle = '#1f4d22'; g.lineWidth = 1.6; g.stroke();
-        g.beginPath(); g.moveTo(-r, 0); g.quadraticCurveTo(0, -r * 0.55, r, 0); g.closePath(); g.fillStyle = p.hot; g.fill();
-        g.strokeStyle = '#1f4d22'; g.beginPath(); g.moveTo(-r * 0.9, 0); g.lineTo(r * 0.9, 0); g.stroke();
-      });
-      this.later(delay + 380, 300, (g, t) => {
-        const fade = 1 - t, len = size * 0.7, ang = -0.7 + i * 0.3;
-        g.globalAlpha = fade; g.translate(b.x + off * 0.6, b.y - off * 0.2); g.rotate(ang);
-        g.beginPath(); g.moveTo(-len / 2, 0); g.quadraticCurveTo(0, -size * 0.07, len / 2, 0); g.quadraticCurveTo(0, size * 0.07, -len / 2, 0); g.closePath();
-        g.fillStyle = p.hot; g.fill(); g.strokeStyle = '#1f4d22'; g.lineWidth = 1.5; g.stroke();
-      });
-      this.at(delay + 380, () => { for (let k = 0; k < 4; k++) this.add({ x: b.x, y: b.y, vx: rnd(-160, 160), vy: rnd(-200, -40), ay: 200, drag: 2, life: rnd(0.5, 0.8), size: rnd(4, 6), spin: rnd(-9, 9), shape: 'leaf', glow: false, color: [p.hot, p.mid, p.deep][k % 3] }); });
-    }
-  }
-
-  /** Roots burst from the ground under the target and wrap it. */
-  private rootBind(a: Pt, b: Pt, size: number) {
-    const p = PALETTE.grass, base = { x: b.x, y: b.y + size * 0.33 };
-    this.at(0, () => { for (let i = 0; i < 8; i++) this.add({ x: base.x + rnd(-size * 0.3, size * 0.3), y: base.y, vx: rnd(-60, 60), vy: rnd(-120, -40), ay: 500, life: rnd(0.4, 0.6), size: rnd(3, 5), spin: rnd(-6, 6), shape: 'shard', glow: false, color: [WOOD.deep, WOOD.mid, '#7a5a3a'][i % 3] }); });
-    for (let v = 0; v < 5; v++) {
-      const side = v % 2 ? 1 : -1, reach = size * rnd(0.3, 0.55), twist = rnd(1.2, 2), x0 = (v - 2) * size * 0.12;
-      this.later(80 + v * 45, 720, (g, t) => {
-        const grow = ease.out(Math.min(1, t / 0.55)), fade = t < 0.75 ? 1 : 1 - (t - 0.75) / 0.25;
-        g.globalAlpha = fade; g.lineCap = 'round'; g.lineJoin = 'round';
-        const pts: Pt[] = [];
-        for (let i = 0; i <= 20 * grow; i++) { const k = i / 20; pts.push({ x: base.x + x0 + side * Math.sin(k * Math.PI * twist) * reach * (1 - k * 0.25), y: base.y - k * size * 0.85 }); }
-        // A root tapers up from the ground: an outline, the bark, a lighter edge.
-        for (const [w, c] of [[9, WOOD.line], [6, WOOD.deep], [2.2, WOOD.hot]] as const) { g.strokeStyle = c; g.lineWidth = w * (1 - grow * 0.25); g.beginPath(); pts.forEach((q, i) => (i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y))); g.stroke(); }
-        pts.forEach((q, i) => { if (i % 5 === 3) { g.fillStyle = p.mid; g.strokeStyle = '#1f4d22'; g.lineWidth = 1.2; g.beginPath(); g.ellipse(q.x + side * 6, q.y, 6, 3, side * 0.5, 0, Math.PI * 2); g.fill(); g.stroke(); } });
-      });
-    }
-  }
-
-  /** The sun comes out over the user, its light pours down, and leaves of light rise. */
-  private photosynth(c: Pt, size: number) {
-    const sun = { x: c.x + size * 0.45, y: c.y - size * 0.95 }, r = size * 0.16;
-    this.later(0, 760, (g, t, now) => {
-      const show = ease.out(Math.min(1, t / 0.3)), fade = t < 0.75 ? 1 : 1 - (t - 0.75) / 0.25;
-      g.globalAlpha = fade;
-      // Beams: flat wedges of light from the sun onto the user.
-      g.fillStyle = '#fff3a8'; g.globalAlpha = fade * 0.45;
-      for (let i = 0; i < 3; i++) { const w = size * (0.12 + i * 0.08) * show; g.beginPath(); g.moveTo(sun.x, sun.y); g.lineTo(c.x - w + i * size * 0.1, c.y + size * 0.35); g.lineTo(c.x + w + i * size * 0.1, c.y + size * 0.35); g.closePath(); g.fill(); }
-      // The sun: rays that turn, a disc, a lighter heart.
-      g.globalAlpha = fade; g.translate(sun.x, sun.y); g.rotate(now / 900);
-      g.fillStyle = '#ffd23a'; g.strokeStyle = '#b8780a'; g.lineWidth = 1.5;
-      for (let i = 0; i < 8; i++) { const a = (i / 8) * Math.PI * 2; g.beginPath(); g.moveTo(Math.cos(a - 0.22) * r * 1.05 * show, Math.sin(a - 0.22) * r * 1.05 * show); g.lineTo(Math.cos(a) * r * 1.7 * show, Math.sin(a) * r * 1.7 * show); g.lineTo(Math.cos(a + 0.22) * r * 1.05 * show, Math.sin(a + 0.22) * r * 1.05 * show); g.closePath(); g.fill(); g.stroke(); }
-      g.beginPath(); g.arc(0, 0, r * show, 0, Math.PI * 2); g.fill(); g.stroke();
-      g.fillStyle = '#fff3a8'; g.beginPath(); g.arc(-r * 0.2, -r * 0.2, r * 0.55 * show, 0, Math.PI * 2); g.fill();
-    });
-    this.heal(c, size);
-    for (let i = 0; i < 6; i++) this.add({ x: c.x + rnd(-size * 0.3, size * 0.3), y: c.y + size * 0.3, vx: rnd(-15, 15), vy: rnd(-80, -40), life: rnd(0.6, 0.9), size: rnd(4, 6), spin: rnd(-4, 4), shape: 'leaf', glow: false, color: i % 2 ? PALETTE.grass.hot : PALETTE.grass.mid });
-  }
-
-  /** A wave rolls in from the attacker's side and breaks over the target. */
-  private wave(a: Pt, b: Pt, size: number) {
-    const side = Math.sign(b.x - a.x) || 1, ground = b.y + size * 0.36, start = b.x - side * size * 1.0, h = size * 0.85, w = size * 0.7;
-    this.later(0, 640, (g, t, now) => {
-      const k = ease.inOut(Math.min(1, t / 0.6)), front = start + side * size * 1.4 * k, fade = t < 0.8 ? 1 : 1 - (t - 0.8) / 0.2, curl = ease.out(Math.min(1, t / 0.5)), bob = Math.sin(now / 70) * 2;
-      g.globalAlpha = fade; g.lineJoin = 'round'; g.lineCap = 'round';
-      g.save(); g.translate(front, ground + bob); g.scale(side, 1);
-      // The breaker: the swell climbs to a crest that throws its lip forward and down, leaving a hollow under it; `s` nests the lighter tones inside.
-      const breaker = (s: number) => {
-        const W = w * s, H = h * s, c = curl;
-        g.beginPath(); g.moveTo(-W, 0);
-        g.quadraticCurveTo(-W * 0.6, -H * 0.5, -W * 0.2, -H * 0.95);
-        g.quadraticCurveTo(W * 0.1, -H * 1.18, W * (0.2 + 0.3 * c), -H * (0.95 - 0.1 * c));
-        g.quadraticCurveTo(W * (0.3 + 0.35 * c), -H * (0.8 - 0.1 * c), W * (0.25 + 0.2 * c), -H * (0.6 - 0.1 * c));
-        g.quadraticCurveTo(W * (0.15 + 0.1 * c), -H * 0.42, W * 0.22, -H * 0.62);
-        g.quadraticCurveTo(W * 0.08, -H * 0.5, W * 0.14, -H * 0.25);
-        g.quadraticCurveTo(W * 0.22, -H * 0.06, W * 0.45, 0);
-        g.closePath();
-      };
-      breaker(1); g.fillStyle = SEA.deep; g.fill(); g.strokeStyle = SEA.line; g.lineWidth = 2.5; g.stroke();
-      g.save(); breaker(1); g.clip();
-      g.translate(-w * 0.1, 0); breaker(0.84); g.fillStyle = SEA.mid; g.fill();
-      g.translate(-w * 0.1, 0); breaker(0.62); g.fillStyle = SEA.hot; g.fill();
-      g.restore();
-      // Foam: a white band along the crest down into the lip, and bubbles breaking off it.
-      g.strokeStyle = SEA.foam; g.lineWidth = Math.max(3, size * 0.07); g.beginPath(); g.moveTo(-w * 0.45, -h * 0.8); g.quadraticCurveTo(w * 0.05, -h * 1.08, w * (0.22 + 0.3 * curl), -h * (0.9 - 0.1 * curl)); g.quadraticCurveTo(w * (0.3 + 0.3 * curl), -h * (0.78 - 0.1 * curl), w * (0.26 + 0.2 * curl), -h * (0.62 - 0.1 * curl)); g.stroke();
-      g.fillStyle = SEA.foam; for (let i = 0; i < 6; i++) { const bx = w * (0.3 + 0.3 * curl) - i * w * 0.1 + Math.sin(now / 80 + i * 2) * 2, by = -h * (1.05 - 0.05 * i) - 4 + Math.cos(now / 90 + i) * 2; g.beginPath(); g.arc(bx, by, 3 - i * 0.3, 0, Math.PI * 2); g.fill(); }
-      g.restore();
-      if (t > 0.25 && t < 0.8) for (let i = 0; i < 3; i++) this.add({ x: front + side * rnd(0, w * 0.5), y: ground - h * rnd(0.7, 1), vx: side * rnd(60, 220), vy: rnd(-220, -40), ay: 700, life: rnd(0.35, 0.6), size: rnd(2.5, 4.5), shape: 'drop', glow: false, color: i ? SEA.hot : SEA.foam });
-    });
-    this.later(380, 420, (g, t) => { g.globalAlpha = 1 - t; g.fillStyle = SEA.mid; g.strokeStyle = SEA.line; g.lineWidth = 1.5; const r = size * (0.3 + 0.5 * ease.out(t)); g.beginPath(); g.ellipse(b.x, ground, r, r * 0.2, 0, 0, Math.PI * 2); g.fill(); g.stroke(); });
-  }
-
-  /** A see-through bubble of water, white swirls running round it, lobbed at the target where it bursts. */
-  private bubble(a: Pt, b: Pt, size: number) {
-    const dur = 480, lift = Math.abs(b.x - a.x) * 0.25 + size * 0.3, r0 = size * 0.26;
-    this.later(0, dur, (g, t, now) => {
-      const at = arc(a, b, ease.inOut(t), lift), r = r0 * (1 + 0.07 * Math.sin(now / 55)), ry = r0 * (1 - 0.07 * Math.sin(now / 55));
-      g.translate(at.x, at.y);
-      // The water: tinted and see-through, an outline, two swirls of white running round it, a flat highlight.
-      g.beginPath(); g.ellipse(0, 0, r, ry, 0, 0, Math.PI * 2);
-      g.fillStyle = 'rgba(93,185,255,0.42)'; g.fill(); g.strokeStyle = SEA.line; g.lineWidth = 2.2; g.stroke();
-      g.save(); g.clip();
-      g.strokeStyle = 'rgba(255,255,255,0.9)'; g.lineWidth = r * 0.16; g.lineCap = 'round';
-      for (let i = 0; i < 2; i++) { const a0 = now / 140 + i * Math.PI; g.beginPath(); g.ellipse(0, ry * 0.1, r * 0.78, ry * 0.42, 0.5, a0, a0 + 2.2); g.stroke(); }
-      g.lineWidth = r * 0.08; g.strokeStyle = 'rgba(255,255,255,0.7)'; g.beginPath(); g.ellipse(0, -ry * 0.15, r * 0.55, ry * 0.3, -0.4, now / 110, now / 110 + 1.8); g.stroke();
-      g.restore();
-      g.fillStyle = 'rgba(255,255,255,0.85)'; g.beginPath(); g.ellipse(-r * 0.4, -ry * 0.45, r * 0.22, ry * 0.11, -0.6, 0, Math.PI * 2); g.fill();
-      if (Math.random() < 0.4) this.add({ x: at.x + rnd(-r, r), y: at.y + rnd(-r, r), vx: rnd(-20, 20), vy: rnd(0, 60), ay: 400, life: rnd(0.3, 0.5), size: rnd(2, 3), shape: 'drop', glow: false, color: SEA.hot });
-    }, () => {
-      for (let i = 0; i < 22; i++) { const ang = rnd(0, Math.PI * 2), v = rnd(120, 300); this.add({ x: b.x, y: b.y, vx: Math.cos(ang) * v, vy: Math.sin(ang) * v - 80, ay: 800, life: rnd(0.4, 0.7), size: rnd(2.5, 5), shape: 'drop', glow: false, color: i % 3 ? SEA.mid : SEA.foam }); }
-    });
-    this.later(dur, 380, (g, t) => {
-      const k = ease.out(t), fade = 1 - t;
-      g.globalAlpha = fade; g.strokeStyle = SEA.line; g.lineWidth = 2;
-      g.fillStyle = 'rgba(93,185,255,0.45)'; g.beginPath(); g.ellipse(b.x, b.y, r0 * (1 + 1.6 * k), r0 * (0.7 + 0.5 * k), 0, 0, Math.PI * 2); g.fill(); g.stroke();
-      g.fillStyle = SEA.mid; g.beginPath(); g.ellipse(b.x, b.y + size * 0.35, size * (0.2 + 0.4 * k), size * (0.06 + 0.1 * k), 0, 0, Math.PI * 2); g.fill(); g.strokeStyle = SEA.line; g.lineWidth = 1.5; g.stroke();
-    });
-  }
-
-  /** Banks of mist drift up around the user and thin out. */
-  private mist(c: Pt, size: number) {
-    for (let i = 0; i < 6; i++) {
-      const x0 = (i - 2.5) * size * 0.2, delay = i * 60, r = size * rnd(0.09, 0.13), drift = rnd(-14, 14);
-      this.later(delay, 760, (g, t, now) => {
-        const rise = ease.out(Math.min(1, t / 0.5)), fade = t < 0.55 ? Math.min(1, t * 4) : 1 - (t - 0.55) / 0.45;
-        const x = c.x + x0 + drift * t + Math.sin(now / 300 + i) * 4, y = c.y + size * 0.38 - rise * size * (0.3 + 0.18 * (i % 3));
-        // A puff: three overlapping rounds with one outline, pale and a little see-through.
-        g.globalAlpha = fade * 0.75; g.fillStyle = '#eaf7ff'; g.strokeStyle = '#8fc6e8'; g.lineWidth = 1.5;
-        g.beginPath(); g.arc(x - r * 0.7, y, r * 0.7, 0, Math.PI * 2); g.arc(x, y - r * 0.25, r, 0, Math.PI * 2); g.arc(x + r * 0.75, y + r * 0.05, r * 0.65, 0, Math.PI * 2); g.fill();
-        g.beginPath(); g.arc(x - r * 0.7, y, r * 0.7, Math.PI * 0.5, Math.PI * 1.5); g.arc(x, y - r * 0.25, r, Math.PI * 1.1, Math.PI * 1.95); g.arc(x + r * 0.75, y + r * 0.05, r * 0.65, Math.PI * 1.5, Math.PI * 2.5); g.stroke();
-      });
-    }
-  }
-
-  /** Charge gathers as sparks and arcs around the user before the bolt leaves. */
-  private charge(c: Pt, size: number) {
-    this.crackle(c, size * 0.9);
-    for (let i = 0; i < 14; i++) { const a = rnd(0, Math.PI * 2), d = size * rnd(0.5, 0.8), tt = rnd(0.2, 0.3); this.add({ x: c.x + Math.cos(a) * d, y: c.y + Math.sin(a) * d, vx: -Math.cos(a) * d / tt, vy: -Math.sin(a) * d / tt, life: tt, size: rnd(1.5, 2.5), shape: 'spark', color: PALETTE.electric.hot }); }
-  }
-
-  /** Two charged tusks gore in from the side and the current jumps across the target. */
-  private tusks(at: Pt, size: number) {
-    const p = PALETTE.electric;
-    this.later(90, 380, (g, t) => {
-      const drive = ease.out(Math.min(1, t / 0.4)), fade = t < 0.65 ? 1 : 1 - (t - 0.65) / 0.35, len = size * 0.38;
-      g.globalAlpha = fade;
-      for (const side of [-1, 1]) {
-        // A tusk: a tapered curve of ivory with a dark outline, driven in from outside the target.
-        g.save(); g.translate(at.x - side * size * (0.7 - 0.4 * drive), at.y + size * 0.1 + side * size * 0.08); g.scale(side, 1);
-        g.beginPath(); g.moveTo(-len * 0.1, -size * 0.1); g.quadraticCurveTo(len * 0.55, -size * 0.14, len, -size * 0.32); g.quadraticCurveTo(len * 0.6, size * 0.06, -len * 0.1, size * 0.1); g.closePath();
-        g.fillStyle = '#fbf6e6'; g.fill(); g.strokeStyle = '#4a3a2a'; g.lineWidth = 2.2; g.lineJoin = 'round'; g.stroke();
-        g.fillStyle = '#d9cfb8'; g.beginPath(); g.moveTo(0, size * 0.03); g.quadraticCurveTo(len * 0.55, size * 0.02, len * 0.95, -size * 0.28); g.quadraticCurveTo(len * 0.6, size * 0.06, 0, size * 0.09); g.closePath(); g.fill();
-        g.restore();
-      }
-    });
-    this.at(220, () => { this.burst(at, size * 0.6, p, 18, 'spark'); this.crackle(at, size); });
-  }
-
-  /** Quills stand out from the user's body, each tip sparking. */
-  private bristle(c: Pt, size: number) {
-    const n = 16, p = PALETTE.electric;
-    this.later(0, 700, (g, t, now) => {
-      const out = ease.out(Math.min(1, t / 0.25)), fade = t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3;
-      g.globalAlpha = fade; g.lineCap = 'round';
-      for (let i = 0; i < n; i++) {
-        const a = (i / n) * Math.PI * 2 - Math.PI / 2 + (i % 2) * 0.1, r0 = size * 0.3, r1 = size * (0.3 + 0.32 * out) * (0.95 + 0.05 * Math.sin(now / 60 + i));
-        const x0 = c.x + Math.cos(a) * r0, y0 = c.y + Math.sin(a) * r0 * 0.9, x1 = c.x + Math.cos(a) * r1, y1 = c.y + Math.sin(a) * r1 * 0.9;
-        g.strokeStyle = '#2b2118'; g.lineWidth = 5; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
-        g.strokeStyle = '#e8d9a8'; g.lineWidth = 2.2; g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke();
-        if (out >= 1 && Math.floor(now / 70 + i) % 3 === 0) { g.fillStyle = p.hot; g.beginPath(); g.arc(x1, y1, 2.5, 0, Math.PI * 2); g.fill(); }
-      }
-    });
-    this.later(180, 520, (g, t, now) => { if (Math.floor(now / 60) % 2) return; g.globalAlpha = 1 - t; g.strokeStyle = PALETTE.electric.hot; g.lineWidth = 2; const path = jagged({ x: c.x - size * 0.5, y: c.y - size * 0.1 }, { x: c.x + size * 0.5, y: c.y + size * 0.1 }, 4, 0.35); g.beginPath(); path.forEach((q, i) => (i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y))); g.stroke(); });
-  }
-
-  /** A glob of sticky sap is lobbed over and strings the target up. */
-  private goo(a: Pt, b: Pt, size: number) {
-    const dur = 440, lift = Math.abs(b.x - a.x) * 0.3 + size * 0.3, r = size * 0.2, GOO = '#c6f24a', LINE = '#5d7a12';
-    this.later(0, dur, (g, t, now) => {
-      const at = arc(a, b, ease.inOut(t), lift), sq = 1 + 0.12 * Math.sin(now / 60);
-      g.translate(at.x, at.y); g.fillStyle = GOO; g.strokeStyle = LINE; g.lineWidth = 2;
-      g.beginPath(); g.ellipse(0, 0, r * sq, r / sq, 0, 0, Math.PI * 2); g.fill(); g.stroke();
-      g.beginPath(); g.ellipse(r * 0.3, r * 0.6, r * 0.25, r * 0.4, 0.4, 0, Math.PI * 2); g.fill(); g.stroke();
-      g.fillStyle = '#f2ffb8'; g.beginPath(); g.ellipse(-r * 0.35, -r * 0.4, r * 0.25, r * 0.12, -0.5, 0, Math.PI * 2); g.fill();
-      if (Math.random() < 0.5) this.add({ x: at.x, y: at.y + r * 0.5, vx: rnd(-10, 10), vy: rnd(20, 60), ay: 300, life: rnd(0.3, 0.5), size: rnd(2, 3), shape: 'drop', glow: false, color: GOO });
-    });
-    const anchors = Array.from({ length: 6 }, (_, i) => ({ x: b.x + Math.cos((i / 6) * Math.PI * 2) * size * 0.55, y: b.y + Math.sin((i / 6) * Math.PI * 2) * size * 0.45 }));
-    this.later(dur, 640, (g, t) => {
-      const spread = ease.out(Math.min(1, t / 0.35)), fade = t < 0.7 ? 1 : 1 - (t - 0.7) / 0.3;
-      g.globalAlpha = fade; g.lineCap = 'round';
-      // Strands run from the splat out to anchors around the target, sagging under drips.
-      for (let i = 0; i < anchors.length; i++) {
-        const e = lerp(b, anchors[i], spread), m = { x: (b.x + e.x) / 2, y: (b.y + e.y) / 2 + size * 0.08 };
-        g.strokeStyle = LINE; g.lineWidth = 5; g.beginPath(); g.moveTo(b.x, b.y); g.quadraticCurveTo(m.x, m.y, e.x, e.y); g.stroke();
-        g.strokeStyle = GOO; g.lineWidth = 3; g.stroke();
-        g.fillStyle = GOO; g.beginPath(); g.arc(e.x, e.y, 4, 0, Math.PI * 2); g.fill(); g.strokeStyle = LINE; g.lineWidth = 1.5; g.stroke();
-      }
-      g.fillStyle = GOO; g.strokeStyle = LINE; g.lineWidth = 2; g.beginPath(); g.ellipse(b.x, b.y, r * (0.8 + 0.6 * spread), r * (0.5 + 0.3 * spread), 0, 0, Math.PI * 2); g.fill(); g.stroke();
-      for (let i = 0; i < 3; i++) { const dx = (i - 1) * r * 0.8, drip = Math.min(1, t * 1.5) * size * (0.25 + 0.1 * i); g.beginPath(); g.moveTo(b.x + dx - 2.5, b.y + r * 0.3); g.lineTo(b.x + dx + 2.5, b.y + r * 0.3); g.lineTo(b.x + dx, b.y + r * 0.3 + drip); g.closePath(); g.fill(); g.stroke(); }
-    });
-  }
-
-  /** A barnacled shell rams across and slams into the target, shedding its crust. */
-  private ram(a: Pt, b: Pt, size: number) {
-    const side = Math.sign(b.x - a.x) || 1, r = size * 0.28, hit = { x: b.x - side * size * 0.25, y: b.y + size * 0.05 };
-    this.later(0, 300, (g, t) => {
-      const k = ease.in(t), q = lerp({ x: a.x + side * size * 0.2, y: a.y }, hit, k);
-      g.translate(q.x, q.y); g.scale(side, 1); g.rotate(-0.15 + k * 0.3); g.lineJoin = 'round';
-      // The shell: a rounded hump with a rim, and three barnacles on it, each a little cone with a dark mouth.
-      g.beginPath(); g.moveTo(-r, r * 0.4); g.quadraticCurveTo(-r * 0.9, -r * 0.8, 0, -r * 0.85); g.quadraticCurveTo(r * 1.1, -r * 0.7, r * 1.05, r * 0.3); g.quadraticCurveTo(r * 0.5, r * 0.75, -r, r * 0.4); g.closePath();
-      g.fillStyle = '#7f8f8a'; g.fill(); g.strokeStyle = '#2d3a38'; g.lineWidth = 2.5; g.stroke();
-      g.fillStyle = '#a9b8b2'; g.beginPath(); g.moveTo(-r * 0.8, r * 0.1); g.quadraticCurveTo(-r * 0.6, -r * 0.6, 0, -r * 0.65); g.quadraticCurveTo(r * 0.7, -r * 0.5, r * 0.85, -r * 0.1); g.quadraticCurveTo(r * 0.3, r * 0.1, -r * 0.8, r * 0.1); g.closePath(); g.fill();
-      for (const [bx, by, bs] of [[-r * 0.45, -r * 0.2, 0.3], [r * 0.2, -r * 0.45, 0.36], [r * 0.6, 0, 0.28]] as const) {
-        const w = r * bs, h = r * bs * 0.9;
-        g.fillStyle = '#e8e4d6'; g.strokeStyle = '#4a4a3f'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(bx - w, by + h * 0.4); g.lineTo(bx - w * 0.35, by - h * 0.6); g.lineTo(bx + w * 0.35, by - h * 0.6); g.lineTo(bx + w, by + h * 0.4); g.closePath(); g.fill(); g.stroke();
-        g.fillStyle = '#2d3a38'; g.beginPath(); g.ellipse(bx, by - h * 0.55, w * 0.3, h * 0.14, 0, 0, Math.PI * 2); g.fill();
-      }
-    });
-    this.at(290, () => { for (let i = 0; i < 12; i++) this.add({ x: hit.x + side * r * 0.8, y: hit.y, vx: side * rnd(40, 200) + rnd(-80, 80), vy: rnd(-300, -40), ay: 800, life: rnd(0.4, 0.7), size: rnd(3.5, 6), spin: rnd(-12, 12), shape: 'shard', glow: false, color: ['#e8e4d6', '#a9b8b2', '#7f8f8a'][i % 3] }); });
-  }
-
-  /** Two halves of a shell slide in from either side and clamp shut round the user. */
-  private shellUp(c: Pt, size: number) {
-    const R = size * 0.52;
-    this.later(0, 700, (g, t, now) => {
-      const close = ease.in(Math.min(1, t / 0.4)), fade = t < 0.75 ? 1 : 1 - (t - 0.75) / 0.25, shut = close >= 1;
-      g.globalAlpha = fade; g.lineJoin = 'round';
-      for (const side of [-1, 1]) {
-        // A half shell: a scalloped half-disc with ridges fanning from the hinge at the bottom, slid in from its side.
-        g.save(); g.translate(c.x + side * (1 - close) * size * 0.9, c.y); g.scale(side, 1);
-        const hinge = { x: 0, y: R * 0.95 }, bumps = 6;
-        g.beginPath(); g.moveTo(hinge.x, hinge.y);
-        for (let i = 0; i <= bumps; i++) {
-          const a0 = Math.PI / 2 + (i / bumps) * Math.PI, a1 = Math.PI / 2 + ((i + 0.5) / bumps) * Math.PI;
-          const x = Math.cos(a0) * R, y = Math.sin(a0) * R * 0.9 - R * 0.05;
-          if (i === 0) g.lineTo(x, y); else g.quadraticCurveTo(Math.cos(a1) * R * 1.12, Math.sin(a1) * R * 1.0 - R * 0.05, x, y);
-        }
-        g.closePath(); g.fillStyle = '#e6c38a'; g.fill(); g.strokeStyle = '#5a3a1e'; g.lineWidth = 2.5; g.stroke();
-        g.strokeStyle = '#b8894f'; g.lineWidth = 2;
-        for (let i = 1; i < bumps; i++) { const a = Math.PI / 2 + (i / bumps) * Math.PI; g.beginPath(); g.moveTo(hinge.x, hinge.y - 4); g.lineTo(Math.cos(a) * R * 0.92, Math.sin(a) * R * 0.85 - R * 0.05); g.stroke(); }
-        g.fillStyle = '#fff1d2'; g.beginPath(); g.ellipse(-R * 0.45, -R * 0.35, R * 0.12, R * 0.06, -0.6, 0, Math.PI * 2); g.fill();
-        g.restore();
-      }
-      if (shut && t < 0.55) { g.strokeStyle = '#fff6dc'; g.lineWidth = 3; g.globalAlpha = fade * (1 - (t - 0.4) / 0.15); for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2 + now / 500; g.beginPath(); g.moveTo(c.x + Math.cos(a) * R * 1.1, c.y + Math.sin(a) * R * 1.1); g.lineTo(c.x + Math.cos(a) * R * 1.35, c.y + Math.sin(a) * R * 1.35); g.stroke(); } }
-    });
-  }
-
-  /** Plates of rusted iron fly in and bolt themselves round the user. */
-  private rustHide(c: Pt, size: number) {
-    const n = 7;
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 - Math.PI / 2, far = { x: c.x + Math.cos(a) * size * 1.3, y: c.y + Math.sin(a) * size * 1.2 }, home = { x: c.x + Math.cos(a) * size * 0.42, y: c.y + Math.sin(a) * size * 0.4 };
-      const w = size * 0.16, h = size * 0.12;
-      this.later(i * 40, 700 - i * 40, (g, t) => {
-        const k = ease.out(Math.min(1, t / 0.35)), q = lerp(far, home, k), fade = t < 0.75 ? 1 : 1 - (t - 0.75) / 0.25;
-        g.globalAlpha = fade; g.translate(q.x, q.y); g.rotate(a + Math.PI / 2 + (1 - k) * 2);
-        // A plate: a rounded slab of rust with a lighter worn edge and two rivets.
-        g.fillStyle = IRON.mid; g.strokeStyle = IRON.line; g.lineWidth = 2; g.lineJoin = 'round';
-        g.beginPath(); g.moveTo(-w, -h); g.lineTo(w, -h); g.lineTo(w * 0.85, h); g.lineTo(-w * 0.85, h); g.closePath(); g.fill(); g.stroke();
-        g.fillStyle = IRON.hot; g.beginPath(); g.moveTo(-w * 0.9, -h * 0.8); g.lineTo(w * 0.9, -h * 0.8); g.lineTo(w * 0.8, -h * 0.3); g.lineTo(-w * 0.8, -h * 0.3); g.closePath(); g.fill();
-        g.fillStyle = IRON.deep; g.beginPath(); g.ellipse(w * 0.3, h * 0.3, w * 0.25, h * 0.3, 0, 0, Math.PI * 2); g.fill();
-        g.fillStyle = IRON.rivet; for (const rx of [-w * 0.6, w * 0.6]) { g.beginPath(); g.arc(rx, 0, 2.2, 0, Math.PI * 2); g.fill(); }
-        if (k >= 1 && t < 0.5) { g.fillStyle = '#fff6dc'; g.beginPath(); g.arc(0, -h, 3, 0, Math.PI * 2); g.fill(); }
-      });
-      this.at(i * 40 + 250, () => { for (let k = 0; k < 3; k++) this.add({ x: home.x, y: home.y, vx: rnd(-60, 60), vy: rnd(-60, 20), ay: 300, life: rnd(0.3, 0.5), size: rnd(2, 3.5), spin: rnd(-6, 6), shape: 'shard', glow: false, color: k ? IRON.deep : IRON.hot }); });
-    }
-  }
-
   // ------------------------------------------------------------------ attacks
 
   /** Light gathers into the attacker before it moves. */
@@ -671,13 +281,13 @@ export class BattleFx {
       const reach = Math.min(1, t / 0.35), end = lerp(a, b, reach), frame = Math.floor(now / 55);
       if (frame !== drawn) { drawn = frame; path = jagged(a, end, 7, 0.22); branches = [0.35, 0.6].map((k) => { const s = path[Math.floor(path.length * k)]; return jagged(s, { x: s.x + rnd(-40, 40), y: s.y + rnd(25, 70) }, 4, 0.3); }); }
       const fade = t < 0.75 ? 1 : 1 - (t - 0.75) / 0.25;
-      g.lineJoin = 'round'; g.lineCap = 'round'; g.globalAlpha = fade;
-      // Flat: a dark outline, the yellow body, a white core.
-      for (const [w, c] of [[11, '#5a4600'], [6.5, p.mid], [2.5, p.core]] as const) {
-        g.strokeStyle = c; g.lineWidth = w;
+      g.globalCompositeOperation = 'lighter'; g.lineJoin = 'round'; g.lineCap = 'round';
+      for (const [w, c, al] of [[14, p.deep, 0.35], [7, p.mid, 0.7], [2.5, p.core, 1]] as const) {
+        g.globalAlpha = al * fade; g.strokeStyle = c; g.lineWidth = w;
         for (const line of [path, ...branches]) { g.beginPath(); line.forEach((q, i) => (i ? g.lineTo(q.x, q.y) : g.moveTo(q.x, q.y))); g.stroke(); }
       }
-      if (reach >= 1 && Math.random() < 0.5) this.add({ x: end.x, y: end.y, vx: rnd(-220, 220), vy: rnd(-220, 120), drag: 3, life: 0.3, size: 2.5, shape: 'spark', color: p.hot });
+      g.globalAlpha = fade; g.drawImage(this.glow(p.hot), a.x - 30, a.y - 30, 60, 60);
+      if (reach >= 1) { g.drawImage(this.glow(p.core), end.x - 34, end.y - 34, 68, 68); if (Math.random() < 0.5) this.add({ x: end.x, y: end.y, vx: rnd(-220, 220), vy: rnd(-220, 120), drag: 3, life: 0.3, size: 2.5, shape: 'spark', color: p.hot }); }
     });
   }
 
@@ -785,16 +395,12 @@ export class BattleFx {
   private lure(a: Pt, b: Pt, size: number) {
     const p = PALETTE.water, orb = { x: a.x + (b.x - a.x) * 0.15, y: a.y - size * 0.45 };
     this.later(0, 800, (g, t, now) => {
-      const pulse = 0.6 + 0.4 * Math.sin(now / 60), r = size * 0.1 + size * 0.05 * pulse * (t < 0.5 ? t * 2 : 1);
+      g.globalCompositeOperation = 'lighter';
+      const pulse = 0.6 + 0.4 * Math.sin(now / 60), r = 14 + 8 * pulse * (t < 0.5 ? t * 2 : 1);
       g.globalAlpha = t < 0.85 ? 1 : 1 - (t - 0.85) / 0.15;
-      // The lure: a stalk up from the head, a bulb of light on it, and short rays that flicker.
-      g.strokeStyle = '#1b4d4a'; g.lineWidth = 3; g.lineCap = 'round'; g.beginPath(); g.moveTo(a.x, a.y - size * 0.2); g.quadraticCurveTo(orb.x - size * 0.1, orb.y + size * 0.05, orb.x, orb.y + r); g.stroke();
-      g.strokeStyle = '#c8fff6'; g.lineWidth = 2;
-      for (let i = 0; i < 8; i++) { if (Math.floor(now / 90 + i) % 2) continue; const ang = (i / 8) * Math.PI * 2; g.beginPath(); g.moveTo(orb.x + Math.cos(ang) * r * 1.3, orb.y + Math.sin(ang) * r * 1.3); g.lineTo(orb.x + Math.cos(ang) * r * (1.8 + 0.4 * pulse), orb.y + Math.sin(ang) * r * (1.8 + 0.4 * pulse)); g.stroke(); }
-      g.fillStyle = '#7ff6e4'; g.strokeStyle = '#1b4d4a'; g.lineWidth = 2; g.beginPath(); g.arc(orb.x, orb.y, r, 0, Math.PI * 2); g.fill(); g.stroke();
-      g.fillStyle = '#ffffff'; g.beginPath(); g.arc(orb.x, orb.y, r * 0.45, 0, Math.PI * 2); g.fill();
+      g.drawImage(this.glow('#7ff6e4'), orb.x - r * 2.2, orb.y - r * 2.2, r * 4.4, r * 4.4);
+      g.drawImage(this.glow('#ffffff'), orb.x - r * 0.7, orb.y - r * 0.7, r * 1.4, r * 1.4);
       if (t > 0.5) {
-        g.globalCompositeOperation = 'lighter';
         const k = (t - 0.5) / 0.5;
         g.globalAlpha = (1 - k) * 0.9; g.strokeStyle = '#c8fff6'; g.lineWidth = 3;
         for (let i = 0; i < 14; i++) { const ang = (i / 14) * Math.PI * 2 + k; g.beginPath(); g.moveTo(b.x + Math.cos(ang) * 20, b.y + Math.sin(ang) * 20); g.lineTo(b.x + Math.cos(ang) * (40 + 140 * k), b.y + Math.sin(ang) * (40 + 140 * k)); g.stroke(); }
@@ -1042,27 +648,6 @@ function jagged(a: Pt, b: Pt, depth: number, rough: number): Pt[] {
     pts = next;
   }
   return pts;
-}
-
-/**
- * A flat cartoon flame at the origin, its base on y=0 and its tip at -h, `w` its half-width: four
- * nested tongues, outline to core, each leaning with `f` so the flame licks.
- */
-function flame(g: CanvasRenderingContext2D, w: number, h: number, f: number) {
-  if (w <= 0.3 || h <= 0.5) return;
-  const lean = Math.sin(f) * w * 0.6, lean2 = Math.sin(f * 1.7 + 1) * w * 0.3;
-  const tongue = (s: number) => {
-    const hw = w * s, hh = h * (0.35 + 0.65 * s);
-    g.beginPath(); g.moveTo(-hw, 0);
-    g.bezierCurveTo(-hw * 1.15, -hh * 0.45, lean2 * s - hw * 0.2, -hh * 0.7, lean * s, -hh);
-    g.bezierCurveTo(lean2 * s + hw * 0.2, -hh * 0.7, hw * 1.15, -hh * 0.45, hw, 0);
-    g.closePath();
-  };
-  g.lineJoin = 'round';
-  tongue(1); g.fillStyle = FIRE.deep; g.fill(); g.strokeStyle = FIRE.line; g.lineWidth = Math.max(1.2, w * 0.14); g.stroke();
-  tongue(0.74); g.fillStyle = FIRE.mid; g.fill();
-  tongue(0.5); g.fillStyle = FIRE.hot; g.fill();
-  tongue(0.26); g.fillStyle = FIRE.core; g.fill();
 }
 
 /**
