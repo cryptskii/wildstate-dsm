@@ -5,6 +5,7 @@ import { heldDirection, type MovementControls } from './held-direction';
 import Joystick from './Joystick.vue';
 import ReportTab from './ReportTab.vue';
 import { BattleFx, type Stage } from './battle-fx';
+import { BattleSfx } from './battle-sfx';
 import type { ReportList } from '../domain/reports';
 import { rodPixels } from './fishing-rod';
 import { SPECIES, TRAINERS, LOOKS, SKIN_NAMES, skinPicture, lookPortrait, ITEMS as ITEM_EFFECTS, TEAM_SIZE, NICK_MAX, XP_PER_LEVEL, LEVEL_CAP, multiplier, displayName, level, maxHp, maxCharges, damageBonus, type GameState, type Element, type MoveFx } from '../domain/game';
@@ -52,17 +53,21 @@ const ITEMS = (s: GameState) => [
   { id: 'tonic', name: 'Charge Tonic', qty: s.inventory.tonic, desc: 'Restores every move charge of one creature.' },
   { id: 'map', name: 'Ranger’s Map', qty: s.inventory.map, desc: 'Reveals the path past the meadow.' },
 ];
-/** Attack choreography per move fx; the reducer already resolved the numbers. */
-async function playAttack(f: MoveFx | undefined, el: Element, dir: 'own' | 'wild') {
-  if (f === 'bite') await set('lunge', { melee: true, fxKind: 'bite' }, 300);
-  else if (f === 'tongue') await set('tongue', { fxKind: 'tongue' }, 520);
-  else if (f === 'jet') await set('jet', { fxKind: 'jet' }, 520);
-  else if (f === 'chain') await set('chain', { fxKind: 'bash' }, 520);
-  else if (f === 'lure') await set('lure', { fxKind: 'tusk' }, 800);
-  else if (f === 'snare') await set('proj', { fxKind: 'snare' }, 420);
-  else if (f === 'bash' || f === 'tusk') await set(dir === 'own' ? 'lunge' : 'counter', { melee: true, fxKind: f }, 300);
-  else if (PROJ[el]) await set('proj', { fxKind: 'proj' }, 420);
-  else await set('lunge', { melee: false, fxKind: 'melee' }, 300);
+/**
+ * Attack choreography, by the move's name: the effect engine draws each move as what it is
+ * (src/gui/battle-fx.ts) and the sprite moves to match. The reducer already resolved the numbers.
+ */
+async function playAttack(move: string, f: MoveFx | undefined, el: Element, dir: 'own' | 'wild') {
+  const m = { move };
+  if (f === 'bite') await set('lunge', { ...m, melee: true, fxKind: 'bite' }, 300);
+  else if (f === 'tongue') await set('tongue', { ...m, fxKind: 'tongue' }, 520);
+  else if (f === 'jet') await set('jet', { ...m, fxKind: 'jet' }, 520);
+  else if (f === 'chain') await set('chain', { ...m, fxKind: 'bash' }, 520);
+  else if (f === 'lure') await set('lure', { ...m, fxKind: 'tusk' }, 800);
+  else if (f === 'snare') await set('proj', { ...m, fxKind: 'snare' }, 420);
+  else if (f === 'bash' || f === 'tusk') await set(dir === 'own' ? 'lunge' : 'counter', { ...m, melee: true, fxKind: f }, 300);
+  else if (PROJ[el]) await set('proj', { ...m, fxKind: 'proj' }, 420);
+  else await set('lunge', { ...m, melee: false, fxKind: 'melee' }, 300);
 }
 /**
  * A pond battle is fought on the water. Every other battle moves on to the next of the dry arenas,
@@ -91,7 +96,7 @@ const busy = ref(inBattle()), message = ref(props.pvp && props.state.battle ? `@
 /** The creature just caught, waiting for the player to name it (or not). */
 const naming = ref<string | null>(null), nick = ref('');
 const renaming = ref<string | null>(null), newNick = ref('');
-const fx = ref<{ kind: string; el: Element; dir: 'own' | 'wild'; dmg?: number; crit?: boolean; melee?: boolean; fxKind?: string }>({ kind: '', el: 'none', dir: 'own' });
+const fx = ref<{ kind: string; el: Element; dir: 'own' | 'wild'; dmg?: number; crit?: boolean; melee?: boolean; fxKind?: string; move?: string }>({ kind: '', el: 'none', dir: 'own' });
 /** Whose creature the other one is, for messages. */
 const foeOwner = computed(() => props.pvp ? `@${props.pvp.opponent}’s` : trainer.value ? `${trainer.value.name}’s` : 'Wild');
 const foeTrainer = computed(() => props.pvp ? `@${props.pvp.opponent}` : trainer.value?.name ?? 'The trainer');
@@ -126,6 +131,7 @@ const wait = (ms: number) => new Promise(r => setTimeout(r, ms));
 /** The arena's effects canvas (src/gui/battle-fx.ts), and where its creatures stand. */
 const arenaEl = ref<HTMLDivElement>(), fxCanvas = ref<HTMLCanvasElement>(), ownImg = ref<HTMLImageElement>(), wildImg = ref<HTMLImageElement>();
 let effects: BattleFx | null = null;
+const sfx = new BattleSfx();
 function stage(): Stage | null {
   if (!arenaEl.value || !ownImg.value || !wildImg.value) return null;
   const a = arenaEl.value.getBoundingClientRect(), o = ownImg.value.getBoundingClientRect(), w = wildImg.value.getBoundingClientRect();
@@ -250,7 +256,20 @@ function confirmName() {
   if (naming.value && nickname) interact('creature-battle', 'battle', { action: 'rename', creatureId: naming.value, nick: nickname, revision: props.state.revision });
   naming.value = null;
 }
-const set = async (kind: string, extra: Partial<typeof fx.value> = {}, ms = 0) => { fx.value = { ...fx.value, ...extra, kind }; if (kind) effects?.play(fx.value); if (ms) await wait(ms); };
+const set = async (kind: string, extra: Partial<typeof fx.value> = {}, ms = 0) => { fx.value = { ...fx.value, ...extra, kind }; if (kind) { effects?.play(fx.value); const sound = soundFor(fx.value); if (sound) sfx.play(sound); } if (ms) await wait(ms); };
+/** The sound a cue makes: the move's own for a move, the element's for its windup, and the event's otherwise. */
+function soundFor(c: typeof fx.value): Parameters<BattleSfx['play']>[0] | null {
+  const move = c.move as Parameters<BattleSfx['play']>[0] | undefined;
+  switch (c.kind) {
+    case 'windup': return `windup-${c.el}` as Parameters<BattleSfx['play']>[0];
+    case 'proj': case 'lunge': case 'counter': case 'tongue': case 'jet': case 'chain': case 'lure': return move ?? 'strike';
+    case 'guard': case 'camo': return move ?? 'warm-coat';
+    case 'heal': return move ?? 'heal';
+    case 'impact': return c.crit ? 'hit-crit' : 'hit';
+    case 'cap-throw': case 'cap-open': case 'cap-shake': case 'cap-catch': case 'recall': case 'faint': case 'send-out': return c.kind;
+    default: return null;
+  }
+}
 
 watch(() => [props.state.revision, props.error], async () => {
   // Background DSM work moved the revision; the battle itself did not change, so nothing animates.
@@ -290,11 +309,11 @@ watch(() => [props.state.revision, props.error], async () => {
       message.value = `${ownName} used ${m.name}!`;
       if (m.max && !mine.skipped) own.value.charges[m.id] = Math.max(0, (own.value.charges[m.id] ?? 0) - 1);
       if (mine.skipped) { message.value = `${ownName} ${own.value.statuses.some(x => x.id === 'stun') ? 'is stunned' : 'is rooted'} and cannot move.`; await wait(700); own.value.statuses = own.value.statuses.filter(x => x.id !== 'root' && x.id !== 'stun'); }
-      else if (m.guard) { await set(m.fx === 'camo' ? 'camo' : 'guard', { el: 'none', dir: 'own' }, 700); own.value.guard = true; message.value = `${ownName} braces for the next hit.`; }
-      else if (m.heal) { await set('heal', { el: 'none', dir: 'own' }, 700); own.value.hp = Math.min(maxHp(own.value), own.value.hp + m.heal); message.value = `${ownName} recovered ${m.heal} HP.`; }
+      else if (m.guard) { await set('guard', { el: 'none', dir: 'own', move: m.id }, 700); own.value.guard = true; message.value = `${ownName} braces for the next hit.`; }
+      else if (m.heal) { await set('heal', { el: 'none', dir: 'own', move: m.id }, 700); own.value.hp = Math.min(maxHp(own.value), own.value.hp + m.heal); message.value = `${ownName} recovered ${m.heal} HP.`; }
       else {
-        await set('windup', { el: m.el, dir: 'own' }, 380);
-        await playAttack(m.fx, m.el, 'own');
+        await set('windup', { el: m.el, dir: 'own', move: m.id }, 380);
+        await playAttack(m.id, m.fx, m.el, 'own');
         wild.value!.hp = Math.max(0, wild.value!.hp - mine.dmg);
         message.value = mine.mult > 1 ? `Super effective! ${mine.dmg} damage.` : mine.mult < 1 ? `Not very effective… ${mine.dmg} damage.` : `${wildName} took ${mine.dmg} damage.`;
         if (mine.status) { message.value += ` ${wildName} is ${mine.status === 'burn' ? 'burning' : mine.status === 'root' ? 'rooted' : mine.status === 'stun' ? 'stunned' : 'soaked'}.`; wild.value!.statuses = b.wild.statuses; }
@@ -311,7 +330,7 @@ watch(() => [props.state.revision, props.error], async () => {
       else {
         const wm = wildSp.value.moves.find(x => x.id === theirs.move)!;
         message.value = `${foeOwner.value} ${wildName} used ${wm.name}!`;
-        await set('windup', { el: wm.el, dir: 'wild' }, 380); await playAttack(wm.fx, wm.el, 'wild');
+        await set('windup', { el: wm.el, dir: 'wild', move: wm.id }, 380); await playAttack(wm.id, wm.fx, wm.el, 'wild');
         own.value.hp = Math.max(0, own.value.hp - theirs.dmg); own.value.guard = false;
         message.value = `${ownName} took ${theirs.dmg} damage.${theirs.status ? ` ${ownName} is ${theirs.status === 'burn' ? 'burning' : theirs.status === 'root' ? 'rooted' : theirs.status === 'stun' ? 'stunned' : 'soaked'}.` : ''}`;
         if (theirs.status) own.value.statuses = next.creatures.find(c => c.id === own.value.id)?.statuses ?? own.value.statuses;
@@ -336,12 +355,12 @@ watch(() => [props.state.revision, props.error], async () => {
     const name = who ? displayName(who) : e.side === 'own' ? ownName : wildName;
     message.value = e.kind === 'faint' ? `${e.side === 'own' ? name : wildName} fainted!` : e.side === 'own' ? `Go, ${name}!` : `${foeTrainer.value} sends out ${name}!`;
     const side = e.side === 'own' ? 'own' : 'wild';
-    if (e.kind === 'faint') { fainting.value = side; effects?.play({ kind: 'faint', el: 'none', dir: side }); }
+    if (e.kind === 'faint') { fainting.value = side; effects?.play({ kind: 'faint', el: 'none', dir: side }); sfx.play('faint'); }
     else {
       // The next creature comes out at once, so the switch is seen, not only read.
       if (side === 'own') { view.value.creatures = JSON.parse(JSON.stringify(next.creatures)); view.value.battle!.creatureId = e.creature; }
       else if (next.battle && e.creature === next.battle.wild.id) view.value.battle!.wild = JSON.parse(JSON.stringify(next.battle.wild));
-      fainting.value = null; effects?.play({ kind: 'send-out', el: 'none', dir: side });
+      fainting.value = null; effects?.play({ kind: 'send-out', el: 'none', dir: side }); sfx.play('send-out');
     }
     await wait(900);
   }
