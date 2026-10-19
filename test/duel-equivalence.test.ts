@@ -122,7 +122,7 @@ function tsView(m: Match): Omit<StateView, 'turn' | 'winner'> {
 function tsLog(m: Match) {
   return m.log.map(e => ({ side: e.side, move: e.move, dmg: e.dmg, mult: e.mult, status: e.status ?? null, burn: e.burn, skipped: e.skipped }));
 }
-function wasmLog(m: Match, log: LogView, before: Match) {
+function wasmLog(log: LogView, before: Match) {
   return log.actions.map(x => {
     const side = before[x.side];
     const move = x.played.kind === 'move' ? SPECIES[side.team[side.active].species].moves[x.played.index].id
@@ -164,7 +164,7 @@ function lockstep(setup: Uint8Array, turns: Uint8Array[]): Compared {
     const view = duel.stateView(state);
     expect(tsView(m), `turn ${i} state`).toEqual({ a: view.a, b: view.b });
     if (log.first) {
-      expect(tsLog(m), `turn ${i} log`).toEqual(wasmLog(m, log, before));
+      expect(tsLog(m), `turn ${i} log`).toEqual(wasmLog(log, before));
       expect(m.events, `turn ${i} events`).toEqual(wasmEvents(m, log));
       expect(m.turn, `turn ${i} counter`).toBe(view.turn);
     }
@@ -241,7 +241,7 @@ describe('the staked-match program matches the game engine', () => {
         const view = duel.stateView(state);
         expect(tsView(m), `match ${n} turn ${t} state`).toEqual({ a: view.a, b: view.b });
         if (log.first) {
-          expect(tsLog(m), `match ${n} turn ${t} log`).toEqual(wasmLog(m, log, before));
+          expect(tsLog(m), `match ${n} turn ${t} log`).toEqual(wasmLog(log, before));
           expect(m.events, `match ${n} turn ${t} events`).toEqual(wasmEvents(m, log));
         }
         turnsPlayed += 1;

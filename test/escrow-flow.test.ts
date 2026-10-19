@@ -69,7 +69,7 @@ const seen: string[] = [];
 const events: StakedEvents = {
   changed: () => {},
   started: (m) => seen.push(`started ${m.id}`),
-  voided: (m, why) => seen.push(`void ${why}`),
+  voided: (_m, why) => seen.push(`void ${why}`),
   resolved: (m) => seen.push(`turn ${m.turn}`),
   decided: (m) => seen.push(`decided ${m.winner} by ${m.reason}`),
 };
