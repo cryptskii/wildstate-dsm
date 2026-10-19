@@ -28,7 +28,7 @@ import * as pb from './proto/dsm_app_pb';
 export type Species = Creature['species'];
 
 /** The game's record of one creature it issued. */
-export interface IssuedCreature {
+interface IssuedCreature {
   species: Species;
   serial: number;
   ticker: string;
@@ -42,7 +42,7 @@ export interface Login {
   session: string | null;
 }
 
-export interface EconomyRecord {
+interface EconomyRecord {
   /** The game's account (Base32 device id). */
   account: string;
   /** WILD's policy anchor (Base32). */
@@ -84,7 +84,7 @@ export interface EconomyRecord {
  * The market divided into lanes (owner direction 2026-10-07). Each step that cannot be undone is
  * written here before the next begins, so a restart resumes where it stopped and never repeats one.
  */
-export interface MarketRecord {
+interface MarketRecord {
   /** Each lane's WILD and ERA in base units: exact slices summing to what the market holds. */
   plan: { wild: string[]; era: string[] } | null;
   /** The single vault before lanes is closed (or there never was one). */
@@ -108,7 +108,7 @@ export function splitExact(total: bigint, parts: number): bigint[] {
 const ERA_DECIMALS = 2;
 
 /** The fee a token's creation burns, in ERA base units (`TOKEN_CREATION_FEE_ERA`). */
-export const CREATION_FEE_ERA = 1_000n;
+const CREATION_FEE_ERA = 1_000n;
 /** ERA the account keeps before it creates anything: the coin, the market, a few creatures. */
 // Fund the market and retain 200 ERA for issuing creatures, after WILD's creation fee.
 const ERA_TO_START = BigInt(MARKET.era) * 100n + CREATION_FEE_ERA + 20_000n;

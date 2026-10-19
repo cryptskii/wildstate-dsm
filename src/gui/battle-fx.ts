@@ -14,7 +14,7 @@ import type { Element } from '../domain/game';
 export type Pt = { x: number; y: number };
 /** Where things are on the canvas, read from the sprites each time an effect starts. */
 export type Stage = { own: Pt; wild: Pt; ownSize: number; wildSize: number; capsuleRest: Pt; ownRest: Pt };
-export type FxCue = { kind: string; el: Element; dir: 'own' | 'wild'; fxKind?: string; crit?: boolean };
+type FxCue = { kind: string; el: Element; dir: 'own' | 'wild'; fxKind?: string; crit?: boolean };
 
 type Palette = { core: string; hot: string; mid: string; deep: string; smoke: string };
 const PALETTE: Record<Element, Palette> = {
@@ -654,7 +654,7 @@ function jagged(a: Pt, b: Pt, depth: number, rough: number): Pt[] {
  * The capture capsule: a red top, a white bottom, a black band and a button, shaded as a sphere.
  * `open` lifts the top on its hinge (0 closed, 1 open); `glow` lights the button in `button`.
  */
-export function drawCapsule(g: CanvasRenderingContext2D, x: number, y: number, r: number, angle: number, open: number, glow: number, button = '#ffffff') {
+function drawCapsule(g: CanvasRenderingContext2D, x: number, y: number, r: number, angle: number, open: number, glow: number, button = '#ffffff') {
   if (r <= 0.5) return;
   g.save();
   g.translate(x, y); g.rotate(angle);

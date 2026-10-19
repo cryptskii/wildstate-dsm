@@ -43,7 +43,7 @@ export const SCARECROW = { x: 112, y: 432 };
 /** The painted notice board in the camp garden: the beta's weekly missions are read off it. */
 export const BULLETIN_BOARD = { x: 256, y: 368 };
 /** Bramble's door tile; stepping on it opens the trading post. */
-export const SHOP_DOOR = { tx: 18, ty: 4 };
+const SHOP_DOOR = { tx: 18, ty: 4 };
 /** Wild meadow bounds (tiles 14..19 × 6..10); the bottom row is plain lawn so the pond is reachable without an encounter. */
 export const MEADOW = { x0: 448, x1: 640, y0: 192, y1: 352 };
 /**
@@ -63,14 +63,14 @@ const WILD_TILES: Set<string> = (() => {
 export const inTallGrass = (x: number, y: number): boolean => WILD_TILES.has(`${Math.floor(x / 32)},${Math.floor(y / 32)}`);
 export const wildTileCount = (): number => WILD_TILES.size;
 /** Pond water tiles (tx,ty); casting is allowed from any 4-neighbour of these. */
-export const POND = new Set(["17,12","18,12","19,12","20,12","21,12","17,13","18,13","19,13","20,13","21,13","22,13","16,14","17,14","18,14","19,14","20,14","21,14","22,14","16,15","17,15","18,15","19,15","20,15","21,15","22,15","16,16","17,16","18,16","19,16","20,16","21,16","22,16","17,17","18,17","19,17","20,17","21,17","17,18","18,18","19,18","20,18"]);
+const POND = new Set(["17,12","18,12","19,12","20,12","21,12","17,13","18,13","19,13","20,13","21,13","22,13","16,14","17,14","18,14","19,14","20,14","21,14","22,14","16,15","17,15","18,15","19,15","20,15","21,15","22,15","16,16","17,16","18,16","19,16","20,16","21,16","22,16","17,17","18,17","19,17","20,17","21,17","17,18","18,18","19,18","20,18"]);
 const T = 32;
 /** Which way the water is from the player: the first neighbouring pond tile, or none. */
 function pondSide(player: RpgPlayer): [number, number] | undefined {
   const tx = Math.floor(player.x() / T), ty = Math.floor(player.y() / T);
   return ([[1, 0], [-1, 0], [0, 1], [0, -1]] as [number, number][]).find(([dx, dy]) => POND.has(`${tx + dx},${ty + dy}`));
 }
-export function nearPond(player: RpgPlayer): boolean {
+function nearPond(player: RpgPlayer): boolean {
   return pondSide(player) !== undefined;
 }
 function nearNpc(player: RpgPlayer): string | undefined {
@@ -80,7 +80,7 @@ function nearNpc(player: RpgPlayer): string | undefined {
 }
 const trainerByName = (name: string | undefined) => Object.keys(TRAINERS).find((id) => TRAINERS[id].name === name);
 const atShopDoor = (player: RpgPlayer) => Math.floor(player.x() / T) === SHOP_DOOR.tx && Math.floor(player.y() / T) === SHOP_DOOR.ty;
-export function hudData(player: RpgPlayer, extra: Record<string, unknown> = {}) {
+function hudData(player: RpgPlayer, extra: Record<string, unknown> = {}) {
   const state = session(player).read();
   const who = nearNpc(player);
   const trainer = trainerByName(who);

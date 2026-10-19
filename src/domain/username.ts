@@ -5,9 +5,9 @@
  * of them. Lookups accept either: a name resolves to its identity, an exact identity resolves to
  * itself.
  */
-export const USERNAME = /^[a-z0-9_]{3,16}$/;
+const USERNAME = /^[a-z0-9_]{3,16}$/;
 /** Names of the game's own characters and brands, never given to players. */
-export const RESERVED = new Set(['kade', 'nessa', 'mira', 'rowan', 'bramble', 'admin', 'wildstate', 'dsm', 'system', 'game']);
+const RESERVED = new Set(['kade', 'nessa', 'mira', 'rowan', 'bramble', 'admin', 'wildstate', 'dsm', 'system', 'game']);
 /** A player may take a new name once a day. */
 export const RENAME_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 export const HISTORY_MAX = 20;
@@ -40,7 +40,7 @@ export interface Directory {
   usernames: Record<string, string>;
 }
 
-export type UsernameError = 'invalid-username' | 'reserved-username' | 'username-taken' | 'rename-cooldown';
+type UsernameError = 'invalid-username' | 'reserved-username' | 'username-taken' | 'rename-cooldown';
 
 export const freshProfile = (): PlayerProfile => ({ username: null, renamedAt: 0, rating: 1200, games: 0, wins: 0, losses: 0, history: [], friends: [] });
 
@@ -61,7 +61,7 @@ export function unfriend(dir: Directory, wallet: string, friend: string): void {
 }
 
 /** Usernames compare case-insensitively; this is the stored form. */
-export const normalize = (name: string) => name.trim().toLowerCase();
+const normalize = (name: string) => name.trim().toLowerCase();
 
 export function validateUsername(name: string): UsernameError | null {
   const n = normalize(name);

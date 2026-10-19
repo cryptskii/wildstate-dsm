@@ -6,7 +6,7 @@ export type StatusId = 'burn' | 'root' | 'stun' | 'soaked';
 /** fx is presentation metadata only; the reducer never reads it. */
 export type MoveFx = 'proj' | 'bite' | 'tongue' | 'snare' | 'bash' | 'jet' | 'tusk' | 'camo' | 'chain' | 'lure';
 export type MoveDef = { id: string; name: string; el: Element; dmg?: number; max: number; status?: StatusId; guard?: true; heal?: number; fx?: MoveFx };
-export type SpeciesDef = { name: string; el: Element; moves: MoveDef[] };
+type SpeciesDef = { name: string; el: Element; moves: MoveDef[] };
 
 /** Pinned content. Clients send move ids only; the reducer resolves every number here. */
 export const ELEMENTS: Record<Element, { beats: Element[] }> = {
@@ -60,7 +60,7 @@ export const SPECIES: Record<string, SpeciesDef> = {
 /** Growth: flat 20 XP per level, cap 10. Every number here is pinned content; clients never send stats. */
 export const XP_PER_LEVEL = 20, LEVEL_CAP = 10, BASE_HP = 40, HP_PER_LEVEL = 4;
 /** Absolute HP ceiling for schema validation (level cap). */
-export const MAX_HP = BASE_HP + HP_PER_LEVEL * (LEVEL_CAP - 1);
+const MAX_HP = BASE_HP + HP_PER_LEVEL * (LEVEL_CAP - 1);
 export const level = (c: { xp: number }): number => Math.min(LEVEL_CAP, 1 + Math.floor(c.xp / XP_PER_LEVEL));
 export const maxHp = (c: { xp: number }): number => BASE_HP + HP_PER_LEVEL * (level(c) - 1);
 export const damageBonus = (c: { xp: number }): number => level(c) - 1;
@@ -79,7 +79,7 @@ export type UsableItem = keyof typeof ITEMS;
  * one at a time; knocking out all three wins, and pays a bounty from the game account. A trainer can be
  * challenged again after the party rests at camp.
  */
-export type TrainerDef = { name: string; title: string; team: { species: keyof typeof SPECIES; nick: string }[]; greeting: string[]; win: string; lose: string; beaten: string };
+type TrainerDef = { name: string; title: string; team: { species: keyof typeof SPECIES; nick: string }[]; greeting: string[]; win: string; lose: string; beaten: string };
 /** Team battles: each side fields up to three, one at a time; whoever knocks out all of the other side's wins. */
 export const TEAM_SIZE = 3;
 export const TRAINERS: Record<string, TrainerDef> = {
@@ -206,7 +206,7 @@ export type Command =
   | { type: 'holdings'; coins: number; held: string[]; inFlight: string[] }
   /** DSM ledger: a creature the wallet holds that this state does not: it joins the party. */
   | { type: 'receive-creature'; creature: Creature };
-export type ErrorCode = 'stale' | 'battle-active' | 'no-battle' | 'fainted' | 'no-charges' |
+type ErrorCode = 'stale' | 'battle-active' | 'no-battle' | 'fainted' | 'no-charges' |
   'no-capsules' | 'not-weakened' | 'choice-consumed' | 'invalid-command' | 'look-picked' | 'no-rod' | 'unknown-creature' |
   'no-item' | 'not-wild' | 'already-beaten' | 'unknown-trainer' | 'sold-out' | 'not-for-sale' | 'gift-cooldown' | 'unavailable' | 'skin-owned' | 'skin-not-owned';
 /** What Bramble's board sells. The Map is a key item: one per player. */

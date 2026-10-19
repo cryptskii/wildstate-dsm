@@ -110,10 +110,10 @@ export interface MatchProgram {
   /** Each turn's openings exactly as revealed. */
   turns: { a: string; b: string }[];
 }
-export type MatchError = 'not-your-turn' | 'unknown-move' | 'no-charges' | 'match-over' | 'already-chosen' | 'no-item' | 'unknown-creature';
+type MatchError = 'not-your-turn' | 'unknown-move' | 'no-charges' | 'match-over' | 'already-chosen' | 'no-item' | 'unknown-creature';
 
 /** A team snapshot: each creature as prepared (HP and charges), with battle-only effects cleared. */
-export function snapshot(team: Creature[]): Creature[] {
+function snapshot(team: Creature[]): Creature[] {
   return team.map((c) => ({ ...structuredClone(c), guard: false, statuses: [] }));
 }
 
@@ -170,7 +170,7 @@ function project(side: MatchSide, view: StateView, s: Side): MatchSide {
 }
 
 /** `item:<poultice|tonic>:<creature id>` names a bag item spent on one of the side's creatures. */
-export function parseItem(choice: string): { item: UsableItem; creatureId: string } | null {
+function parseItem(choice: string): { item: UsableItem; creatureId: string } | null {
   const [kind, item, ...rest] = choice.split(':');
   if (kind !== 'item' || (item !== 'poultice' && item !== 'tonic') || !rest.length) return null;
   return { item, creatureId: rest.join(':') };

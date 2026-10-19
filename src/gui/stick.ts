@@ -1,12 +1,12 @@
 import { Direction } from '@rpgjs/common';
 
 /** Below this share of the radius the thumb is resting: no direction. */
-export const DEAD_ZONE = 0.15;
+const DEAD_ZONE = 0.15;
 /**
  * Hysteresis past the diagonal: once walking along one axis, the thumb must lean this many degrees
  * past 45° toward the other axis before the direction switches, so it does not flicker.
  */
-export const HYSTERESIS_DEG = 12;
+const HYSTERESIS_DEG = 12;
 const SWITCH = Math.tan(((45 + HYSTERESIS_DEG) * Math.PI) / 180);
 
 /** The four-way direction a stick offset (dx right, dy down, in px) asks for. */

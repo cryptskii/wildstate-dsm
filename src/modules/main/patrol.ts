@@ -12,7 +12,7 @@ const LOOPS: Record<string, Stop[]> = {
 const EVENT_IDS: Record<string,string> = {mira:'npc',rowan:'rowan',kade:'trainer-kade',nessa:'trainer-nessa'};
 const holds = new WeakMap<RpgEvent,number>();
 const delay = (ms:number) => new Promise<void>(resolve => { const timer=setTimeout(resolve,ms); timer.unref?.(); });
-export function npcFor(player:RpgPlayer, name:string):RpgEvent|undefined {
+function npcFor(player:RpgPlayer, name:string):RpgEvent|undefined {
  return player.getCurrentMap?.()?.getEvent(EVENT_IDS[name] ?? name);
 }
 export function npcPosition(player:RpgPlayer,name:string,fallback:{x:number;y:number}) {
