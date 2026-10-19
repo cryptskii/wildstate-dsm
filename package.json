@@ -1,7 +1,6 @@
 {
   "name": "dsm-creatures",
   "version": "1.0.0",
-  "main": "index.js",
   "scripts": {
     "dev": "RPG_TYPE=mmorpg vite --host",
     "build": "RPG_TYPE=mmorpg vite build",
@@ -37,7 +36,6 @@
   "dependencies": {
     "@bufbuild/protobuf": "^1.10.1",
     "@canvasengine/presets": "2.4.0",
-    "@rpgjs/action-battle": "5.0.0",
     "@rpgjs/client": "5.0.0",
     "@rpgjs/common": "5.0.0",
     "@rpgjs/server": "5.0.0",
