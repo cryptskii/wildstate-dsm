@@ -7,7 +7,7 @@
  */
 import { inject, onMounted, onUnmounted, ref, watch } from 'vue';
 import QRCode from 'qrcode';
-import { RESUME_KEY } from './resume';
+import { RESUME_KEY, keepResumeToken } from './resume';
 import { LOGO_HTML } from './logo';
 
 const props = defineProps<{ code: string; status: string; resumeToken?: string | null }>();
@@ -17,18 +17,7 @@ const interact = inject<(id: string, event: string, data: unknown) => void>('rpg
 // server resumes that session if the game's account still holds it.
 // The login that goes with this code: kept, so a page the phone froze while
 // the player was in the wallet picks up the connection when it comes back.
-watch(
-  () => props.resumeToken,
-  (token) => {
-    if (!token) return;
-    try {
-      window.localStorage.setItem(RESUME_KEY, token);
-    } catch (e: unknown) {
-      console.warn('the resume token could not be kept', e);
-    }
-  },
-  { immediate: true },
-);
+keepResumeToken(() => props.resumeToken);
 
 // The phone freezes this page while the player approves in the wallet, and the
 // game server lets its connection go. Coming back, the page joins again; its

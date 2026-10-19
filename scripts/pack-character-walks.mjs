@@ -77,9 +77,9 @@ for(const [name,source] of Object.entries(sources)){
   }
   if(!occupied)throw new Error(name+': empty packed frame');
  }
- writeFileSync('public/spritesheets/'+name+'-walk-v4.png',PNG.sync.write(packed));
+ writeFileSync('public/spritesheets/'+name+'.png',PNG.sync.write(packed));
  records.push({name,rows:bands,frame:[32,40],frames:12});
 }
-writeFileSync('public/spritesheets/character-walk-v4.json',JSON.stringify(records,null,2));
+writeFileSync('public/spritesheets/character-walk.json',JSON.stringify(records,null,2));
 console.log(`Packed and verified ${records.length*12} isolated frames, with shared baselines and clear borders.`);
 

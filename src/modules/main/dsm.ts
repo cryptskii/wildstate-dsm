@@ -25,7 +25,7 @@ import { COIN, ITEM_PRICES, SKIN_PRICE, MARKET, MARKET_VAULTS, TRAINER_REWARD, V
 import * as pb from '../../integrations/dsm/proto/dsm_app_pb';
 
 /** The game's DSM account (`dsm-app-host`): the game does not run without it. */
-export const DSM_HOST_URL: string | undefined = process.env.DSM_APP_HOST;
+const DSM_HOST_URL: string | undefined = process.env.DSM_APP_HOST;
 const RECORD_PATH = process.env.DSM_GAME_RECORD ? process.env.DSM_GAME_RECORD : 'data/dsm-game.json';
 
 // ------------------------------- the overlay -------------------------------

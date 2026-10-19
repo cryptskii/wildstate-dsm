@@ -20,7 +20,7 @@ const own = (bytes: Uint8Array): Bytes => new Uint8Array(bytes);
 /** `P`: the hash that pins the program a staked match is decided by. */
 export const PROGRAM: Bytes = own(wasm.programHash());
 /** The program's turn cap: after it, more team HP wins, and equal HP goes to the tiebreak seed. */
-export const TURN_CAP = 60;
+const TURN_CAP = 60;
 /** Species and items in the program's table order: the game's own tables, in their own order. */
 export const SPECIES_IDS = Object.keys(SPECIES) as Creature['species'][];
 export const ITEM_IDS = Object.keys(ITEMS) as UsableItem[];
@@ -30,7 +30,7 @@ export const unb64 = (text: string): Bytes => new Uint8Array(Buffer.from(text, '
 
 /** One side's opened move, as the program reads it. */
 export type MoveView = { kind: 'move'; index: number } | { kind: 'item'; item: number; teamIndex: number } | { kind: 'pass' } | { kind: 'resign' };
-export type FighterView = { species: string; xp: number; hp: number; charges: number[]; guard: 'up' | 'down'; statuses: { id: string; turns: number }[] };
+type FighterView = { species: string; xp: number; hp: number; charges: number[]; guard: 'up' | 'down'; statuses: { id: string; turns: number }[] };
 export type SideView = { poultice: number; tonic: number; active: number; ko: number; team: FighterView[] };
 export type End = 'knockouts' | 'resign' | 'hp' | 'tiebreak';
 export type WinnerView = { winner: Side; end: End; turns: number };
@@ -86,9 +86,6 @@ export function playTurn(state: Uint8Array, a: Uint8Array, b: Uint8Array): { sta
   const out = wasm.step(state, wasm.turnOfOpenings(a, b)) as { state: Uint8Array; log: LogView };
   return { state: own(out.state), log: out.log };
 }
-
-/** The move an opening plays (bytes that are no move play as a pass). */
-export const playedMove = (opened: Uint8Array): MoveView => (wasm.turnView(wasm.turnOfOpenings(opened, opened)) as { a: MoveView }).a;
 
 /** Transcript entries (DSM class 0x0068), as each player's wallet signs them. */
 export const commitEntry = (index: number, side: Side, salt: Uint8Array, played: Uint8Array): Bytes => own(wasm.commitEntry(index, side, salt, played));

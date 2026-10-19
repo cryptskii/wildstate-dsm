@@ -8,23 +8,11 @@
  */
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import type { PanelData, OverlayEntry } from '../modules/main/dsm';
-import { RESUME_KEY } from './resume';
+import { keepResumeToken } from './resume';
 
 const props = defineProps<PanelData>();
 
-// The game's login for this browser: kept so reopening the game resumes the connection.
-watch(
-  () => props.resumeToken,
-  (token) => {
-    if (!token) return;
-    try {
-      window.localStorage.setItem(RESUME_KEY, token);
-    } catch (e: unknown) {
-      console.warn('the resume token could not be kept', e);
-    }
-  },
-  { immediate: true },
-);
+keepResumeToken(() => props.resumeToken);
 const open = ref(false);
 const filter = ref<'all' | 'dsm' | 'web2'>('all');
 

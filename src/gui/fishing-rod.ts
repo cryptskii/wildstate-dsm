@@ -3,8 +3,8 @@
  * the characters, so it reads as part of the same picture. Coordinates are map pixels from the
  * hand holding the rod.
  */
-export type Pixel = { x: number; y: number; c: string };
-export type Way = { tip: [number, number]; bob: [number, number] };
+type Pixel = { x: number; y: number; c: string };
+type Way = { tip: [number, number]; bob: [number, number] };
 
 const ROD = '#9a6a38', UNDERSIDE = '#5a3a1c', GRIP = '#2e1d10', REEL = '#8a8f94', LINE = '#b9bec4';
 

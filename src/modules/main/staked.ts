@@ -170,7 +170,7 @@ const message = (err: unknown) => (err instanceof Error ? err.message : String(e
  * 2026-10-08: a ready that ran past its window announced a void, the Start had already landed,
  * the match was played and won, and the void notice stayed on both lobbies).
  */
-export async function voidMatch(m: Match, why: string, events: StakedEvents, by?: Side): Promise<void> {
+async function voidMatch(m: Match, why: string, events: StakedEvents, by?: Side): Promise<void> {
   const { save } = await lobbyRecord();
   const e = m.escrow!;
   e.problem = `Match void. ${why}`;
@@ -238,7 +238,7 @@ export async function findLateLock(m: Match, side: Side): Promise<void> {
 // ------------------------------------------------------------------ playing
 
 /** The entries `side`'s wallet has not applied: every one after its own last. */
-export function unseen(e: MatchEscrow, side: Side): Relayed[] {
+function unseen(e: MatchEscrow, side: Side): Relayed[] {
   let last = -1;
   e.transcript.forEach((x, i) => { if (x.side === side) last = i; });
   return e.transcript.slice(last + 1).map((x) => ({ entry: unb64(x.entry), signature: unb64(x.signature) }));

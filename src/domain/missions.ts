@@ -10,7 +10,7 @@ export type MissionWeek = { week: number; title: string; posted: string; mission
 export type MissionBoard = { weeks: MissionWeek[]; footer: string; starter: Mission[] };
 
 /** What the board screen shows: the welcome, this week (if one is up), its missions, and the list to copy. */
-export type BoardView = {
+type BoardView = {
   welcome: string;
   week: { week: number; title: string; posted: string } | null;
   missions: Mission[];
@@ -19,7 +19,7 @@ export type BoardView = {
 };
 
 export const BOARD_WELCOME = 'Welcome to the board. This will be where you get your updated weekly beta test missions every Monday morning.';
-export const NOTHING_PINNED = 'Nothing is pinned up yet. Check back Monday morning for this week’s missions.';
+const NOTHING_PINNED = 'Nothing is pinned up yet. Check back Monday morning for this week’s missions.';
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 

@@ -18,7 +18,7 @@ const isPass = (a: Action): a is { pass: true } => 'pass' in a;
 const idle = (a: { item: string } | { pass: true }): ExchangeEntry => ({ move: 'pass' in a ? 'pass' : `item:${a.item}`, dmg: 0, mult: 1, burn: 0, skipped: false });
 
 /** How the second actor plays: a wild creature is weakened and lands no status; a trainer or a player's does. */
-export type SecondRules = {
+type SecondRules = {
   /** Damage taken off the second actor's move (a wild creature's handicap). */
   weaken: number;
   /** Whether the second actor's status moves land a status. */
@@ -27,7 +27,7 @@ export type SecondRules = {
   spendsCharge: boolean;
 };
 
-export function damage(attacker: Creature, target: Creature, move: MoveDef): { dmg: number; mult: number } {
+function damage(attacker: Creature, target: Creature, move: MoveDef): { dmg: number; mult: number } {
   const mult = multiplier(move.el, SPECIES[target.species].el);
   let d = (move.dmg! + damageBonus(attacker)) * mult;
   if (attacker.statuses.some(x => x.id === 'soaked')) d = Math.max(1, d - 2);
@@ -35,12 +35,12 @@ export function damage(attacker: Creature, target: Creature, move: MoveDef): { d
   return { dmg: Math.max(0, Math.round(d)), mult };
 }
 /** Ticks the holder's statuses once; returns burn damage to apply. */
-export function tick(c: Creature): number {
+function tick(c: Creature): number {
   let burn = 0;
   c.statuses = c.statuses.map(x => ({ ...x, turns: x.turns - 1 })).filter(x => { if (x.id === 'burn') burn += 3; return x.turns > 0; });
   return burn;
 }
-export function applyStatus(target: Creature, id: StatusId) {
+function applyStatus(target: Creature, id: StatusId) {
   if (id === 'soaked') target.statuses = target.statuses.filter(x => x.id !== 'burn');
   if (!target.statuses.some(x => x.id === id)) target.statuses.push({ id, turns: STATUSES[id].turns });
 }

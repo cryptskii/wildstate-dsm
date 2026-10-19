@@ -59,10 +59,10 @@ export default {
           vueGui({id: 'dsm-connect', component: DsmConnect}), vueGui({id: 'dsm-market', component: Market}), vueGui({id: 'bramble-shop', component: Shop}), vueGui({id: 'mission-board', component: Board}), vueGui({id: 'dsm-panel', component: DsmPanel}), vueGui({id: 'lobby', component: Lobby}),
         ],
         spritesheets: [
-          { id: 'ranger', image: 'spritesheets/rowan-walk-v4.png', ...walker() },
+          { id: 'ranger', image: 'spritesheets/rowan.png', ...walker() },
           // All five characters share 32×40px map frames and four-direction walk/stand animations.
-          { id: 'kade', image: 'spritesheets/kade-walk-v4.png', ...walker() },
-          { id: 'nessa', image: 'spritesheets/nessa-walk-v4.png', ...walker() },
+          { id: 'kade', image: 'spritesheets/kade.png', ...walker() },
+          { id: 'nessa', image: 'spritesheets/nessa.png', ...walker() },
           // Three 32px frames at 8 fps, looping while the fire stands.
           {
             id: 'campfire', image: 'fx/campfire.png', framesWidth: 3, framesHeight: 1,
@@ -70,12 +70,12 @@ export default {
               { time: 0, frameX: 0, frameY: 0 }, { time: 8, frameX: 1, frameY: 0 }, { time: 16, frameX: 2, frameY: 0 }, { time: 24 },
             ]] } },
           },
-          { id: 'hero', image: 'spritesheets/player-walk-v4.png', ...walker() },
+          { id: 'hero', image: 'spritesheets/player.png', ...walker() },
           // The trainer looks a player can pick (game.ts LOOKS): same frames, same gait.
-          { id: 'hero-auburn', image: 'spritesheets/player-auburn-walk-v4.png', ...walker() },
-          { id: 'hero-bearded', image: 'spritesheets/player-bearded-walk-v4.png', ...walker() },
-          { id: 'hero-curly', image: 'spritesheets/player-curly-walk-v4.png', ...walker() },
-          { id: 'female', image: 'spritesheets/mira-walk-v4.png', ...walker() },
+          { id: 'hero-auburn', image: 'spritesheets/player-auburn.png', ...walker() },
+          { id: 'hero-bearded', image: 'spritesheets/player-bearded.png', ...walker() },
+          { id: 'hero-curly', image: 'spritesheets/player-curly.png', ...walker() },
+          { id: 'female', image: 'spritesheets/mira.png', ...walker() },
           // The Halloween skins Bramble sells (game.ts SKINS), packed to the same frames by scripts/pack-skin-walks.mjs.
           ...SKINS.map((skin) => ({ id: skinGraphic(skin), image: `spritesheets/skin-${skin}-walk.png`, ...walker() })),
         ]

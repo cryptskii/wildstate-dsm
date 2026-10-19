@@ -46,7 +46,7 @@ export type GameDetails = {
   at: string;
 };
 
-export type BugReport = {
+type BugReport = {
   summary: string;
   checks: string[];
   happened: string;
@@ -58,7 +58,7 @@ export type BugReport = {
 export type MissionResult = 'done' | 'failed' | 'not-tried';
 export const RESULT_LABEL: Record<MissionResult, string> = { done: 'Done', failed: "Couldn't finish", 'not-tried': 'Not tried' };
 export type MissionEntry = { mission: Mission; result: MissionResult; checks: string[]; comment: string; bugs: string };
-export type MissionsReport = { week: number | null; title: string; entries: MissionEntry[]; overall: string };
+type MissionsReport = { week: number | null; title: string; entries: MissionEntry[]; overall: string };
 
 /** The week's game missions a tester reports on: the starter set's in week 1, then that week's own. */
 export type ReportList = { week: number | null; title: string; missions: Mission[] };

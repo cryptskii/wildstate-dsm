@@ -1,7 +1,7 @@
 import { pauseNpc } from './patrol';
 import type { RpgPlayer } from '@rpgjs/server';
 import { LOOKS, lookPortrait } from '../../domain/game';
-export type DialogueLine = { speaker: string; portrait: 'player' | 'mira' | 'rowan' | 'kade' | 'nessa' | null; message: string };
+type DialogueLine = { speaker: string; portrait: 'player' | 'mira' | 'rowan' | 'kade' | 'nessa' | null; message: string };
 const speaking = new WeakSet<RpgPlayer>();
 export const isSpeaking = (player: RpgPlayer) => speaking.has(player);
 function ownPortrait(player: RpgPlayer): string {
