@@ -18,8 +18,6 @@ export const ITEM_PRICES = { capsule: 3n, poultice: 4n, tonic: 5n, map: 12n } as
 export type ShopItem = keyof typeof ITEM_PRICES;
 /** What one Halloween skin costs, in WILD (game data, like every price on Bramble's board). */
 export const SKIN_PRICE = 20n;
-/** A capsule's price, in WILD. */
-export const CAPSULE_PRICE = ITEM_PRICES.capsule;
 /** A trainer's bounty for beating them, in WILD. */
 export const TRAINER_REWARD = 12n;
 /** A victory's reward, in WILD. */

@@ -87,9 +87,6 @@ export function playTurn(state: Uint8Array, a: Uint8Array, b: Uint8Array): { sta
   return { state: own(out.state), log: out.log };
 }
 
-/** The move an opening plays (bytes that are no move play as a pass). */
-export const playedMove = (opened: Uint8Array): MoveView => (wasm.turnView(wasm.turnOfOpenings(opened, opened)) as { a: MoveView }).a;
-
 /** Transcript entries (DSM class 0x0068), as each player's wallet signs them. */
 export const commitEntry = (index: number, side: Side, salt: Uint8Array, played: Uint8Array): Bytes => own(wasm.commitEntry(index, side, salt, played));
 export const revealEntry = (index: number, side: Side, salt: Uint8Array, played: Uint8Array): Bytes => own(wasm.revealEntry(index, side, salt, played));
