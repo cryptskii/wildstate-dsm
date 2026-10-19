@@ -122,62 +122,63 @@ async function copyId() { await navigator.clipboard.writeText(props.me.id); copi
         </div>
       </template>
 
-      <template v-else-if="tab === 'play'">
+      <template v-else-if="tab === 'play' || tab === 'friends'">
         <button class="card strip" @click="tab = 'team'"><small class="px lbl">TEAM</small><span v-for="c in pickedCreatures" :key="c.id" class="mini"><i class="thumb" :style="{ backgroundImage: `url(/creatures/${c.species}.png)` }"></i><small>{{ c.hp }}/{{ c.maxHp }}</small></span><small v-if="!pickedCreatures.length">None standing · heal first</small></button>
-        <div class="card">
-          <small class="px lbl">STAKE</small>
-          <div class="stakes">
-            <button v-for="s in stakes" :key="s" class="px stake" :class="{ on: stake === s }" :disabled="!open(s) || !!queued" @click="stake = s">{{ wild(s) }}</button>
+        <template v-if="tab === 'play'">
+          <div class="card">
+            <small class="px lbl">STAKE</small>
+            <div class="stakes">
+              <button v-for="s in stakes" :key="s" class="px stake" :class="{ on: stake === s }" :disabled="!open(s) || !!queued" @click="stake = s">{{ wild(s) }}</button>
+            </div>
+            <small class="hint">Wagers lock each stake in your DSM wallet's escrow; the game only referees. They open with the next wallet update.</small>
           </div>
-          <small class="hint">Wagers lock each stake in your DSM wallet's escrow; the game only referees. They open with the next wallet update.</small>
-        </div>
-        <div class="card">
-          <template v-if="queued">
-            <b class="big">Finding an opponent… {{ waited }}s</b>
-            <small>{{ queued.stake === 0 ? 'Free match' : wild(queued.stake) }} · matching {{ windowText }}</small>
-            <button class="px cancel" @click="send('leave-queue')">LEAVE QUEUE</button>
-          </template>
-          <template v-else>
-            <b class="big">Ready to battle</b>
-            <small>Your team (pick it in TEAM) fights as you left it; knock out all of theirs to win.</small>
-            <button class="px go wide" :disabled="!open(stake)" @click="send('queue', { stake })">FIND A MATCH</button>
-          </template>
-        </div>
-      </template>
+          <div class="card">
+            <template v-if="queued">
+              <b class="big">Finding an opponent… {{ waited }}s</b>
+              <small>{{ queued.stake === 0 ? 'Free match' : wild(queued.stake) }} · matching {{ windowText }}</small>
+              <button class="px cancel" @click="send('leave-queue')">LEAVE QUEUE</button>
+            </template>
+            <template v-else>
+              <b class="big">Ready to battle</b>
+              <small>Your team (pick it in TEAM) fights as you left it; knock out all of theirs to win.</small>
+              <button class="px go wide" :disabled="!open(stake)" @click="send('queue', { stake })">FIND A MATCH</button>
+            </template>
+          </div>
+        </template>
 
-      <template v-else-if="tab === 'friends'">
-        <button class="card strip" @click="tab = 'team'"><small class="px lbl">TEAM</small><span v-for="c in pickedCreatures" :key="c.id" class="mini"><i class="thumb" :style="{ backgroundImage: `url(/creatures/${c.species}.png)` }"></i><small>{{ c.hp }}/{{ c.maxHp }}</small></span><small v-if="!pickedCreatures.length">None standing · heal first</small></button>
-        <div v-for="c in incoming" :key="c.id" class="card challenge">
-          <b>@{{ c.from.name }} challenges you</b>
-          <small>{{ shortId(c.from.id) }} · rating {{ c.from.rating }} · {{ c.stake === 0 ? 'free match' : `for ${wild(c.stake)}` }}</small>
-          <div class="row"><button class="px go" @click="send('accept', { id: c.id })">ACCEPT</button><button class="px cancel" @click="send('decline', { id: c.id })">DECLINE</button></div>
-        </div>
-        <form class="card" @submit.prevent="find">
-          <small class="px lbl">FIND A FRIEND</small>
-          <div class="row"><input v-model="query" placeholder="username or DSM ID" autocapitalize="off" autocomplete="off" /><button class="px go">FIND</button></div>
-        </form>
-        <div class="card">
-          <small class="px lbl">FRIENDS</small>
-          <small v-if="!friends?.length">Players you find, challenge or play stay here.</small>
-          <button v-for="f in friends" :key="f.id" type="button" class="friendrow" @click="send('find', { query: f.id })">
-            <i class="dot" :class="{ on: f.online }"></i><b>@{{ f.name }}</b>
-            <small>{{ f.contact ? 'contact · ' : '' }}{{ f.playing ? 'in a match' : f.online ? 'online' : 'offline' }} · {{ f.rating }}</small>
-          </button>
-        </div>
-        <div v-if="found" class="card friend">
-          <small class="px lbl">PLAYER FOUND</small>
-          <div class="who"><i class="dot" :class="{ on: found.online }"></i><b>@{{ found.name }}</b><small>rating {{ found.rating }}</small></div>
-          <small>{{ shortId(found.id) }} · {{ found.online ? 'online now' : 'offline: they need the game open to accept' }}</small>
-          <small class="px lbl">STAKE · ANY AMOUNT</small>
-          <div class="row"><input v-model.number="friendStake" type="number" min="0" :max="maxStake" step="1" inputmode="numeric" /><span>WILD</span></div>
-          <div class="stakes"><button v-for="s in stakes" :key="s" type="button" class="px stake" :class="{ on: friendStake === s }" :disabled="!open(s)" @click="friendStake = s">{{ wild(s) }}</button></div>
-          <button class="px go wide" :disabled="!found.online || !friendStakeOk" @click="send('challenge', { to: found.id, stake: friendStake })">CHALLENGE @{{ found.name.toUpperCase() }}{{ friendStake ? ` FOR ${friendStake.toLocaleString()} WILD` : '' }} ▶</button>
-          <button v-if="friends?.some((f) => f.id === found!.id)" type="button" class="px cancel" @click="send('unfriend', { id: found!.id })">REMOVE FRIEND</button>
-        </div>
-        <div v-for="c in outgoing" :key="c.id" class="card">
-          <small>Waiting for @{{ c.to.name }} to accept…</small>
-          <button class="px cancel" @click="send('cancel', { id: c.id })">CANCEL</button>
-        </div>
+        <template v-else>
+          <div v-for="c in incoming" :key="c.id" class="card challenge">
+            <b>@{{ c.from.name }} challenges you</b>
+            <small>{{ shortId(c.from.id) }} · rating {{ c.from.rating }} · {{ c.stake === 0 ? 'free match' : `for ${wild(c.stake)}` }}</small>
+            <div class="row"><button class="px go" @click="send('accept', { id: c.id })">ACCEPT</button><button class="px cancel" @click="send('decline', { id: c.id })">DECLINE</button></div>
+          </div>
+          <form class="card" @submit.prevent="find">
+            <small class="px lbl">FIND A FRIEND</small>
+            <div class="row"><input v-model="query" placeholder="username or DSM ID" autocapitalize="off" autocomplete="off" /><button class="px go">FIND</button></div>
+          </form>
+          <div class="card">
+            <small class="px lbl">FRIENDS</small>
+            <small v-if="!friends?.length">Players you find, challenge or play stay here.</small>
+            <button v-for="f in friends" :key="f.id" type="button" class="friendrow" @click="send('find', { query: f.id })">
+              <i class="dot" :class="{ on: f.online }"></i><b>@{{ f.name }}</b>
+              <small>{{ f.contact ? 'contact · ' : '' }}{{ f.playing ? 'in a match' : f.online ? 'online' : 'offline' }} · {{ f.rating }}</small>
+            </button>
+          </div>
+          <div v-if="found" class="card friend">
+            <small class="px lbl">PLAYER FOUND</small>
+            <div class="who"><i class="dot" :class="{ on: found.online }"></i><b>@{{ found.name }}</b><small>rating {{ found.rating }}</small></div>
+            <small>{{ shortId(found.id) }} · {{ found.online ? 'online now' : 'offline: they need the game open to accept' }}</small>
+            <small class="px lbl">STAKE · ANY AMOUNT</small>
+            <div class="row"><input v-model.number="friendStake" type="number" min="0" :max="maxStake" step="1" inputmode="numeric" /><span>WILD</span></div>
+            <div class="stakes"><button v-for="s in stakes" :key="s" type="button" class="px stake" :class="{ on: friendStake === s }" :disabled="!open(s)" @click="friendStake = s">{{ wild(s) }}</button></div>
+            <button class="px go wide" :disabled="!found.online || !friendStakeOk" @click="send('challenge', { to: found.id, stake: friendStake })">CHALLENGE @{{ found.name.toUpperCase() }}{{ friendStake ? ` FOR ${friendStake.toLocaleString()} WILD` : '' }} ▶</button>
+            <button v-if="friends?.some((f) => f.id === found!.id)" type="button" class="px cancel" @click="send('unfriend', { id: found!.id })">REMOVE FRIEND</button>
+          </div>
+          <div v-for="c in outgoing" :key="c.id" class="card">
+            <small>Waiting for @{{ c.to.name }} to accept…</small>
+            <button class="px cancel" @click="send('cancel', { id: c.id })">CANCEL</button>
+          </div>
+        </template>
       </template>
 
       <template v-else>
